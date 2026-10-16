@@ -108,6 +108,40 @@ const server = createServer(async (req, res) => {
       const projects = discoverProjects(errors).map(p => ({ ...p, url: runs.get(p.path)?.url ?? p.url, state: runs.get(p.path)?.state ?? 'idle', code: runs.get(p.path)?.code ?? null }));
       return json(200, { projects, errors });
     }
+    if (url.pathname === '/api/skills' && ['GET', 'POST'].includes(req.method ?? '')) {
+      let request: { action: string; args?: Record<string, unknown> };
+      if (req.method === 'GET') {
+        const project = url.searchParams.get('project');
+        request = project ? { action: 'runtime', args: { project } } : { action: 'list' };
+      } else {
+        let body = '';
+        for await (const chunk of req) {
+          body += chunk.toString();
+          if (Buffer.byteLength(body) > 6 * 1024 * 1024) return json(413, { error: '技能请求过大' });
+        }
+        request = JSON.parse(body);
+        if (!['save', 'bind'].includes(request.action)) return json(400, { error: '不支持的技能操作' });
+      }
+      const result = await new Promise<{ code: number; data: unknown }>((resolve, reject) => {
+        const python = process.env.HOTLINE_PYTHON ?? (process.platform === 'win32'
+          ? join(rootDir, 'projects/ai/dodo-agent/.venv/Scripts/python.exe') : 'python3');
+        const child = spawn(python, [join(rootDir, 'tools/skill-center/center.py')], {
+          cwd: rootDir, windowsHide: true, env: { ...process.env, PYTHONUTF8: '1' },
+        });
+        let output = '';
+        const timer = setTimeout(() => { child.kill(); reject(new Error('技能服务超时')); }, 15000);
+        child.on('error', error => { clearTimeout(timer); reject(error); });
+        child.stdout.on('data', chunk => { output += chunk.toString(); });
+        child.stdin.on('error', () => {});
+        child.on('close', code => {
+          clearTimeout(timer);
+          try { resolve({ code: code === 0 ? 200 : 400, data: JSON.parse(output) }); }
+          catch { reject(new Error('Python 技能服务启动失败，请配置 HOTLINE_PYTHON')); }
+        });
+        child.stdin.end(JSON.stringify(request));
+      });
+      return json(result.code, result.data);
+    }
     const id = url.searchParams.get('id') ?? '';
     if (req.method === 'GET' && url.pathname === '/api/readme') {
       const project = discoverProjects().find(p => p.path === id);

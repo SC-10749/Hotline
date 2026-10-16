@@ -1,0 +1,106 @@
+import json
+import hashlib
+import sqlite3
+from contextlib import closing
+import sys
+import tempfile
+import threading
+import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from types import SimpleNamespace
+from center import Catalog, ROOT
+
+sys.path.insert(0, str(ROOT / 'projects/ai/dodo-agent'))
+from python_backend.skills import SkillRegistry
+
+CONTENT = '---\nname: incident-summary\ndescription: 运维事件复盘\n---\n输出影响和处理行动。\n'
+
+
+class CatalogTests(unittest.TestCase):
+    def test_version_binding_and_agent_prompt(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp, closing(Catalog(Path(temp) / 'catalog.db').db) as db:
+            catalog = Catalog.__new__(Catalog)
+            catalog.db = db
+            old = catalog.call('save', {'content': CONTENT})
+            self.assertEqual(old, catalog.call('save', {'content': CONTENT}))
+            new = catalog.call('save', {'content': CONTENT + '标记缺失信息。'})
+            self.assertEqual(old['version'], 'v1')
+            self.assertEqual(new['version'], 'v2')
+            self.assertEqual(catalog.call('save', {'content': CONTENT + '补充第三版。'})['version'], 'v3')
+            self.assertEqual(catalog.call('save', {'content': CONTENT.replace('incident-summary', 'other-skill')})['version'], 'v1')
+            project = 'projects/ai/dodo-agent'
+            catalog.call('bind', {**old, 'project': project})
+            self.assertEqual(catalog.call('runtime', {'project': project})['skills'][0]['content'], CONTENT)
+            self.assertEqual(catalog.call('runtime', {'project': 'other'})['skills'], [])
+            payload = catalog.call('runtime', {'project': project})
+
+            class Handler(BaseHTTPRequestHandler):
+                def do_GET(self):
+                    self.send_response(200)
+                    self.end_headers()
+                    self.wfile.write(json.dumps(payload).encode())
+                def log_message(self, *args):
+                    pass
+
+            server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                registry = SkillRegistry(SimpleNamespace(skills_dir=Path(temp) / 'local',
+                    platform_skills_url=f'http://127.0.0.1:{server.server_port}/api/skills', platform_project=project))
+                skill = registry.select('$incident-summary 请复盘')
+                self.assertIsNotNone(skill)
+                self.assertIn('输出影响和处理行动', registry.prompt_block(skill))
+                self.assertIn(old['version'], registry.prompt_block(skill))
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join()
+            catalog.call('bind', {**new, 'project': project})
+            self.assertEqual(catalog.call('runtime', {'project': project})['skills'][0]['version'], new['version'])
+            catalog.call('bind', {'name': old['name'], 'project': project})
+            self.assertEqual(catalog.call('runtime', {'project': project})['skills'], [])
+
+    def test_reject_invalid_packages(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp, closing(Catalog(Path(temp) / 'catalog.db').db) as db:
+            catalog = Catalog.__new__(Catalog)
+            catalog.db = db
+            for args in [{'content': 'bad'}, {'content': CONTENT, 'resources': {'../escape': 'bad'}}]:
+                with self.assertRaises(ValueError):
+                    catalog.call('save', args)
+            with self.assertRaises(ValueError):
+                catalog.call('bind', {'name': 'missing', 'version': 'missing', 'project': 'dodo'})
+
+    def test_migrate_existing_hash_versions_and_binding(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
+            path = Path(temp) / 'legacy.db'
+            contents = [CONTENT, CONTENT + '第二版。']
+            hashes = [hashlib.sha256((c + '\0{}').encode()).hexdigest() for c in contents]
+            with closing(sqlite3.connect(path)) as db:
+                db.executescript('''CREATE TABLE versions (name TEXT, version TEXT, description TEXT,
+                    content TEXT, resources TEXT, source TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY(name,version));
+                    CREATE TABLE bindings (project TEXT, name TEXT, version TEXT, PRIMARY KEY(project,name));''')
+                with db:
+                    for content, version in zip(contents, hashes):
+                        db.execute('INSERT INTO versions(name,version,description,content,resources,source) VALUES(?,?,?,?,?,?)',
+                                   ('incident-summary', version, '运维事件复盘', content, '{}', '{}'))
+                    db.execute('INSERT INTO bindings VALUES(?,?,?)', ('dodo', 'incident-summary', hashes[0]))
+            catalog = Catalog(path)
+            try:
+                self.assertEqual(catalog.call('runtime', {'project': 'dodo'})['skills'][0]['version'], 'v1')
+                self.assertEqual(catalog.call('save', {'content': contents[1]})['version'], 'v2')
+                self.assertEqual(catalog.call('save', {'content': CONTENT + '第三版。'})['version'], 'v3')
+            finally:
+                catalog.db.close()
+            reopened = Catalog(path)
+            try:
+                self.assertEqual(len(reopened.call('list', {})['skills']), 3)
+                self.assertEqual(reopened.call('runtime', {'project': 'dodo'})['skills'][0]['content'], CONTENT)
+            finally:
+                reopened.db.close()
+
+
+if __name__ == '__main__':
+    unittest.main()

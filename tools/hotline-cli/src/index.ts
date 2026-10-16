@@ -3,13 +3,15 @@ import { join } from "node:path";
 import { discoverProjects, rootDir } from "./projects.js";
 
 function usage(): void {
-  console.log("用法: pnpm hotline <list|search|info|validate> [关键词或项目路径]");
+  console.log("用法: npm run hotline（启动基础平台）\n      pnpm hotline <dashboard|list|search|info|validate> [关键词或项目路径]");
 }
 
 const [command, argument] = process.argv.slice(2);
 const projects = discoverProjects();
 
-if (!command || command === "help") {
+if (!command || command === "dashboard") {
+  await import("./dashboard.js");
+} else if (command === "help" || command === "--help" || command === "-h") {
   usage();
 } else if (command === "list") {
   if (projects.length === 0) console.log("当前没有包含 project.yaml 的项目。");

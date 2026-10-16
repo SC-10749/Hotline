@@ -1,0 +1,30 @@
+[
+  {
+    "name": "frontend-design",
+    "repository": "https://github.com/anthropics/skills",
+    "commit": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+    "path": "skills/frontend-design",
+    "files": 2
+  },
+  {
+    "name": "webapp-testing",
+    "repository": "https://github.com/anthropics/skills",
+    "commit": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+    "path": "skills/webapp-testing",
+    "files": 6
+  },
+  {
+    "name": "mcp-builder",
+    "repository": "https://github.com/anthropics/skills",
+    "commit": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+    "path": "skills/mcp-builder",
+    "files": 10
+  },
+  {
+    "name": "skill-creator",
+    "repository": "https://github.com/anthropics/skills",
+    "commit": "dbd4588f9e1033efb41dad4bef2f7947c8993d44",
+    "path": "skills/skill-creator",
+    "files": 18
+  }
+]

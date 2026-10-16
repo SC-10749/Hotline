@@ -23,7 +23,22 @@ const plannedModules = {
   observability: { title: '运行观测', description: '查看任务稳定性、执行轨迹和资源成本。', items: ['统计成功率、耗时、错误、重试和工具调用', '按项目、模型与版本统计 Token 和估算成本', '关联执行记录与产物，逐步增加日志脱敏和诊断导出'] },
 };
 
-function selectSection(section) {
+function selectSection(section, updateAddress = true) {
+  if (section !== 'projects' && !Object.hasOwn(plannedModules, section)) section = 'projects';
+  const hash = `#${section}`;
+  if (updateAddress && window.location.hash !== hash) window.history.pushState(null, '', hash);
+  $('skill-section').hidden = section !== 'skills';
+  if (section === 'skills') {
+    $('project-section').hidden = true;
+    $('future-section').hidden = true;
+    $('platform-nav').querySelectorAll('[data-section]').forEach(button => {
+      button.classList.toggle('active', button.dataset.section === section);
+      if (button.dataset.section === section) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
+    void loadSkills();
+    return;
+  }
   const plan = plannedModules[section];
   $('project-section').hidden = !!plan;
   $('future-section').hidden = !plan;
@@ -39,6 +54,122 @@ function selectSection(section) {
     else button.removeAttribute('aria-current');
   });
 }
+
+let skillCatalog = { skills: [], bindings: [] };
+let skillFilter = 'all';
+const skillVersions = new Map();
+const skillNotes = {
+  'frontend-design': { label: '界面设计', type: 'design', icon: 'M4 4h16v16H4z M4 9h16 M9 9v11', intro: '将页面需求转化为有辨识度的前端界面，提供布局、字体、配色与组件细节的设计指导。' },
+  'webapp-testing': { label: '应用测试', type: 'testing', icon: 'm8 12 3 3 5-6 M4 4h16v16H4z', intro: '使用 Playwright 验证本地 Web 应用，研究浏览器交互、页面截图和常见功能测试流程。' },
+  'mcp-builder': { label: '工具开发', type: 'tools', icon: 'm8 7-5 5 5 5 m8-10 5 5-5 5 m-3-14-2 18', intro: '指导构建 MCP 服务，将外部 API 与工具能力接入智能体，涵盖接口设计、实现与验证。' },
+  'skill-creator': { label: '技能迭代', type: 'research', icon: 'M12 3v6 m0 6v6 M3 12h6 m6 0h6 M6 6l3 3 m6 6 3 3 M6 18l3-3 m6-6 3-3', intro: '从实际任务出发编写和改进技能，研究测试用例、评估与迭代方法，为自进化实验提供参考。' },
+};
+function skillGroups() {
+  const groups = new Map();
+  skillCatalog.skills.forEach(s => {
+    if (!groups.has(s.name)) groups.set(s.name, []);
+    groups.get(s.name).push(s);
+  });
+  return [...groups.values()];
+}
+function renderSkills() {
+  const groups = skillGroups();
+  const boundNames = new Set(skillCatalog.bindings.filter(b => b.project === 'projects/ai/dodo-agent').map(b => b.name));
+  $('skill-count').textContent = `${groups.length} 个技能 · ${boundNames.size} 个已启用`;
+  const query = $('skill-search').value.trim().toLowerCase();
+  const visible = groups.filter(versions => {
+    const s = versions[0], note = skillNotes[s.name];
+    return (skillFilter !== 'enabled' || boundNames.has(s.name)) &&
+      `${s.name} ${s.description} ${note?.label || ''} ${note?.intro || ''}`.toLowerCase().includes(query);
+  });
+  $('skill-list').innerHTML = visible.map(versions => {
+    const name = versions[0].name;
+    const binding = skillCatalog.bindings.find(b => b.name === name && b.project === 'projects/ai/dodo-agent');
+    const s = versions.find(v => v.version === skillVersions.get(name)) || versions.find(v => v.version === binding?.version) || versions[0];
+    const index = skillCatalog.skills.indexOf(s);
+    const bound = binding?.version === s.version;
+    const note = skillNotes[name] || { label: '自定义技能', type: 'custom', icon: 'M8 3H5v18h14V7l-4-4H8 M9 11h6 M9 15h6' };
+    return `<article class="skill-card ${bound ? 'is-bound' : ''}">
+      <div class="skill-card-top"><span class="skill-icon ${note.type}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="${note.icon}"/></svg></span><span class="skill-binding ${bound ? 'is-bound' : ''}">${bound ? '已启用' : binding ? '当前版本未启用' : '未启用'}</span></div>
+      <div class="skill-heading"><span class="skill-category">${esc(note.label)}</span><h2>${esc(name)}</h2></div>
+      <p class="skill-intro">${esc(note.intro || s.description || '暂无技能介绍，可在编辑中填写 description。')}</p>
+      <div class="skill-version-row"><label for="skill-version-${index}">版本 <span>${versions.length}</span></label><select id="skill-version-${index}" data-skill-version="${esc(name)}" aria-label="${esc(name)} 的版本">${versions.map((v, i) => `<option value="${esc(v.version)}" ${v.version === s.version ? 'selected' : ''}>${esc(v.version)}${i === 0 ? ' · 最新' : ''}${v.version === binding?.version ? ' · 已启用' : ''}</option>`).join('')}</select></div>
+      <div class="skill-card-actions"><button class="action readme-button" data-edit-skill="${index}" aria-label="查看和编辑 ${esc(name)}">查看 / 编辑</button><button type="button" class="skill-switch" role="switch" aria-checked="${bound}" aria-label="启用 ${esc(name)} ${esc(s.version)}" data-toggle-skill="${index}"><span class="skill-switch-label">${bound ? '已启用' : '启用'}</span><span class="skill-switch-track" aria-hidden="true"><span></span></span></button></div>
+    </article>`;
+  }).join('') || `<div class="empty">${groups.length ? '没有匹配的技能' : '从第一个技能开始'}<br><small>${groups.length ? '试试其他关键词，或切换到全部技能。' : '点击“新建技能”，把常用流程保存为可复用的能力。'}</small></div>`;
+  $('skill-list').querySelectorAll('[data-skill-version]').forEach(select => select.onchange = () => {
+    skillVersions.set(select.dataset.skillVersion, select.value);
+    renderSkills();
+  });
+  $('skill-list').querySelectorAll('[data-edit-skill]').forEach(b => b.onclick = () => openSkillEditor(skillCatalog.skills[Number(b.dataset.editSkill)]));
+  $('skill-list').querySelectorAll('[data-toggle-skill]').forEach(b => b.onclick = async () => {
+    const s = skillCatalog.skills[Number(b.dataset.toggleSkill)];
+    const bound = skillCatalog.bindings.some(x => x.project === 'projects/ai/dodo-agent' && x.name === s.name && x.version === s.version);
+    b.disabled = true;
+    b.setAttribute('aria-busy', 'true');
+    b.querySelector('.skill-switch-label').textContent = '处理中…';
+    try {
+      await api('/api/skills', { method: 'POST', body: JSON.stringify({ action: 'bind', args: { project: 'projects/ai/dodo-agent', name: s.name, version: bound ? null : s.version } }) });
+      skillCatalog.bindings = skillCatalog.bindings.filter(x => !(x.project === 'projects/ai/dodo-agent' && x.name === s.name));
+      if (!bound) skillCatalog.bindings.push({ project: 'projects/ai/dodo-agent', name: s.name, version: s.version });
+      $('skill-message').textContent = bound ? `已停用 ${s.name} ${s.version}。` : `已启用 ${s.name} ${s.version}，下次技能请求生效。`;
+      renderSkills();
+    } catch (e) {
+      $('skill-message').textContent = e.message;
+      b.disabled = false;
+      b.removeAttribute('aria-busy');
+      b.querySelector('.skill-switch-label').textContent = bound ? '已启用' : '启用';
+    }
+  });
+}
+async function loadSkills() {
+  $('skill-refresh').disabled = true;
+  $('skill-list').setAttribute('aria-busy', 'true');
+  try {
+    skillCatalog = await api('/api/skills');
+    renderSkills();
+  } catch (e) { $('skill-message').textContent = `加载失败：${e.message}。请点击刷新重试。`; }
+  finally {
+    $('skill-refresh').disabled = false;
+    $('skill-list').setAttribute('aria-busy', 'false');
+  }
+}
+function openSkillEditor(skill) {
+  $('skill-editor-title').textContent = skill ? `编辑 ${skill.name}` : '新建技能';
+  $('skill-content').value = skill?.content || '---\nname: my-skill\ndescription: 描述这个技能能做什么、适用于什么任务。\n---\n写下执行步骤、所需资料和输出要求。';
+  $('skill-resources').value = skill?.resources || '{}';
+  $('skill-editor-message').textContent = '';
+  $('skill-editor').showModal();
+}
+$('skill-new').onclick = () => openSkillEditor();
+$('skill-editor-close').onclick = () => $('skill-editor').close();
+$('skill-refresh').onclick = () => loadSkills();
+$('skill-search').oninput = renderSkills;
+$('skill-filters').querySelectorAll('[data-skill-filter]').forEach(button => button.onclick = () => {
+  skillFilter = button.dataset.skillFilter;
+  $('skill-filters').querySelectorAll('button').forEach(b => {
+    b.classList.toggle('active', b === button);
+    b.setAttribute('aria-pressed', String(b === button));
+  });
+  renderSkills();
+});
+$('skill-save').onclick = async () => {
+  $('skill-save').disabled = true;
+  $('skill-save').textContent = '保存中…';
+  try {
+    const result = await api('/api/skills', { method: 'POST', body: JSON.stringify({ action: 'save', args: {
+      content: $('skill-content').value, resources: JSON.parse($('skill-resources').value || '{}'),
+    } }) });
+    skillVersions.set(result.name, result.version);
+    $('skill-message').textContent = `已保存 ${result.name} / ${result.version}，可在卡片上启用此版本。`;
+    $('skill-editor').close();
+    await loadSkills();
+  } catch (e) { $('skill-editor-message').textContent = e.message; }
+  finally {
+    $('skill-save').disabled = false;
+    $('skill-save').textContent = '保存新版本';
+  }
+};
 
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: { 'X-Hotline-Token': TOKEN, ...options.headers } });
@@ -154,5 +285,7 @@ $('search').oninput = render;
 $('clear').onclick = () => { $('log').textContent = ''; };
 $('platform-nav').querySelectorAll('[data-section]').forEach(button => button.onclick = () => selectSection(button.dataset.section));
 $('back-to-projects').onclick = () => selectSection('projects');
+window.addEventListener('hashchange', () => selectSection(window.location.hash.slice(1), false));
+selectSection(window.location.hash.slice(1) || 'projects');
 refresh();
 setInterval(refresh, 1800);

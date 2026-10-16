@@ -23,16 +23,22 @@ async function until(fn) {
 test('cards wait for readiness, never navigate automatically, and show safe Readme', async () => {
   const elements = new Map();
   const element = id => {
-    if (!elements.has(id)) elements.set(id, { innerHTML: '', textContent: '', value: '', open: false, hidden: false, children: [], classList: { add() {}, remove() {} }, appendChild(child) { this.children.push(child); }, querySelectorAll: () => [], addEventListener() {}, showModal() { this.open = true; }, close() { this.open = false; } });
+    if (!elements.has(id)) elements.set(id, { innerHTML: '', textContent: '', value: '', open: false, hidden: false, children: [], classList: { add() {}, remove() {} }, setAttribute() {}, appendChild(child) { this.children.push(child); }, querySelectorAll: () => [], addEventListener() {}, showModal() { this.open = true; }, close() { this.open = false; } });
     return elements.get(id);
   };
   const project = { path: 'projects/ai/demo', name: 'Demo', state: 'starting', url: 'http://127.0.0.1:5180/', runCommand: ['node'], language: ['Vue'] };
   const sources = [];
   class Events { constructor() { this.handlers = {}; sources.push(this); } addEventListener(name, fn) { this.handlers[name] = fn; } close() {} }
-  const context = vm.createContext({ document: { getElementById: element, createElement: tag => ({ tag, dataset: {}, hidden: false, remove() { this.removed = true; } }) }, window: { HOTLINE_TOKEN: '', location: { href: 'dashboard' } }, EventSource: Events, setTimeout: () => 1, clearTimeout() {}, setInterval() {}, fetch: async path => ({ ok: true, json: async () => path.startsWith('/api/readme') ? { overview: { techStack: ['Vue 3'], features: ['Chat'], services: [{ name: 'SQLite', requirement: '内置', description: '无需外部服务' }] }, readme: '<script>alert(1)</script>' } : { projects: [project], errors: [], log: '' } }) });
+  const context = vm.createContext({ document: { getElementById: element, createElement: tag => ({ tag, dataset: {}, hidden: false, remove() { this.removed = true; } }) }, window: { HOTLINE_TOKEN: '', location: { href: 'dashboard', hash: '' }, history: { pushState(_state, _title, hash) { context.window.location.hash = hash; } }, addEventListener() {} }, EventSource: Events, setTimeout: () => 1, clearTimeout() {}, setInterval() {}, fetch: async path => ({ ok: true, json: async () => path.startsWith('/api/skills') ? { skills: [], bindings: [] } : path.startsWith('/api/readme') ? { overview: { techStack: ['Vue 3'], features: ['Chat'], services: [{ name: 'SQLite', requirement: '内置', description: '无需外部服务' }] }, readme: '<script>alert(1)</script>' } : { projects: [project], errors: [], log: '' } }) });
   vm.runInContext(readFileSync(join(cli, 'public/dashboard.js'), 'utf8'), context);
   await delay(0);
-  for (const section of ['harness', 'skills', 'tools', 'evaluations', 'cicd', 'observability']) {
+  vm.runInContext("selectSection('skills')", context);
+  assert.equal(element('skill-section').hidden, false);
+  assert.equal(context.window.location.hash, '#skills');
+  vm.runInContext("selectSection(window.location.hash.slice(1), false)", context);
+  assert.equal(element('skill-section').hidden, false, 'restoring address must preserve Skill center');
+  assert.equal(element('future-section').hidden, true);
+  for (const section of ['harness', 'tools', 'evaluations', 'cicd', 'observability']) {
     vm.runInContext(`selectSection('${section}')`, context);
     assert.equal(element('project-section').hidden, true);
     assert.equal(element('future-section').hidden, false);
@@ -85,7 +91,7 @@ test('HTTP health checks, duplicate starts, Readme API and process cleanup', asy
   writeFileSync(join(fixture, 'README.md'), '# Test project\nTech stack and services.\n');
   writeFileSync(join(fixture, 'server.mjs'), `import {createServer} from 'node:http';import {existsSync} from 'node:fs';createServer((req,res)=>{res.statusCode=req.url==='/health'&&!existsSync('ready')?503:200;res.end('OK')}).listen(${appPort},'127.0.0.1',()=>console.log('Local: http://127.0.0.1:${appPort}/'));`);
   writeFileSync(join(fixture, 'project.yaml'), JSON.stringify({ name, healthChecks: [`http://127.0.0.1:${appPort}/health`], commands: { start: [process.execPath, 'server.mjs'] }, overview: { techStack: ['Node.js'], features: ['Test server'] } }));
-  const child = spawn(process.execPath, ['--import', 'tsx', 'src/dashboard.ts'], { cwd: cli, env: { ...process.env, HOTLINE_PORT: String(port), NODE_OPTIONS: '' }, windowsHide: true, stdio: 'pipe' });
+  const child = spawn(process.execPath, ['--import', 'tsx', 'src/dashboard.ts'], { cwd: cli, env: { ...process.env, HOTLINE_PORT: String(port), HOTLINE_SKILL_DB: join(fixture, 'skills.db'), NODE_OPTIONS: '' }, windowsHide: true, stdio: 'pipe' });
   let logs = '', token, started = false;
   child.stdout.on('data', value => logs += value);
   child.stderr.on('data', value => logs += value);
@@ -95,6 +101,14 @@ test('HTTP health checks, duplicate starts, Readme API and process cleanup', asy
   try {
     token = await until(async () => { try { return (await (await fetch(origin)).text()).match(/HOTLINE_TOKEN='([^']+)'/)[1]; } catch { if (child.exitCode !== null) throw Error(logs); return false; } });
     assert.equal((await call('/dashboard.js')).status, 200);
+    const skillCall = args => fetch(origin + '/api/skills', { method: 'POST', headers: { 'X-Hotline-Token': token }, body: JSON.stringify(args) });
+    const savedResponse = await skillCall({ action: 'save', args: { content: '---\nname: integration-demo\ndescription: Integration test\n---\nSummarize facts.' } });
+    assert.equal(savedResponse.status, 200);
+    const saved = await savedResponse.json();
+    assert.equal((await skillCall({ action: 'bind', args: { ...saved, project: id } })).status, 200);
+    const runtime = await (await call('/api/skills?project=' + encodeURIComponent(id))).json();
+    assert.equal(runtime.skills[0].version, saved.version);
+    assert.equal((await fetch(origin + '/api/skills', { method: 'POST', body: '{}' })).status, 403);
     const info = await (await call('/api/readme?id=' + id)).json();
     assert.deepEqual(info.overview.techStack, ['Node.js']);
     assert.ok(info.readme.includes('# Test project'));
