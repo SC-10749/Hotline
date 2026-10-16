@@ -1,0 +1,28 @@
+# Local secrets and environment configuration, at every directory depth.
+.env
+.env.*
+*.env
+!.env.example
+!.env.sample
+*.local.*
+*.private.*
+private/
+secrets/
+service-addresses.*
+server-addresses.*
+*服务地址*
+*服务器地址*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Dependencies, local runtime state and generated output.
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+dist/
+coverage/
+/data/
+.DS_Store
