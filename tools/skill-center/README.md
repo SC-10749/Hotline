@@ -44,6 +44,26 @@ dodoagent 默认访问 `http://127.0.0.1:4311/api/skills`，项目 ID 为 `proje
 
 `version: null` 解除绑定。同一技能按 v1、v2、v3 递增；内容哈希覆盖 SKILL.md 和资源文本，用于去重，相同内容重复保存仍返回原版本；旧版哈希编号和绑定自动迁移；`source` 保存来源；保存幂等。资源使用相对路径到 UTF-8 文本的映射，原始二进制资产保留于样本目录。当前编辑器仅支持单行 name/description，不是完整 YAML 解析器。
 
-当前运行方式是把绑定版本的技能正文加载到 dodoagent 的模型上下文；需要配置模型才能生成实际回答。尚不支持脚本沙箱、资源读取工具、依赖安装、自动评分或自动演化。界面所有版本标记为“未评测”，版本号也不代表效果质量。平台断开时记录警告，保留本地技能和现有降级行为。
+当前运行方式是把绑定版本的技能正文加载到 dodoagent 的模型上下文；需要配置模型才能生成实际回答。平台暂不执行技能包脚本或安装依赖。平台断开时记录警告，保留本地技能和现有降级行为。
 
-后续自进化可在这些不可变版本上增加固定任务集、运行轨迹、评分与候选晋升流程。现在保存候选不会替换已绑定版本，可用于先人工对比再切换的实验。
+## Skill 自进化
+
+平台提供本地、可审计的自进化闭环：评测用例按 `train`、`selection`、`test` 三段保存；`evolve` 只接受最多 8 条 `add/delete/replace` patch，自动执行静态、动态、回归、增益和安全门禁。通过后候选以 `staged` 保存，不会自动改变线上绑定；再用 `promote` 灰度绑定，或用 `rollback` 恢复上一版本。
+
+示例请求：
+
+```json
+{"action":"eval_case","args":{"caseId":"incident-1","split":"selection","case":{"required":["输出影响"],"forbidden":["泄露密钥"]}}}
+```
+
+```json
+{"action":"evolve","args":{"name":"example","baseVersion":"v1","patches":[{"op":"add","text":"输出前检查敏感信息。"}]}}
+```
+
+`evaluate` 可单独查看评分，`promote` 接受 `project`、`name`、`version` 和 `percentage`，`rollback` 按项目和技能恢复上一绑定版本。每次演化都会在 SQLite 中保存 patch、门禁结果和新旧分数，便于人工审查和回滚。`evolve` 接收外部 bounded patch，`auto_evolve` 则在配置模型后自动生成 patch。
+
+### 自动反思、沙箱与灰度
+
+配置 `SKILL_EVOLUTION_BASE_URL`、`SKILL_EVOLUTION_API_KEY`、`SKILL_EVOLUTION_MODEL` 后，`auto_evolve` 会把 train 失败用例交给独立模型，只接收 bounded patch；配置 `SKILL_JUDGE_BASE_URL`、`SKILL_JUDGE_API_KEY`、`SKILL_JUDGE_MODEL` 后，`judge` 可对执行输出做独立评分。`run_case` 只接受字符串数组命令，使用临时工作目录、无 shell、限时和最小环境执行，并把 `required/forbidden` verifier 结果写回响应。
+
+`promote` 会保存候选和旧版本，运行时传入 `requestId` 时按稳定哈希命中灰度比例；`metric` 记录错误率等指标，达到 `SKILL_ROLLOUT_ERROR_THRESHOLD` 且样本数达到 `SKILL_ROLLOUT_MIN_SAMPLES` 时自动回滚。控制台的 **Skill 自进化** 页面可直接提交 patch、查看门禁结果和 staged 状态。

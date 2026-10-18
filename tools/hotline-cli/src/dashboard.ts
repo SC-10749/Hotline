@@ -22,11 +22,9 @@ const append = (id: string, run: Run, value: string) => {
   run.log = (run.log + value).slice(-65536);
   const clean = run.log.replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, '');
   const match = clean.match(/Local:\s+(https?:\/\/[^\s]+)/i);
-  if (match) {
+    if (match && !run.url) {
     const url = match[1].replace(/[),\]]+$/, '');
-    if (url !== run.url) {
       run.url = url;
-    }
   }
   publish(id, 'output', { value });
 };
@@ -120,7 +118,7 @@ const server = createServer(async (req, res) => {
           if (Buffer.byteLength(body) > 6 * 1024 * 1024) return json(413, { error: '技能请求过大' });
         }
         request = JSON.parse(body);
-        if (!['save', 'bind'].includes(request.action)) return json(400, { error: '不支持的技能操作' });
+        if (!['save', 'bind', 'eval_case', 'eval_cases', 'evaluate', 'evolve', 'auto_evolve', 'run_case', 'judge', 'promote', 'rollback', 'metric', 'metrics'].includes(request.action)) return json(400, { error: '不支持的技能操作' });
       }
       const result = await new Promise<{ code: number; data: unknown }>((resolve, reject) => {
         const python = process.env.HOTLINE_PYTHON ?? (process.platform === 'win32'
@@ -141,6 +139,62 @@ const server = createServer(async (req, res) => {
         child.stdin.end(JSON.stringify(request));
       });
       return json(result.code, result.data);
+    }
+    if (req.method === 'GET' && url.pathname === '/api/documents') {
+      // The document processor remains a dodoagent service for now; the
+      // platform provides the unified catalog view and reads its safe list API.
+      const source = process.env.HOTLINE_DOCUMENTS_URL ?? 'http://127.0.0.1:8888/document/list';
+      try {
+        const response = await fetch(source, { signal: AbortSignal.timeout(2000) });
+        if (!response.ok) return json(502, { error: 'dodoagent 文档服务暂不可用' });
+        const payload = await response.json() as { data?: { documents?: unknown[] }; documents?: unknown[] };
+        return json(200, { documents: payload.data?.documents ?? payload.documents ?? [] });
+      } catch { return json(502, { error: 'dodoagent 文档服务未启动' }); }
+    }
+    if (req.method === 'GET' && url.pathname === '/api/skill-evolution') {
+      const view = url.searchParams.get('view') || 'all';
+      const actions: Record<string, string> = { cases: 'eval_cases', metrics: 'metrics', runs: 'evolution_runs', rollouts: 'rollouts' };
+      const action = actions[view];
+      if (!action && view !== 'all') return json(400, { error: '不支持的自进化视图' });
+      const python = process.env.HOTLINE_PYTHON ?? (process.platform === 'win32' ? join(rootDir, 'projects/ai/dodo-agent/.venv/Scripts/python.exe') : 'python3');
+      const runCatalog = (name: string) => new Promise<unknown>((resolve, reject) => {
+        const child = spawn(python, [join(rootDir, 'tools/skill-center/center.py')], { cwd: rootDir, windowsHide: true, env: { ...process.env, PYTHONUTF8: '1' } });
+        let output = ''; const timer = setTimeout(() => { child.kill(); reject(new Error('技能服务超时')); }, 15000);
+        child.stdout.on('data', chunk => { output += chunk.toString(); }); child.on('error', reject);
+        child.on('close', code => { clearTimeout(timer); try { if (code !== 0) reject(new Error(output)); else resolve(JSON.parse(output)); } catch (error) { reject(error); } });
+        child.stdin.end(JSON.stringify({ action: name, args: {} }));
+      });
+      try { if (action) return json(200, await runCatalog(action)); const [cases, metrics, runs, rollouts] = await Promise.all([runCatalog('eval_cases'), runCatalog('metrics'), runCatalog('evolution_runs'), runCatalog('rollouts')]); return json(200, { cases, metrics, runs, rollouts }); }
+      catch (error) { return json(502, { error: error instanceof Error ? error.message : '自进化数据读取失败' }); }
+    }
+    if (req.method === 'GET' && url.pathname === '/api/document-assets') {
+      const sourcePath = url.searchParams.get('src') || '';
+      if (!sourcePath.startsWith('/doc-asset/')) return json(400, { error: '图片地址无效' });
+      const base = process.env.HOTLINE_DOCUMENTS_URL ?? 'http://127.0.0.1:8888/document/list';
+      const origin = new URL(base).origin;
+      try {
+        const response = await fetch(new URL(sourcePath, origin), { signal: AbortSignal.timeout(5000) });
+        if (!response.ok) return json(404, { error: '图片不存在' });
+        const body = Buffer.from(await response.arrayBuffer());
+        res.writeHead(200, { 'Content-Type': response.headers.get('content-type') || 'image/*', 'Cache-Control': 'private, max-age=300' });
+        return res.end(body);
+      } catch { return json(502, { error: '图片服务暂不可用' }); }
+    }
+    if (req.method === 'GET' && url.pathname.startsWith('/api/documents/')) {
+      const suffix = url.pathname.slice('/api/documents/'.length);
+      if (!suffix.endsWith('/preview')) return json(404, { error: '文档接口不存在' });
+      const documentId = decodeURIComponent(suffix.slice(0, -'/preview'.length));
+      if (!documentId || documentId.includes('/') || documentId.includes('\\')) return json(400, { error: '文档 ID 无效' });
+      const source = process.env.HOTLINE_DOCUMENTS_URL ?? 'http://127.0.0.1:8888/document/list';
+      const previewUrl = source.replace(/\/list\/?$/, `/${encodeURIComponent(documentId)}/preview`);
+      try {
+        const response = await fetch(previewUrl, { signal: AbortSignal.timeout(5000) });
+        const payload = await response.json() as { data?: unknown; message?: string; detail?: string };
+        if (!response.ok) return json(response.status === 404 ? 404 : 502, { error: payload.message || payload.detail || '文档预览不可用' });
+        const data = payload.data && typeof payload.data === 'object' ? payload.data as { images?: Array<{ src?: string }> } : null;
+        if (data?.images) data.images = data.images.map(image => ({ ...image, src: image.src?.startsWith('/doc-asset/') ? `/api/document-assets?src=${encodeURIComponent(image.src)}` : image.src }));
+        return json(200, payload.data ?? payload);
+      } catch { return json(502, { error: 'dodoagent 文档预览服务未启动' }); }
     }
     const id = url.searchParams.get('id') ?? '';
     if (req.method === 'GET' && url.pathname === '/api/readme') {

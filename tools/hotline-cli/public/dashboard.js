@@ -1,5 +1,6 @@
 const TOKEN = window.HOTLINE_TOKEN;
 let projects = [], category = 'all', selected = '', eventSource = null;
+const projectLogs = new Map();
 let readmeRequest = 0;
 const $ = id => document.getElementById(id);
 const developmentStages = {
@@ -24,10 +25,30 @@ const plannedModules = {
 };
 
 function selectSection(section, updateAddress = true) {
-  if (section !== 'projects' && !Object.hasOwn(plannedModules, section)) section = 'projects';
+  if (section !== 'projects' && section !== 'skills' && section !== 'documents' && section !== 'evolution' && !Object.hasOwn(plannedModules, section)) section = 'projects';
   const hash = `#${section}`;
   if (updateAddress && window.location.hash !== hash) window.history.pushState(null, '', hash);
   $('skill-section').hidden = section !== 'skills';
+  $('document-section').hidden = section !== 'documents';
+  $('evolution-section').hidden = section !== 'evolution';
+  if (section === 'evolution') {
+    $('project-section').hidden = true;
+    $('future-section').hidden = true;
+    $('platform-nav').querySelectorAll('[data-section]').forEach(button => { const active = button.dataset.section === section; button.classList.toggle('active', active); if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current'); });
+    void loadEvolutionView();
+    return;
+  }
+  if (section === 'documents') {
+    $('project-section').hidden = true;
+    $('future-section').hidden = true;
+    $('platform-nav').querySelectorAll('[data-section]').forEach(button => {
+      const active = button.dataset.section === section;
+      button.classList.toggle('active', active);
+      if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
+    });
+    void loadDocuments();
+    return;
+  }
   if (section === 'skills') {
     $('project-section').hidden = true;
     $('future-section').hidden = true;
@@ -54,6 +75,75 @@ function selectSection(section, updateAddress = true) {
     else button.removeAttribute('aria-current');
   });
 }
+
+let documentCatalog = [];
+function renderDocuments() {
+  const query = $('document-search').value.trim().toLowerCase();
+  const visible = documentCatalog.filter(doc => String(doc.fileName || doc.name || '').toLowerCase().includes(query));
+  $('document-count').textContent = `${visible.length} 份文档`;
+  $('document-list').innerHTML = visible.map(doc => { const id = doc.fileId || doc.id || ''; return `<article class="skill-card"><div class="skill-card-top"><span class="skill-icon tools" aria-hidden="true">DOC</span><span class="skill-binding is-bound">平台目录</span></div><div class="skill-heading"><span class="skill-category">${esc(doc.docType || '文档')}</span><h2>${esc(doc.fileName || doc.name || '未命名文档')}</h2></div><p class="skill-intro">状态：${esc(doc.status || '已登记')} · ${esc(doc.charCount || 0)} 字</p><div class="skill-version-row"><label>文档 ID <span>${esc(id)}</span></label></div><button class="action readme-button document-preview-button" type="button" data-document-preview="${esc(id)}">查看分块与图片描述</button></article>`; }).join('') || '<div class="empty">暂无文档</div>';
+  $('document-list').querySelectorAll('[data-document-preview]').forEach(button => button.onclick = () => openDocumentPreview(button.dataset.documentPreview));
+}
+async function openDocumentPreview(id) {
+  $('document-dialog-title').textContent = '文档预览';
+  $('document-dialog-subtitle').textContent = '正在读取文档分块与图片描述…';
+  $('document-content').innerHTML = '<p role="status">正在加载…</p>';
+  if (!$('document-dialog').open) $('document-dialog').showModal();
+  try {
+    const data = await api('/api/documents/' + encodeURIComponent(id) + '/preview');
+    const summary = data.summary || {};
+    $('document-dialog-subtitle').textContent = `${summary.childCount ?? 0} 个子分段 · ${summary.sectionCount ?? 0} 个章节 · ${summary.imageCount ?? 0} 张图片`;
+    const stats = `<div class="document-preview-stats"><span>子分段 <b>${esc(summary.childCount ?? 0)}</b></span><span>章节 <b>${esc(summary.sectionCount ?? 0)}</b></span><span>图片 <b>${esc(summary.imageCount ?? 0)}</b></span><span>图注 <b>${esc(summary.captionCount ?? 0)}</b></span></div>`;
+    const sections = (data.sections || []).map(section => `<details class="document-preview-section" open><summary>${esc(section.heading || '未命名章节')} <span>${esc(section.chunkCount ?? 0)} 块 · ${esc(section.charCount ?? 0)} 字</span></summary><div>${(section.chunks || []).map(chunk => `<article class="document-chunk"><header>块 ${esc(chunk.index ?? '')}<code>${esc(chunk.charCount ?? 0)} 字</code></header><pre>${esc(chunk.content || '')}</pre></article>`).join('')}</div></details>`).join('');
+    const images = (data.images || []).map(image => `<article class="document-image">${image.src ? `<img src="${esc(image.src)}" alt="${esc(image.alt || `文档图片 ${image.index ?? ''}`)}" loading="lazy">` : ''}<div><strong>图片 ${esc(image.index ?? '')}</strong><span>${esc(image.captionSource === 'generated' ? 'AI 图注' : '原文说明')}</span></div><p>${esc(image.caption || image.alt || '暂无图片描述')}</p></article>`).join('');
+    $('document-content').innerHTML = stats + `<h3>父子分块</h3>${sections || '<p>暂无分块数据。</p>'}<h3>图片描述</h3>${images || '<p>这份文档没有图片或图注。</p>'}`;
+  } catch (error) { $('document-dialog-subtitle').textContent = '读取失败'; $('document-content').innerHTML = `<p role="alert">${esc(error.message)}</p>`; }
+}
+async function loadDocuments() {
+  $('document-refresh').disabled = true;
+  try {
+    const result = await api('/api/documents');
+    documentCatalog = result.documents || [];
+    renderDocuments();
+  } catch (e) { $('document-message').textContent = `加载失败：${e.message}`; }
+  finally { $('document-refresh').disabled = false; }
+}
+$('document-refresh').onclick = () => loadDocuments();
+$('document-search').oninput = renderDocuments;
+$('close-document').onclick = () => $('document-dialog').close();
+$('evolution-run').onclick = async () => {
+  const button = $('evolution-run');
+  try {
+    button.disabled = true;
+    const result = await api('/api/skills', { method: 'POST', body: JSON.stringify({ action: 'evolve', args: { name: $('evolution-name').value.trim(), baseVersion: $('evolution-base').value.trim(), patches: JSON.parse($('evolution-patches').value) } }) });
+    $('evolution-result').textContent = JSON.stringify(result, null, 2);
+    $('evolution-message').textContent = result.status === 'staged' ? '候选已通过门禁并进入 staged。' : '候选未通过门禁，请查看结果。';
+  } catch (error) { $('evolution-message').textContent = error.message; }
+  finally { button.disabled = false; }
+};
+let evolutionView = 'cases';
+function renderEvolution(view, data) {
+  const panel = $('evolution-panel');
+  if (view === 'cases') {
+    const rows = data.cases || [];
+    panel.innerHTML = `<h2>评测集 <small>${rows.length} 条</small></h2>` + (rows.length ? `<table class="evolution-table"><thead><tr><th>ID</th><th>分段</th><th>用例</th></tr></thead><tbody>${rows.map(row => `<tr><td>${esc(row.case_id)}</td><td>${esc(row.split)}</td><td><code>${esc(row.payload)}</code></td></tr>`).join('')}</tbody></table>` : '<p class="evolution-empty">还没有评测用例。</p>');
+  } else if (view === 'runs' || view === 'rollback') {
+    const rows = (data.runs || []).filter(row => view === 'runs' || row.status === 'rejected' || row.status === 'rolled_back');
+    panel.innerHTML = `<h2>${view === 'runs' ? '执行轨迹' : '回滚记录'} <small>${rows.length} 条</small></h2>` + (rows.length ? `<table class="evolution-table"><thead><tr><th>时间</th><th>技能</th><th>基础版本</th><th>候选版本</th><th>状态</th><th>运行 ID</th></tr></thead><tbody>${rows.map(row => `<tr><td>${esc(row.created_at)}</td><td>${esc(row.name)}</td><td>${esc(row.base_version)}</td><td>${esc(row.candidate_version || '-')}</td><td><span class="evolution-status ${esc(row.status)}">${esc(row.status)}</span></td><td><code>${esc(row.run_id)}</code></td></tr>`).join('')}</tbody></table>` : '<p class="evolution-empty">暂无记录。</p>');
+  } else if (view === 'rollouts') {
+    const rows = data.rollouts || [];
+    panel.innerHTML = `<h2>灰度状态 <small>${rows.length} 个</small></h2>` + (rows.length ? `<table class="evolution-table"><thead><tr><th>项目</th><th>技能</th><th>候选版本</th><th>旧版本</th><th>比例</th><th>状态</th></tr></thead><tbody>${rows.map(row => `<tr><td>${esc(row.project)}</td><td>${esc(row.name)}</td><td>${esc(row.candidate_version)}</td><td>${esc(row.previous_version || '-')}</td><td>${esc(row.percentage)}%</td><td>${row.active ? '运行中' : '已回滚'}</td></tr>`).join('')}</tbody></table>` : '<p class="evolution-empty">暂无灰度发布。</p>');
+  } else {
+    const rows = data.metrics || [];
+    panel.innerHTML = `<h2>指标曲线 <small>${rows.length} 条</small></h2>` + (rows.length ? `<div class="metric-bars">${rows.slice(0, 30).reverse().map(row => `<div class="metric-bar"><span>${esc(row.metric)} ${esc(row.value)}</span><i style="height:${Math.min(100, Math.max(4, Number(row.value) * 100))}%"></i></div>`).join('')}</div>` : '<p class="evolution-empty">暂无线上指标。</p>');
+  }
+}
+async function loadEvolutionView() {
+  try { const data = await api('/api/skill-evolution?view=all'); const merged = { cases: data.cases?.cases || [], runs: data.runs?.runs || [], rollouts: data.rollouts?.rollouts || [], metrics: data.metrics?.metrics || [] }; renderEvolution(evolutionView, merged); }
+  catch (error) { $('evolution-panel').innerHTML = `<p class="evolution-empty">读取失败：${esc(error.message)}</p>`; }
+}
+$('evolution-tabs').querySelectorAll('[data-evolution-view]').forEach(button => button.onclick = () => { evolutionView = button.dataset.evolutionView; $('evolution-tabs').querySelectorAll('button').forEach(item => item.classList.toggle('active', item === button)); loadEvolutionView(); });
+$('evolution-refresh').onclick = loadEvolutionView;
 
 let skillCatalog = { skills: [], bindings: [] };
 let skillFilter = 'all';
@@ -194,9 +284,10 @@ function render() {
     const stage = developmentStage(p.status);
     const link = p.state === 'running' && isWebUrl(p.url)
       ? `<a class="project-link" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer" aria-label="打开 ${esc(p.name)} 页面">${esc(p.url)} <span aria-hidden="true">↗</span></a>` : '';
+    const log = projectLogs.get(p.path) || '';
     return `<article class="card"><div class="card-top"><div style="min-width:0"><h2 title="${esc(p.name)}">${esc(p.name)}</h2><div class="path">${esc(p.path)}</div></div><span class="development-badge ${stage.key}" aria-label="开发状态：${stage.label}">${stage.label}</span></div>
       <p class="desc">${esc(p.description || '暂无描述')}</p><div class="meta"><span class="tag">${esc(categoryLabel[p.category] || p.category)}</span><span class="tag">${esc(p.mode || '未声明模式')}</span>${(p.language || []).map(l => `<span class="tag">${esc(l)}</span>`).join('')}</div>
-      <div class="card-runtime"><span>运行状态</span><span class="status ${esc(p.state)}">${statusLabel(p.state)}</span></div>${link}<div class="actions"><button class="action readme-button" data-readme="${esc(p.path)}" aria-label="查看 ${esc(p.name)} 的 Readme">Readme</button>
+      <div class="card-runtime"><span>运行状态</span><span class="status ${esc(p.state)}">${statusLabel(p.state)}</span></div>${link}<details class="card-logs" ${log ? 'open' : ''}><summary>应用日志 <span>${log ? '有输出' : '暂无输出'}</span></summary><pre data-log-id="${esc(p.path)}">${esc(log || '启动应用后，这里显示该应用自己的日志。')}</pre></details><div class="actions"><button class="action readme-button" data-readme="${esc(p.path)}" aria-label="查看 ${esc(p.name)} 的 Readme">Readme</button>
       ${active ? `<button class="action stop" data-stop="${esc(p.path)}" ${p.state === 'stopping' ? 'disabled' : ''}>${p.state === 'stopping' ? '停止中…' : '停止'}</button>` : `<button class="action" data-start="${esc(p.path)}" ${p.runCommand ? '' : 'disabled'}>${p.runCommand ? '启动项目' : '未配置启动命令'}</button>`}</div></article>`;
   }).join('') : '<div class="empty">没有匹配的项目<br><small>添加 project.yaml 后刷新控制台</small></div>';
   $('grid').querySelectorAll('[data-start]').forEach(button => button.onclick = () => start(button.dataset.start));
@@ -207,14 +298,23 @@ function render() {
 function connectEvents(id) {
   eventSource?.close();
   eventSource = new EventSource('/api/events?id=' + encodeURIComponent(id));
-  eventSource.addEventListener('snapshot', event => { $('log').textContent = JSON.parse(event.data).log || '该项目暂无输出。'; });
+  eventSource.addEventListener('snapshot', event => { setProjectLog(id, JSON.parse(event.data).log || ''); });
   eventSource.addEventListener('output', event => {
-    $('log').textContent += JSON.parse(event.data).value;
-    $('log').scrollTop = $('log').scrollHeight;
+    setProjectLog(id, (projectLogs.get(id) || '') + JSON.parse(event.data).value);
   });
   eventSource.addEventListener('ready', () => { show('项目已启动，点击卡片上的页面链接即可访问。'); refresh(); });
   eventSource.addEventListener('state', () => refresh());
   eventSource.onerror = () => { $('updated').textContent = '实时连接已断开，正在重连'; };
+}
+function setProjectLog(id, value) {
+  projectLogs.set(id, value);
+  const element = [...document.querySelectorAll('[data-log-id]')].find(item => item.dataset.logId === id);
+  if (element) {
+    element.textContent = value || '该项目暂无输出。';
+    element.scrollTop = element.scrollHeight;
+    const details = element.closest('details');
+    if (details && value) details.open = true;
+  }
 }
 async function start(id) {
   const project = projects.find(p => p.path === id);
@@ -247,7 +347,7 @@ async function refresh() {
     if (data.errors.length) show(data.errors.join('；'));
     if (selected) {
       const logs = await api('/api/logs?id=' + encodeURIComponent(selected));
-      $('log').textContent = logs.log || '该项目暂无输出。';
+      setProjectLog(selected, logs.log || '');
     }
   } catch (error) { show(error.message); $('updated').textContent = '连接失败'; }
 }
@@ -282,7 +382,6 @@ $('close-readme').onclick = () => $('readme-dialog').close();
 $('readme-dialog').addEventListener('close', () => { readmeRequest++; });
 $('readme-dialog').addEventListener('click', event => { if (event.target === $('readme-dialog')) { const rect = event.target.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) event.target.close(); } });
 $('search').oninput = render;
-$('clear').onclick = () => { $('log').textContent = ''; };
 $('platform-nav').querySelectorAll('[data-section]').forEach(button => button.onclick = () => selectSection(button.dataset.section));
 $('back-to-projects').onclick = () => selectSection('projects');
 window.addEventListener('hashchange', () => selectSection(window.location.hash.slice(1), false));

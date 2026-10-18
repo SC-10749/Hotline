@@ -72,6 +72,27 @@ class CatalogTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 catalog.call('bind', {'name': 'missing', 'version': 'missing', 'project': 'dodo'})
 
+    def test_evolution_gates_stage_promote_and_rollback(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
+            catalog = Catalog(Path(temp) / 'catalog.db')
+            base_content = CONTENT + ('执行步骤：记录事实并核对证据。\n' * 12)
+            old = catalog.call('save', {'content': base_content})
+            catalog.call('eval_case', {'caseId': 'case-1', 'split': 'selection',
+                                       'case': {'required': ['输出影响和处理行动', '禁止泄露'], 'forbidden': []}})
+            catalog.call('eval_case', {'caseId': 'case-2', 'split': 'test',
+                                       'case': {'required': ['输出影响和处理行动', '禁止泄露'], 'forbidden': []}})
+            evolved = catalog.call('evolve', {'name': old['name'], 'baseVersion': old['version'],
+                                              'patches': [{'op': 'add', 'text': '禁止泄露敏感信息。'}]})
+            self.assertEqual(evolved['status'], 'staged')
+            self.assertTrue(all(evolved['gates'].values()))
+            project = 'projects/ai/dodo-agent'
+            catalog.call('bind', {**old, 'project': project})
+            catalog.call('promote', {'project': project, 'name': old['name'], 'version': evolved['candidateVersion'], 'percentage': 10})
+            self.assertEqual(catalog.call('runtime', {'project': project})['skills'][0]['version'], evolved['candidateVersion'])
+            catalog.call('rollback', {'project': project, 'name': old['name']})
+            self.assertEqual(catalog.call('runtime', {'project': project})['skills'][0]['version'], old['version'])
+            catalog.db.close()
+
     def test_migrate_existing_hash_versions_and_binding(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp:
             path = Path(temp) / 'legacy.db'
