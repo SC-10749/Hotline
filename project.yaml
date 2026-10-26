@@ -1,0 +1,66 @@
+name: dodo-agent
+category: ai
+status: working
+description: 企业级端到端通用智能体平台（FastAPI 后端 + Vue 前端 + 技能中心）
+language:
+  - Python
+  - Vue
+mode: local-demo
+url: http://127.0.0.1:8888/
+healthChecks:
+  - http://127.0.0.1:8888/health
+  - http://127.0.0.1:8888/console
+overview:
+  techStack:
+    - Vue 3、Vite 6、Lucide 图标
+    - Python 3.11+、FastAPI、Uvicorn、SSE 流式响应
+    - 技能中心与 Skill 自进化（SQLite 目录库，已并入后端）
+    - 本地 SQLite 与文件存储；可选 MySQL、Redis、MinIO、PostgreSQL / pgvector
+  features:
+    - 智能对话、联网搜索与多轮会话管理
+    - 文件问答与文档库，支持 Markdown、PDF、Word 的解析和检索
+    - PPT 生成、深度研究与技能包管理
+    - /console 技能控制台：技能版本、绑定与自进化闭环
+  services:
+    - name: Node.js、Python 3.11+（可选 uv）
+      requirement: 启动必需
+      description: 先在 frontend 目录执行 npm install；后端依赖通过 pyproject.toml / requirements.txt 安装。确保 5180 和 8888 端口空闲。
+    - name: 大模型 API
+      requirement: 对话功能必需
+      description: 配置兼容 OpenAI 的服务地址、模型和 API Key；仅启动页面无需调用模型。
+    - name: MySQL、Redis、MinIO
+      requirement: 按需启用
+      description: 本地启动默认使用 SQLite 和本地文件，不要求启动这三个服务；生产存储、分布式任务或对象存储模式按配置连接。
+    - name: PostgreSQL / pgvector 与 Embedding API
+      requirement: 向量检索需要
+      description: 本地默认关闭向量检索；启用后需配置数据库、向量扩展及 Embedding 模型。
+    - name: MinerU、多模态模型、Tavily
+      requirement: 扩展功能按需配置
+      description: 分别用于 PDF / Word 文档库解析、图片图注和联网搜索，需对应服务凭据。
+  startup:
+    - 首次使用：在项目根目录执行 npm --prefix frontend install && npm --prefix frontend run build。
+    - 日常启动：npm start，页面与接口同端口 8888。
+    - 前端开发热更新：node dev-launcher.mjs（Vite 代理保持同源）。
+    - 页面、健康检查与技能控制台均通过后，访问 http://127.0.0.1:8888/ 进入豆豆 Agent。
+commands:
+  start:
+    - python
+    - -m
+    - uvicorn
+    - main:app
+    - --host
+    - 127.0.0.1
+    - --port
+    - "8888"
+  dev:
+    - node
+    - dev-launcher.mjs
+  hot:
+    - node
+    - hot-deploy.mjs
+  hotReload:
+    frontend: Vite HMR（开发模式下 Vue、CSS、静态资源变更即时更新）
+    backend: Uvicorn reload（Python 源码变更自动重启 FastAPI）
+    command:
+      - node
+      - dev-launcher.mjs

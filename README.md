@@ -1,199 +1,228 @@
 <div align="center">
 
-# Hotline
+# Dodo Agent · 豆豆助手
 
-**热点技术整合实验仓库**
+**企业级端到端通用智能体平台**
 
-收集、验证并组织 AI、前端、后端、自动化、数据与其他技术方向的独立项目。
-
-让每个项目独立安装、配置、运行和验证，是 Hotline 的建设目标。
+对话问答、文件检索、PPT 生成、深度研究与技能包管理，一体化单项目交付。
 
 <p>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-20%2B-339933?logo=node.js&logoColor=white" alt="Node.js 20+"></a>
-  <a href="https://pnpm.io/"><img src="https://img.shields.io/badge/pnpm-9%2B-F69220?logo=pnpm&logoColor=white" alt="pnpm 9+"></a>
-  <img src="https://img.shields.io/badge/status-foundation-5865F2" alt="Project status: foundation">
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11+"></a>
+  <img src="https://img.shields.io/badge/status-working-16803c" alt="Project status: working">
 </p>
 
-[快速开始](#快速开始) · [项目结构](#项目结构) · [新增项目](#如何新增项目) · [路线图](#路线图)
+[快速开始](#快速开始) · [架构](#整体架构) · [技能中心](#技能中心与-skill-自进化) · [配置](#配置)
 
 </div>
 
 ---
 
-## 为什么做 Hotline
+## 项目简介
 
-热点技术更新很快，单独保存 Demo 容易失控：目录混乱、启动方式不一致、实验状态不清楚，也很难知道哪些项目可以复用。
+Dodo Agent 是一个面向企业级应用的端到端通用智能体（End-to-End Universal Agent）平台，采用多智能体架构，深度融合大语言模型（LLM）能力与现代软件工程架构，提供从感知、推理到执行的全链路智能化解决方案。
 
-Hotline 采用“**统一规范，项目独立运行**”的方式：
-
-- 一个目录对应一个可以独立运行的项目
-- 一个项目拥有自己的依赖、配置、README 和验证方式
-- 根目录提供统一的索引和 CLI
-- 项目之间通过 API、CLI、共享包或明确的数据格式协作
-- 明确区分想法、原型、可运行项目和已归档项目
-
-## 项目结构
-
-```text
-Hotline/
-├─ projects/                 # 独立技术项目
-│  └─ <category>/
-│     └─ <project-name>/
-├─ catalog/                  # 项目索引与元数据
-├─ tools/
-│  └─ hotline-cli/           # 项目发现与校验 CLI
-├─ AGENTS.md                 # 协作规则与大模型行为约束
-├─ package.json              # 根目录命令
-└─ pnpm-workspace.yaml       # Workspace 配置
-```
-
-项目之间的关系可以理解为：
-
-```mermaid
-flowchart LR
-    A[Hotline 根目录] --> B[项目索引]
-    A --> C[Hotline CLI]
-    A --> D[独立项目集合]
-    D --> E[AI]
-    D --> F[前端]
-    D --> G[后端]
-    D --> H[自动化]
-    D --> I[数据]
-    C --> B
-    C --> D
-```
+本仓库是**单一项目仓库**：Vue 前端、FastAPI 后端、技能中心与技能控制台都在这里，一条命令启动，不再依赖任何外部平台。
 
 ## 快速开始
 
 ### 环境要求
 
-- Node.js 20+
-- pnpm 9+
+- Node.js 20+（前端构建与开发服务）
+- Python 3.11+（后端；本机可直接用 `python`，也可用 uv 管理依赖）
 
 ### 私密配置
 
-真实 API Key、密码和服务地址统一放在仓库根目录 `.env`，由 `.gitignore` 排除；不含真实密钥的 `.env.example` 模板可以提交。远程环境与本地不同的值使用同一文件中的 `REMOTE_` 前缀配置，无需维护第二个配置文件。
+真实 API Key、密码和服务地址统一放在项目根目录 `.env`，由 `.gitignore` 排除；不含真实密钥的 `.env.example` 模板可以提交。远程环境与本地不同的值使用同一文件中的 `REMOTE_` 前缀配置：Python、PowerShell、Shell 启动脚本及数据库初始化脚本均读取根目录 `.env`，支持 `DODO_ENV_FILE` 指定其他路径；`DODO_ENV_PROFILE=remote` 时应用 `REMOTE_` 配置（去掉前缀后覆盖对应项），PowerShell 远程脚本默认应用该配置。普通开发启动保留 SQLite、本地文件及关闭 Redis 的默认行为。
 
-豆豆 Agent 的 Python、PowerShell、Shell 启动脚本及数据库初始化脚本均读取根目录 `.env`，支持通过 `DODO_ENV_FILE` 指定其他路径。Python/Shell 通过 `DODO_ENV_PROFILE=remote` 应用 `REMOTE_` 配置（去掉前缀后覆盖对应项）；PowerShell 远程启动脚本默认应用该配置。普通开发启动保留 SQLite、本地文件及关闭 Redis 的默认行为。
+### 安装与启动
 
-### 安装依赖
-
-```bash
-pnpm install
-```
-
-### 查看项目
+前后端融合为**一个服务**：FastAPI 直接服务 Vue 构建产物，页面与接口同端口。
 
 ```bash
-# 列出所有项目
-pnpm hotline list
+# 1) 首次：安装并构建前端
+npm --prefix frontend install
+npm --prefix frontend run build
 
-# 按名称、分类或描述搜索
-pnpm hotline search ai
-
-# 查看单个项目
-pnpm hotline info projects/ai/example-project
-
-# 检查项目元数据和 README
-pnpm hotline validate
+# 2) 启动单服务（页面 + API + 技能控制台都在 8888）
+npm start        # 等价于 python -m uvicorn main:app --host 127.0.0.1 --port 8888
 ```
 
-当前仓库包含一个用于验证结构的示例项目：
+启动后：
+
+| 入口 | 地址 |
+| --- | --- |
+| 应用页面 | http://127.0.0.1:8888/ |
+| 后端 API 文档 | http://127.0.0.1:8888/docs |
+| 健康检查 | http://127.0.0.1:8888/health |
+| 技能控制台 | http://127.0.0.1:8888/console |
+
+### 常见问题
+
+**启动报 `Errno 10048`（端口 8888 被占用）**：多半是上次开发模式（`node dev-launcher.mjs`）残留的旧后端还在运行。查询占用并结束：
+
+```powershell
+netstat -ano | findstr :8888     # 找到 LISTENING 行末尾的 PID
+taskkill /PID <PID> /F
+```
+
+开发模式下若端口被占，启动器也会打印同样的提示。
+
+### 热部署（改代码自动更新，推荐日常使用）
+
+一个服务跑在 8888，改完代码不用手动重启或构建：
+
+```bash
+npm run hot
+```
+
+- 改 Python（`python_backend/`、`main.py` 等所有 `.py`）→ 后端自动重启
+- 改 Vue/CSS（`frontend/src/`）→ 自动重新构建，浏览器页面自动刷新（页面内置热部署探针）
+- 窗口里会分别提示前端构建完成、后端启动完成，全部就绪后直接访问 <http://127.0.0.1:8888/>
+
+### 前端开发模式（热更新）
+
+修改 Vue 代码时使用开发模式，页面仍是 5180，但 API 请求由 Vite 代理转发到后端，前后端依旧同源：
+
+```bash
+node dev-launcher.mjs    # 或 npm run dev
+```
+
+前端使用 Vite HMR（修改即时更新），后端使用 Uvicorn reload（改 Python 自动重启）。端口可用 `DODO_DEV_FRONTEND_PORT` 和 `DODO_DEV_BACKEND_PORT` 覆盖。改完前端要回到单服务模式时，重新执行 `npm --prefix frontend run build` 即可。
+
+### 仅启动后端 / 其他方式
+
+```bash
+python -m uvicorn main:app --host 127.0.0.1 --port 8888 --reload   # 开发后端
+./run_python_backend.ps1                                            # Windows，读取 .env 后运行
+./run_python_backend.sh                                             # Linux / macOS
+bash deploy/init_mysql_schema.sh                                    # 初始化 MySQL schema（按需）
+uv sync                                                             # 可选：用 uv 重建 .venv
+```
+
+## 整体架构
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           应用层 (Application Layer)                         │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
+│  │ 智能问答Agent │ │ 文件问答Agent │  │ PPT生成Agent │  │    深度研究Agent     │ │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────────┬──────────┘ │
+│         └──────────────────────────┴────────────────────┘                  │
+│                              AgentEngine（技能路由）                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  服务层：Embedding / 文件管理 / 会话管理 / PPT 渲染 / 文档解析（MinerU）        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  工具层：MCP 工具回调（Tavily 搜索）/ 向量检索 / 图片生成 / 技能中心             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  基础设施：大模型 API / SQLite(默认) 或 MySQL / 本地文件 或 MinIO / pgvector   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 多模式智能体
+
+| Agent 类型 | 核心模式 | 适用场景 |
+|-----------|---------|---------|
+| **WebSearchReactAgent** | ReAct + 联网搜索 | 实时信息查询、新闻分析 |
+| **FileReactAgent** | RAG + ReAct | 企业内部文档问答 |
+| **PPTBuilderAgent** | 状态机 + 断点续传 | 一句话生成演示文稿 |
+| **PlanExecuteAgent** | Plan-Execute-Critique | 深度研究、复杂任务分解 |
+| **技能智能体** | 技能中心版本绑定 | 沉淀可复用的工作流经验 |
+
+### 技术栈
+
+| 层级 | 选型 |
+|-----|------|
+| 前端 | Vue 3、Vite 6、Lucide 图标 |
+| 后端 | Python 3.11+、FastAPI、Uvicorn、SSE 流式响应 |
+| 存储 | 本地 SQLite + 文件（默认）；可选 MySQL、Redis、MinIO、PostgreSQL / pgvector |
+| 技能中心 | SQLite 目录库（`data/skill-center/catalog.db`），纯标准库实现 |
+
+## 技能中心与 Skill 自进化
+
+技能中心已并入后端：版本目录、项目绑定、评测用例、自进化门禁、灰度发布与自动回滚，全部通过 FastAPI 提供服务，数据库位于 `data/skill-center/catalog.db`（Git 忽略）。
+
+- **技能控制台**：后端启动后打开 <http://127.0.0.1:8888/console>，可新建/编辑技能（SKILL.md + 可选资源）、按版本启用或停用、运行自进化并查看门禁结果。
+- **运行时加载**：技能智能体（`/agent/skills/stream`）按请求匹配技能；`$技能名` 显式指定，否则按名称与描述匹配。每次技能请求读取当前绑定版本，灰度发布按 `requestId` 稳定哈希命中。
+- **自进化闭环**：评测用例按 `train / selection / test` 分段；`evolve` 只接受最多 8 条 `add/delete/replace` patch，通过静态、动态、回归、增益、安全五道门禁后进入 `staged`，再用 `promote` 灰度绑定、`rollback` 回滚；错误率达到阈值自动回滚。
+- **可选模型配置**：`SKILL_EVOLUTION_*`（自动生成 patch）与 `SKILL_JUDGE_*`（独立评分），见 `.env.example`。
+
+命令行工具（`skill-center/`，纯标准库）：
+
+```bash
+python skill-center/test_center.py       # 目录库回归测试
+python skill-center/import_samples.py    # 导入 samples/ 研究样本（默认不绑定）
+python skill-center/pull_samples.py      # 更新上游样本（anthropics/skills 固定提交）
+```
+
+`samples/` 内容来自 [Anthropic 官方 skills 仓库](https://github.com/anthropics/skills)，`samples/sources.json` 记录固定提交号。这些文件属于研究数据，不是本仓库开发的行为指令。
+
+## 配置
+
+| 变量 | 说明 |
+| --- | --- |
+| `DODO_ENV_FILE` | 指定 env 文件路径，默认项目根目录 `.env` |
+| `DODO_ENV_PROFILE` | `remote` 时应用 `REMOTE_` 前缀配置 |
+| `DODO_STORAGE_BACKEND` / `DODO_FILE_STORAGE_BACKEND` | `sqlite`/`mysql`、`local`/`minio`，本地开发默认 SQLite + 本地文件 |
+| `DODO_VECTOR_ENABLED` | 向量检索开关，本地默认关闭 |
+| `DODO_SKILL_CATALOG_DB` / `DODO_SKILL_PROJECT` | 技能目录库路径（默认 `data/skill-center/catalog.db`）与绑定项目 ID（默认 `dodo-agent`） |
+| `DODO_DEV_FRONTEND_PORT` / `DODO_DEV_BACKEND_PORT` | 开发端口覆盖，默认 5180 / 8888 |
+
+完整清单见 [.env.example](./.env.example)。
+
+## 目录结构
 
 ```text
-projects/ai/example-project/
+├─ frontend/          # Vue 3 前端（Vite）
+│  └─ src/modules/     # chat、workspaces、memory、retrieval、skills、MCP 等前端模块边界
+├─ python_backend/    # FastAPI 后端（agents、documents、skills、skill_center 等）
+│  └─ modules/         # memory、retrieval、storage、上下文、技能、MCP、执行器等后端模块边界
+├─ static/            # favicon 与 console/ 技能控制台页面（Vue 产物由后端服务 frontend/dist）
+├─ skill-center/      # 技能中心命令行工具与研究样本
+├─ deploy/            # 数据库初始化脚本
+├─ sql/ templates/    # SQL schema 与 PPT 模板
+├─ docs/              # 设计规范、运维手册与脚本
+├─ data/              # 运行数据（Git 忽略）：应用库、上传、技能目录库
+├─ main.py            # FastAPI 入口（加载根目录 .env）
+└─ dev-launcher.mjs   # 一键启动前端 + 后端
 ```
 
-> **当前阶段：基础骨架。** CLI 已编写，依赖安装、编译和实际运行尚未验证。示例项目仅展示目录与元数据结构，不包含 AI 业务功能。CLI 当前读取各项目的 `project.yaml`；`catalog/projects.json` 是预留文件，尚未接入自动索引。
+### 模块边界
 
-## 如何新增项目
+前后端按同名能力模块逐步拆分，当前旧入口继续负责装配，迁移不会改变现有接口：
 
-创建目录：
+| 模块 | 负责内容 | 当前实现入口 |
+| --- | --- | --- |
+| `memory` | 会话历史、草稿、项目记忆 | `agents.py`、`storage.py` |
+| `retrieval` | 文件、向量、关键词、图谱和联网检索 | `vector_store.py`、`documents.py`、`agents.py` |
+| `storage` | 会话、文件、文档和对象存储 | `storage.py`、`object_store.py` |
+| `context_engineering` | 历史、检索、技能和提示词组装 | `agents.py` |
+| `skills` | Skill 版本、绑定、运行时加载 | `skills.py`、`skill_center.py` |
+| `mcp` | 外部工具协议和搜索工具 | `agents.py`（逐步迁移） |
+| `execution` | 任务生命周期、停止、脚本和 EXE 执行 | `agents.py`（逐步迁移） |
+| `workspaces` | 文件夹、工作区和任务归属 | 前端工作区状态（逐步持久化） |
+| `artifacts` | PPT、文档预览、下载和结果交付 | `ppt.py`、`documents.py` |
 
-```text
-projects/<category>/<project-name>/
-├─ README.md
-├─ project.yaml
-├─ src/
-├─ tests/
-└─ .env.example
-```
-
-创建 `project.yaml`：
-
-```yaml
-name: example-project
-category: ai
-status: prototype
-description: 项目用途和当前验证目标
-language:
-  - python
-mode: offline-demo
-commands:
-  install: pip install -r requirements.txt
-  run: python main.py
-  test: pytest
-```
-
-`mode` 必须明确说明项目的外部能力：
-
-| 值 | 含义 |
-| --- | --- |
-| `offline-demo` | 不访问外部服务，可离线运行 |
-| `mock` | 使用模拟服务或模拟数据 |
-| `real-api` | 会调用真实外部 API，必须说明凭证和风险 |
-
-项目 README 应至少说明用途、状态、依赖、环境变量、启动命令、测试命令和已知限制。
-
-## 项目状态
-
-| 状态 | 含义 |
-| --- | --- |
-| `idea` | 想法、调研或技术记录 |
-| `prototype` | 正在验证的原型 |
-| `working` | 按文档可以运行 |
-| `stable` | 经过持续验证，可以作为稳定参考 |
-| `archived` | 停止维护，仅保留记录 |
-
-状态只代表当前仓库中的验证程度，不代表生产可用性。
+模块目录位于 `python_backend/modules/` 和 `frontend/src/modules/`；协作约束和迁移规则统一见 [AGENTS.md](./AGENTS.md)。
 
 ## 设计原则
 
-1. **项目独立**：每个项目拥有自己的依赖、配置、启动和测试方式。
-2. **边界清晰**：项目默认不直接访问其他项目的内部代码、数据库或运行时状态。
+1. **单项目单仓库**：一个应用一个仓库，前端、后端、工具、文档同仓维护，不再有平台与项目之分。
+2. **一个服务一个端口**：FastAPI 直接服务 Vue 构建产物，页面、接口、技能控制台同源同端口；开发时才拆成 Vite + Uvicorn 双进程（Vite 代理保持同源）。
 3. **事实优先**：不把计划、推测或未验证结果描述成已实现能力。
-4. **可重复验证**：项目必须提供清晰、可重复执行的命令。
-5. **安全优先**：不提交密钥、访问令牌、真实个人信息或生产数据。
-6. **最小改动**：新增功能只影响必要的项目和文件，不进行无关重构。
+4. **可重复验证**：`python skill-center/test_center.py`、`npm --prefix frontend run build` 等命令可重复执行。
+5. **安全优先**：不提交密钥、访问令牌、真实个人信息或生产数据；技能内容保存前自动做敏感信息与提示注入扫描。
+6. **最小改动**：新增功能只影响必要的文件，不进行无关重构。
 
-更完整的协作规则见 [AGENTS.md](./AGENTS.md)。
-
-## 路线图
-
-- [x] 建立独立项目目录约定
-- [x] 建立项目元数据格式
-- [x] 提供 TypeScript CLI
-- [x] 提供示例项目
-- [ ] 增加项目初始化命令
-- [ ] 增加安全的项目启动、测试和构建执行器
-- [ ] 增加项目标签、依赖关系和验证结果
-- [ ] 增加 Vue Web 项目浏览器
-- [ ] 增加 GitHub Actions 基础校验
-
-路线图表示计划，不代表尚未完成的功能已经存在。
+协作规则见 [AGENTS.md](./AGENTS.md)。
 
 ## 贡献方式
 
-添加或修改项目时：
-
 1. 阅读 [AGENTS.md](./AGENTS.md)。
-2. 进入对应的独立项目目录操作。
-3. 补充项目 README、`project.yaml` 和配置示例。
-4. 运行项目自身的检查命令。
-5. 再运行根目录的 `pnpm hotline validate`。
-6. 提交变更时使用清晰的 Conventional Commits 信息。
+2. 在对应子目录（frontend / python_backend / skill-center）内修改。
+3. 运行项目自身的检查命令（后端编译与技能测试、前端构建）。
+4. 提交变更时使用清晰的 Conventional Commits 信息。
 
 ## 许可证
 
 当前仓库尚未声明开源许可证。正式公开到 GitHub 前，请根据你的授权方式补充 `LICENSE` 文件。
-

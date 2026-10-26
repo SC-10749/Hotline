@@ -1,12 +1,14 @@
 {
-  "name": "hotline",
+  "name": "dodo-agent",
   "private": true,
-  "packageManager": "pnpm@9.15.0",
+  "version": "1.0.0",
   "scripts": {
-    "hotline": "pnpm --dir tools/hotline-cli dev",
-    "validate": "pnpm hotline validate",
-    "dev": "pnpm --dir tools/hotline-cli dashboard",
-    "dashboard": "pnpm --dir tools/hotline-cli dashboard"
+    "start": "python -m uvicorn main:app --host 127.0.0.1 --port 8888",
+    "hot": "node hot-deploy.mjs",
+    "dev": "node dev-launcher.mjs",
+    "backend": "python -m uvicorn main:app --host 127.0.0.1 --port 8888 --reload",
+    "frontend": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "test": "python skill-center/test_center.py"
   }
 }
-

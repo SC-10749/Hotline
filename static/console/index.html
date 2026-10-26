@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>豆豆助手 · 技能控制台</title>
+  <meta name="application-name" content="豆豆助手技能控制台">
+  <meta name="description" content="管理豆豆助手的技能版本、项目绑定与 Skill 自进化。">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <meta name="theme-color" content="#2864dc">
+  <link rel="stylesheet" href="/console/console.css">
+</head>
+<body>
+<div class="shell"><aside class="side"><div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M6 5v14M18 5v14M6 12h12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></span><span class="brand-name">豆豆助手<span class="brand-dot">.</span></span></div><div class="sub">技能控制台</div><nav class="platform-nav" id="platform-nav" aria-label="控制台功能"><button data-section="skills" class="active" aria-current="page"><span>Skill 中心</span><span class="planned-label">可用</span></button><button data-section="evolution"><span>Skill 自进化</span><span class="planned-label">可用</span></button></nav><div class="side-foot">本地 / 127.0.0.1</div></aside>
+<main>
+<section id="skill-section" aria-labelledby="skill-title">
+  <header class="top skill-header"><div><div class="eyebrow">能力库 / SKILLS</div><h1 id="skill-title">把经验，变成可复用的技能。</h1><p>浏览、编写和迭代技能，为豆豆助手配置适合当前任务的能力。</p></div><button class="action skill-new" id="skill-new"><span aria-hidden="true">＋</span> 新建技能</button></header>
+  <div class="skill-toolbar"><input class="search" id="skill-search" type="search" aria-label="搜索技能" placeholder="搜索技能名称或用途" autocomplete="off"><div class="filters" id="skill-filters" aria-label="筛选技能"><button class="active" data-skill-filter="all" aria-pressed="true">全部技能</button><button data-skill-filter="enabled" aria-pressed="false">已启用</button></div><div class="skill-toolbar-end"><span id="skill-count">正在加载技能…</span><button class="skill-refresh" id="skill-refresh" aria-label="刷新技能列表">刷新</button></div></div>
+  <p id="skill-message" class="skill-message" role="status"></p><div class="skill-grid" id="skill-list" aria-live="polite"></div>
+  <p class="skill-footnote">开启开关即可启用当前版本，每个技能同时启用一个版本。保存新版本不会自动切换，豆豆助手在每次技能请求时读取当前绑定版本。</p>
+</section>
+<section id="evolution-section" hidden aria-labelledby="evolution-title"><header class="top"><div><div class="eyebrow">能力库 / EVOLUTION</div><h1 id="evolution-title">Skill 自进化</h1><p>用评测集、bounded patch 和五道门禁迭代技能，候选默认只进入 staged。</p></div><button class="action" id="evolution-refresh">刷新数据</button></header><nav class="evolution-tabs" id="evolution-tabs"><button class="active" data-evolution-view="cases">评测集</button><button data-evolution-view="runs">执行轨迹</button><button data-evolution-view="rollouts">灰度状态</button><button data-evolution-view="metrics">指标曲线</button><button data-evolution-view="rollback">回滚记录</button></nav><div id="evolution-panel" class="evolution-panel"></div><div class="evolution-form"><label>技能名称<input id="evolution-name" placeholder="incident-summary"></label><label>基础版本<input id="evolution-base" placeholder="v1"></label><label class="wide">Patch JSON<textarea id="evolution-patches" rows="5">[{"op":"add","text":"补充失败处理步骤。"}]</textarea></label><button class="action" id="evolution-run">运行自进化</button></div><p id="evolution-message" class="skill-message" role="status"></p><pre id="evolution-result" class="evolution-result">尚未运行。</pre></section>
+</main></div>
+<dialog id="skill-editor" class="skill-editor" aria-labelledby="skill-editor-title">
+  <header class="readme-head"><div><h2 id="skill-editor-title">新建技能</h2><p>保存为独立版本，随时可以切换或回退。</p></div><button class="action readme-button" id="skill-editor-close">关闭</button></header>
+  <div class="skill-editor-body"><label for="skill-content">技能定义 <span>SKILL.md</span></label><p class="skill-field-help">写清技能的用途、执行步骤和输出要求。name 与 description 使用单行 YAML。</p><textarea id="skill-content" rows="16" spellcheck="false"></textarea>
+  <details class="skill-resource-details"><summary>附加资源 <span>可选 · JSON 文本</span></summary><p class="skill-field-help">以相对路径映射资源文本，随版本保存。当前 Agent 加载技能正文，暂不读取或执行资源。</p><label class="sr-only" for="skill-resources">附加资源 JSON</label><textarea id="skill-resources" rows="5" spellcheck="false">{}</textarea></details><p id="skill-editor-message" class="skill-message" role="alert"></p></div>
+  <footer class="skill-editor-footer"><span>保存后，可在卡片上开启启用开关。</span><button class="action" id="skill-save">保存新版本</button></footer>
+</dialog>
+<script src="/console/console.js" defer></script>
+</body></html>
