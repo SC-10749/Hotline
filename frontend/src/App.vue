@@ -196,6 +196,12 @@ function titleFor(text) {
   return value.length > 28 ? `${value.slice(0, 28)}…` : value || '新对话'
 }
 
+function normalizeBrandText(value) {
+  return String(value || '')
+    .replace(/\bDodo Agent\b/gi, 'Hotline Agent')
+    .replace(/豆豆助手|豆豆 Agent/g, 'Hotline Agent')
+}
+
 function newSession() {
   if (sending.value) return
   const existing = draftSessions()[0]
@@ -446,8 +452,8 @@ async function selectSession(id) {
       if (row.question) history.push({ id: `user-${row.id}`, role: 'user', content: row.question, fileName: row.fileid ? '已上传文件' : '', createdAt: row.createTime })
       if (row.answer || row.thinking) {
         history.push({
-          id: `assistant-${row.id}`, role: 'assistant', content: row.answer || '',
-          timeline: row.thinking ? [{ type: 'thinking', content: row.thinking }] : [],
+          id: `assistant-${row.id}`, role: 'assistant', content: normalizeBrandText(row.answer),
+          timeline: row.thinking ? [{ type: 'thinking', content: normalizeBrandText(row.thinking) }] : [],
           references: normalizeReferences(row.reference), recommend: parseArray(row.recommend),
           showTimeline: false, showReferences: false, createdAt: row.createTime,
         })
@@ -557,7 +563,7 @@ function appendStreamEvent(data, message) {
   if (!data || typeof data !== 'object') return
   const content = data.content
   if (data.type === 'text' && content) {
-    const chunk = String(content)
+    const chunk = normalizeBrandText(content)
     message.content += chunk
     const pptLink = chunk.match(/(?:下载文件|Download):\s*(https?:\/\/\S+|\/generated\/\S+)/i)
     if (pptLink) message.pptFile = pptLink[1].replace(/[)\]，。]+$/, '')
