@@ -1,4 +1,4 @@
-# Dodo Agent · UI 设计系统（DESIGN 锚）
+# Hotline Agent · UI 设计系统（DESIGN 锚）
 
 > 当前方向于 2026-10-25：保留现有三栏工作台、会话列表和聊天输入区；Hotline 用暖白底、珊瑚强调色和耳机标识建立识别。
 > 本文件是前端视觉的唯一事实源；改风格先改这里，再动 `style.css` / `console.css`。
@@ -61,3 +61,4 @@
 ## 9. Motion 哲学
 
 只动 `transform` / `opacity`；状态点脉冲 1.6s（`prefers-reduced-motion` 时关闭）；按压 `scale(0.97)`；列表 hover 130–140ms；无入场编排。
+

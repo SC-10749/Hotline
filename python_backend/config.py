@@ -33,7 +33,7 @@ class Settings:
     generated_dir: Path = Path(os.getenv("DODO_GENERATED_DIR", "data/generated"))
     skills_dir: Path = Path(os.getenv("SKILLS_DIRECTORY", "data/skills"))
     skill_catalog_db: Path = Path(os.getenv("DODO_SKILL_CATALOG_DB", "data/skill-center/catalog.db"))
-    skill_project: str = os.getenv("DODO_SKILL_PROJECT", "dodo-agent")
+    skill_project: str = os.getenv("DODO_SKILL_PROJECT", "hotline-agent")
     max_file_size: int = int(os.getenv("DODO_MAX_FILE_SIZE", str(50 * 1024 * 1024)))
     max_text_length: int = int(os.getenv("DODO_MAX_TEXT_LENGTH", "20000"))
     large_file_threshold: int = int(os.getenv("DODO_LARGE_FILE_THRESHOLD", "5000"))
@@ -130,3 +130,4 @@ class Settings:
 
 
 settings = Settings()
+

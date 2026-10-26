@@ -12,7 +12,7 @@ from python_backend.skill_center import Catalog
 from python_backend.skills import SkillRegistry
 
 CONTENT = '---\nname: incident-summary\ndescription: 运维事件复盘\n---\n输出影响和处理行动。\n'
-PROJECT = 'dodo-agent'
+PROJECT = 'hotline-agent'
 
 
 class CatalogTests(unittest.TestCase):
@@ -121,3 +121,4 @@ class CatalogTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+

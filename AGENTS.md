@@ -1,11 +1,11 @@
-# Dodo Agent 持久协作规则
+# Hotline Agent 持久协作规则
 
 本规则适用于 `F:\Hotline` 及其全部子目录。用户要求：任何时候都不得上传 `.env`、真实密钥或包含其真实服务地址的文件。
 
 ## 项目结构与目录管理
 
 - 所有开发者和 Agent 开始开发前，必须阅读并遵循本文件；子目录另有说明文件时一并遵循。子目录规则不得放宽本文件中的私密信息保护要求。
-- **本仓库是单一项目 Dodo Agent（豆豆助手）**：Vue 前端（`frontend/`）、FastAPI 后端（`python_backend/`）、技能中心（`python_backend/skill_center.py` 与 `skill-center/`）、静态资源与技能控制台（`static/`）、部署脚本（`deploy/`）、文档（`docs/`）同仓维护，不再有平台与项目之分。
+- **本仓库是单一项目 Hotline Agent**：Vue 前端（`frontend/`）、FastAPI 后端（`python_backend/`）、技能中心（`python_backend/skill_center.py` 与 `skill-center/`）、静态资源与技能控制台（`static/`）、部署脚本（`deploy/`）、文档（`docs/`）同仓维护，不再有平台与项目之分。
 - 修改默认限于对应子目录；涉及跨目录的公共改动（如 `.env.example`、`AGENTS.md`、根启动脚本）需在提交说明中写清影响范围。
 - 项目元数据保留在 `project.yaml`，README 说明用途、当前状态、安装、启动、验证命令及配置项。
 - 根目录 `README.md` 是仓库唯一项目说明文件；不要在子目录新增 README。模块说明、迁移边界和当前状态统一写入根 README 或本文件。
@@ -37,3 +37,4 @@
 - 文档必须描述当前代码和可验证命令；历史方案、已废弃技术栈和未实现能力不得继续作为现状说明。
 - 规划内容只保留在根 README 的规划小节或明确标注为草案的文档中；功能完成后及时删除过时规划，避免与代码重复描述。
 - 修改文档后至少核对路径、启动命令、端口、模块名称和验证命令；不复制 `.env`、真实服务地址或运行数据到文档。
+

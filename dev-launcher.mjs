@@ -84,7 +84,7 @@ const releaseFrontendPort = () => {
 };
 
 const root = dirname(fileURLToPath(import.meta.url));
-console.log('Dodo Agent: starting Vue frontend and FastAPI backend.');
+console.log('Hotline Agent: starting Vue frontend and FastAPI backend.');
 console.log(`Backend API: http://127.0.0.1:${backendPort}/docs`);
 // Start one ordinary backend process and one ordinary Vite server.
 // Development hot reload is intentionally disabled to avoid stale duplicate
@@ -94,7 +94,7 @@ console.log(`Backend API: http://127.0.0.1:${backendPort}/docs`);
 try {
   const response = await fetch(`http://127.0.0.1:${backendPort}/health`, { signal: AbortSignal.timeout(800) });
   const payload = await response.json().catch(() => null);
-  backendReused = response.ok && payload?.service === 'dodo-agent';
+  backendReused = response.ok && payload?.service === 'hotline-agent';
 } catch { /* No existing backend; start one below. */ }
 
 if (backendReused) {
@@ -149,3 +149,4 @@ void waitUntilReady('后端', `http://127.0.0.1:${backendPort}/health`, () => {
 
 process.on('SIGINT', () => shutdown());
 process.on('SIGTERM', () => shutdown());
+

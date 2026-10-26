@@ -22,7 +22,7 @@
 
 ## 项目简介
 
-Dodo Agent 是一个面向企业级应用的端到端通用智能体（End-to-End Universal Agent）平台，采用多智能体架构，深度融合大语言模型（LLM）能力与现代软件工程架构，提供从感知、推理到执行的全链路智能化解决方案。
+Hotline Agent 是一个面向企业级应用的端到端通用智能体（End-to-End Universal Agent）平台，采用多智能体架构，深度融合大语言模型（LLM）能力与现代软件工程架构，提供从感知、推理到执行的全链路智能化解决方案。
 
 本仓库是**单一项目仓库**：Vue 前端、FastAPI 后端、技能中心与技能控制台都在这里，一条命令启动，不再依赖任何外部平台。
 
@@ -167,7 +167,7 @@ python skill-center/pull_samples.py      # 更新上游样本（anthropics/skill
 | `DODO_ENV_PROFILE` | `remote` 时应用 `REMOTE_` 前缀配置 |
 | `DODO_STORAGE_BACKEND` / `DODO_FILE_STORAGE_BACKEND` | `sqlite`/`mysql`、`local`/`minio`，本地开发默认 SQLite + 本地文件 |
 | `DODO_VECTOR_ENABLED` | 向量检索开关，本地默认关闭 |
-| `DODO_SKILL_CATALOG_DB` / `DODO_SKILL_PROJECT` | 技能目录库路径（默认 `data/skill-center/catalog.db`）与绑定项目 ID（默认 `dodo-agent`） |
+| `DODO_SKILL_CATALOG_DB` / `DODO_SKILL_PROJECT` | 技能目录库路径（默认 `data/skill-center/catalog.db`）与绑定项目 ID（默认 `hotline-agent`） |
 | `DODO_DEV_FRONTEND_PORT` / `DODO_DEV_BACKEND_PORT` | 开发端口覆盖，默认 5180 / 8888 |
 
 完整清单见 [.env.example](./.env.example)。
@@ -330,3 +330,4 @@ ls mcp skills plugins
 `Explore · Verify · Package · Share`
 
 </div>
+

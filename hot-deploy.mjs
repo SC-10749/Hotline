@@ -147,7 +147,7 @@ frontendChild.on('error', error => {
 });
 children.push(frontendChild);
 
-console.log('Dodo Agent 热部署：改 Python 自动重启后端，改 Vue 自动重建前端并刷新页面。');
+console.log('Hotline Agent 热部署：改 Python 自动重启后端，改 Vue 自动重建前端并刷新页面。');
 console.log(`服务地址：http://127.0.0.1:${port}/（Ctrl+C 退出）`);
 
 let frontendBuilt = false;
@@ -194,3 +194,4 @@ void waitUntilReady('后端', `http://127.0.0.1:${port}/health`, () => {
 
 process.on('SIGINT', () => shutdown());
 process.on('SIGTERM', () => shutdown());
+

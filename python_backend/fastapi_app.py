@@ -66,7 +66,7 @@ async def lifespan(_: FastAPI):
     documents.stop_sweeper()
 
 
-app = FastAPI(title="Dodo Agent", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Hotline Agent", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -86,7 +86,7 @@ def fail(message: str, code: int = 400):
 
 @app.get("/health")
 def health():
-    return {"status": "UP", "service": "dodo-agent", "version": "fastapi"}
+    return {"status": "UP", "service": "hotline-agent", "version": "fastapi"}
 
 
 @app.get("/file/list")
@@ -520,3 +520,4 @@ else:
         if not target.is_file():
             raise HTTPException(status_code=404, detail="图标不存在")
         return FileResponse(target)
+

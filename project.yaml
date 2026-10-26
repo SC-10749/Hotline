@@ -1,4 +1,4 @@
-name: dodo-agent
+name: hotline-agent
 category: ai
 status: working
 description: 企业级端到端通用智能体平台（FastAPI 后端 + Vue 前端 + 技能中心）
@@ -41,7 +41,7 @@ overview:
     - 首次使用：在项目根目录执行 npm --prefix frontend install && npm --prefix frontend run build。
     - 日常启动：npm start，页面与接口同端口 8888。
     - 前端开发热更新：node dev-launcher.mjs（Vite 代理保持同源）。
-    - 页面、健康检查与技能控制台均通过后，访问 http://127.0.0.1:8888/ 进入豆豆 Agent。
+    - 页面、健康检查与技能控制台均通过后，访问 http://127.0.0.1:8888/ 进入 Hotline Agent。
 commands:
   start:
     - python
@@ -64,3 +64,4 @@ commands:
     command:
       - node
       - dev-launcher.mjs
+

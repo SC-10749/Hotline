@@ -1,4 +1,4 @@
-let projectId = 'dodo-agent';
+let projectId = 'hotline-agent';
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]));
 
@@ -184,3 +184,4 @@ window.addEventListener('hashchange', () => selectSection(window.location.hash.s
   try { projectId = (await api('/console/api/config')).project || projectId; } catch { /* keep default */ }
   selectSection(window.location.hash.slice(1) || 'skills', false);
 })();
+

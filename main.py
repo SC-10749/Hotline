@@ -1,4 +1,4 @@
-"""FastAPI entrypoint for Dodo Agent.
+"""FastAPI entrypoint for Hotline Agent.
 
 Run:
   uv run fastapi dev
@@ -47,4 +47,5 @@ os.environ.setdefault("DODO_VECTOR_ENABLED", "false")
 from python_backend.fastapi_app import app  # noqa: E402
 
 __all__ = ["app"]
+
 

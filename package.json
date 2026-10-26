@@ -1,5 +1,5 @@
 {
-  "name": "dodo-agent",
+  "name": "hotline-agent",
   "private": true,
   "version": "1.0.0",
   "scripts": {
@@ -12,3 +12,4 @@
     "test": "python skill-center/test_center.py"
   }
 }
+
