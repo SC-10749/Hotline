@@ -7,13 +7,16 @@ import shutil
 import sqlite3
 import zipfile
 import logging
+import hashlib
+import threading
+from urllib.parse import urlsplit
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from uuid import uuid4
 
 from .config import Settings
-from .skill_center import Catalog
+from .skill_center import Catalog, validate_resource_path
 
 SKILL_FILENAME = "SKILL.md"
 # Skill packages are usually zipped one or two directories deep (my-skill/ or
@@ -47,6 +50,134 @@ class Skill:
         data = asdict(self)
         data.pop("dirName")
         return data
+
+
+@dataclass(frozen=True)
+class SkillDescriptor:
+    id: str
+    name: str
+    description: str
+    version: str | None
+    entry_uri: str
+
+
+@dataclass(frozen=True)
+class _SkillSource:
+    descriptor: SkillDescriptor
+    root: Path | None = None
+    entry: Path | None = None
+    stamp: tuple[int, int, int] | None = None
+    installed_id: str | None = None
+
+
+def _file_stamp(path: Path) -> tuple[int, int, int]:
+    stat = path.stat()
+    return stat.st_ino, stat.st_mtime_ns, stat.st_size
+
+
+def _read_skill_header(path: Path) -> dict[str, str]:
+    lines = []
+    with path.open('r', encoding='utf-8') as stream:
+        first = stream.readline(8193)
+        if first.strip() != '---':
+            return {}
+        lines.append(first)
+        remaining = 8192 - len(first)
+        while remaining > 0:
+            line = stream.readline(remaining + 1)
+            if not line or len(line) > remaining:
+                return {}
+            lines.append(line)
+            remaining -= len(line)
+            if line.strip() == '---':
+                return parse_frontmatter(''.join(lines))[0]
+    return {}
+
+
+class SkillResourceSession:
+    def __init__(self, registry: SkillRegistry, sources: list[_SkillSource], request_id: str):
+        self.registry = registry
+        self.request_id = request_id
+        self.descriptors = tuple(source.descriptor for source in sources)
+        self._sources = {source.descriptor.id: source for source in sources}
+        self._texts: dict[str, str] = {}
+        self._lock = threading.RLock()
+
+    def read_file(self, resource_uri: str, offset: int = 0, limit: int = 12000) -> dict:
+        try:
+            if type(offset) is not int or type(limit) is not int or offset < 0 or not 1 <= limit <= 12000:
+                raise SkillError('分页参数无效')
+            if not isinstance(resource_uri, str) or len(resource_uri) > 2048:
+                raise SkillError('资源地址无效')
+            parsed = urlsplit(resource_uri)
+            if parsed.scheme != 'skill' or parsed.query or parsed.fragment or not parsed.path.startswith('/'):
+                raise SkillError('仅允许已登记的技能资源地址')
+            source = self._sources.get(parsed.netloc)
+            if source is None:
+                raise SkillError('技能资源未登记')
+            relative = validate_resource_path(parsed.path[1:])
+            with self._lock:
+                if source.root is not None:
+                    text = self._local_text(source, relative, resource_uri)
+                else:
+                    text = self._catalog_text(source, relative, resource_uri)
+                if offset > len(text):
+                    raise SkillError('读取位置超出文本范围')
+                end = min(offset + limit, len(text))
+                return {'uri': resource_uri, 'text': text[offset:end],
+                        'next_offset': end if end < len(text) else None, 'eof': end == len(text)}
+        except (OSError, ValueError, TypeError, KeyError, UnicodeError, sqlite3.Error, SkillError):
+            return {'error': '技能资源不可读：请检查地址、权限、文件类型或分页参数；技能变化后请重试。'}
+
+    def _local_text(self, source: _SkillSource, relative: str, uri: str) -> str:
+        if source.installed_id:
+            current = self.registry.get(source.installed_id)
+            if not current or not current.enabled:
+                raise SkillError('技能已禁用')
+            if self.registry.skill_file(current).resolve() != source.entry:
+                raise SkillError('技能入口已变化')
+        if not source.root.is_dir() or source.root.is_symlink() or not source.entry.is_file():
+            raise SkillError('技能已移除')
+        target = source.entry if relative == 'SKILL.md' else source.root / relative
+        if not target.resolve().is_relative_to(source.root):
+            raise SkillError('资源越界')
+        if not target.is_file():
+            raise SkillError('仅允许普通文本文件')
+        cursor = target
+        while cursor != source.root:
+            if cursor.is_symlink():
+                raise SkillError('不支持链接资源')
+            cursor = cursor.parent
+        if uri in self._texts:
+            return self._texts[uri]
+        if _file_stamp(source.entry) != source.stamp:
+            raise SkillError('技能入口已变化，请重新开始')
+        stamp = _file_stamp(target)
+        with target.open('rb') as stream:
+            content = stream.read(1024 * 1024 + 1)
+        if len(content) > 1024 * 1024 or b'\x00' in content or _file_stamp(target) != stamp:
+            raise SkillError('资源过大、非文本或读取期间变化')
+        text = content.decode('utf-8')
+        self._texts[uri] = text
+        return text
+
+    def _catalog_text(self, source: _SkillSource, relative: str, uri: str) -> str:
+        catalog = Catalog.open_readonly(self.registry.settings.skill_catalog_db)
+        try:
+            if not catalog.call('authorize_runtime_skill', {
+                'project': self.registry.settings.skill_project, 'name': source.descriptor.name,
+                'version': source.descriptor.version,
+            })['authorized']:
+                raise SkillError('技能授权已撤销')
+            if uri not in self._texts:
+                result = catalog.call('read_runtime_file', {
+                    'project': self.registry.settings.skill_project, 'requestId': self.request_id,
+                    'name': source.descriptor.name, 'version': source.descriptor.version, 'path': relative,
+                })
+                self._texts[uri] = result['text']
+            return self._texts[uri]
+        finally:
+            catalog.db.close()
 
 
 def _now() -> str:
@@ -158,6 +289,57 @@ class SkillRegistry:
 
     def _skill_dir(self, dir_name: str) -> Path:
         return self.root / dir_name
+
+    def open_resource_session(self, request_id: str) -> SkillResourceSession:
+        sources: list[_SkillSource] = []
+
+        def local_source(entry: Path, name: str, description: str, key: str,
+                         installed_id: str | None = None) -> None:
+            if not entry.is_file() or entry.is_symlink() or entry.parent.is_symlink():
+                return
+            if not isinstance(name, str) or not isinstance(description, str):
+                return
+            identity = hashlib.sha256(key.encode('utf-8')).hexdigest()[:24]
+            descriptor = SkillDescriptor(identity, name, description, None, f'skill://{identity}/SKILL.md')
+            sources.append(_SkillSource(descriptor, entry.parent.resolve(), entry.resolve(),
+                                        _file_stamp(entry), installed_id))
+
+        repo = Path(getattr(self.settings, 'repo_skills_dir', Path(__file__).resolve().parents[1] / 'skills'))
+        if repo.is_dir():
+            for directory in sorted(repo.iterdir()):
+                entry = directory / SKILL_FILENAME
+                if directory.is_symlink() or not directory.is_dir() or not entry.is_file() or entry.is_symlink():
+                    continue
+                try:
+                    validate_resource_path(directory.name + '/SKILL.md')
+                    metadata = _read_skill_header(entry)
+                    if metadata.get('name') and metadata.get('description'):
+                        local_source(entry, metadata['name'], metadata['description'], 'repo:' + directory.name)
+                except (OSError, UnicodeError, ValueError):
+                    continue
+        for skill in self.list():
+            if skill.enabled:
+                try:
+                    validate_resource_path(skill.dirName + '/' + skill.entry)
+                    entry = self.skill_file(skill)
+                    if entry.resolve().is_relative_to(self.root.resolve()):
+                        local_source(entry, skill.name, skill.description, 'installed:' + skill.id, skill.id)
+                except (OSError, ValueError, TypeError):
+                    continue
+        if self.settings.skill_catalog_db.is_file():
+            catalog = Catalog.open_readonly(self.settings.skill_catalog_db)
+            try:
+                rows = catalog.call('runtime_metadata', {
+                    'project': self.settings.skill_project, 'requestId': request_id,
+                })['skills']
+                for row in rows:
+                    identity = hashlib.sha256(f"catalog:{row['name']}:{row['version']}".encode()).hexdigest()[:24]
+                    descriptor = SkillDescriptor(identity, row['name'], row['description'], row['version'],
+                                                 f'skill://{identity}/SKILL.md')
+                    sources.append(_SkillSource(descriptor))
+            finally:
+                catalog.db.close()
+        return SkillResourceSession(self, sources, request_id)
 
     def list(self) -> list[Skill]:
         if not self.root.exists():

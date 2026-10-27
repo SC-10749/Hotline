@@ -10,7 +10,11 @@ from collections.abc import Iterator
 from typing import Any
 
 from .config import Settings
+from .llm import build_chat_model
 from .models import SessionMessage
+from .modules.context_engineering.skill_catalog import render_skill_catalog
+from .modules.execution.langchain_agent import run_agent
+from .modules.execution.tools import build_read_file_tool
 from .skills import Skill, SkillRegistry
 from .storage import Storage
 from .vector_store import PgVectorStore
@@ -280,31 +284,60 @@ class AgentEngine:
                 answer = f"已收到问题：{query}\n当前未配置外部大模型，已使用本地降级模式。"
         return answer, refs
 
+    def _stream_skills(self, query: str, row_id: str, task: threading.Event) -> Iterator[dict[str, Any]]:
+        if not self.settings.model_api_key:
+            yield self.event('error', '未配置模型，无法执行技能。')
+            return
+        try:
+            if not self.skills:
+                raise ValueError('skill registry unavailable')
+            session = self.skills.open_resource_session(row_id)
+            prompt = '你是 Dodo Agent，请用中文准确回答。\n' + render_skill_catalog(session.descriptors)
+            model = build_chat_model(self.settings)
+            tool = build_read_file_tool(session.read_file)
+            answer = ''
+            for event in run_agent(model, prompt, query, [tool], task.is_set):
+                if task.is_set():
+                    yield self.event('error', '任务已停止')
+                    return
+                if event.type == 'error':
+                    yield self.event('error', event.content)
+                    return
+                if event.type == 'text':
+                    answer += event.content
+                    yield self.event('text', event.content)
+                elif event.type == 'done':
+                    recommendations = [f'请进一步解释：{query}', '给出一个实际案例']
+                    self.storage.update_answer(row_id, answer, '', '', [], recommendations)
+                    yield self.event('recommend', recommendations)
+                    yield self.event('complete', '')
+        except Exception:
+            yield self.event('error', '技能初始化或执行失败，请检查模型工具调用支持与技能配置。')
+
     def stream(self, agent: str, conversation_id: str, query: str, file_id: str | None = None) -> Iterator[dict[str, Any]]:
         task = self.tasks.register(conversation_id)
         row_id = self.storage.save_question(conversation_id, query, agent, file_id)
-        if not file_id and agent != "ppt":
-            file_id = self.storage.conversation_file_id(conversation_id)
-        history = [row for row in self.storage.session_messages(conversation_id)
-                   if row.id != row_id and row.answer][-self.HISTORY_TURNS:]
-        skill = self.skills.select(query) if agent == "skills" and self.skills else None
         thinking: list[str] = []
         try:
             yield self.event("thinking", f"正在启动 {agent} 智能体...")
             if task.is_set():
                 yield self.event("error", "任务已停止")
                 return
+            if agent == 'skills':
+                yield from self._stream_skills(query, row_id, task)
+                return
+            if not file_id and agent != 'ppt':
+                file_id = self.storage.conversation_file_id(conversation_id)
+            history = [row for row in self.storage.session_messages(conversation_id)
+                       if row.id != row_id and row.answer][-self.HISTORY_TURNS:]
             if agent == "deep":
                 yield self.event("thinking", "正在制定研究计划并执行检索...")
             elif agent == "ppt":
                 yield self.event("thinking", "正在识别 PPT 意图、生成大纲并渲染...")
-            elif agent == "skills":
-                yield self.event("thinking", f"已匹配技能「{skill.name}」，正在按技能说明执行..."
-                                 if skill else "没有匹配到已启用的技能，按通用问答处理...")
             elif agent == "file" or file_id:
                 in_library = bool(file_id and self.storage.get_document(file_id))
                 yield self.event("thinking", "正在按父子分段检索文档库..." if in_library else "正在检索上传文件内容...")
-            answer, refs = self._fallback(agent, query, file_id, history, skill)
+            answer, refs = self._fallback(agent, query, file_id, history)
             for chunk in re.findall(r".{1,80}(?:\s+|$)", answer, flags=re.S) or [answer]:
                 if task.is_set():
                     yield self.event("error", "任务已停止")
