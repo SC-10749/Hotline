@@ -124,6 +124,10 @@ class Settings:
     def db_path(self) -> Path:
         return self.data_dir / "dodo.db"
 
+    @property
+    def execution_db_path(self) -> Path:
+        return self.data_dir / "execution.db"
+
     def ensure_dirs(self) -> None:
         for path in (self.data_dir, self.upload_dir, self.generated_dir, self.skills_dir):
             path.mkdir(parents=True, exist_ok=True)

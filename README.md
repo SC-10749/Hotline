@@ -39,15 +39,15 @@ Hotline Agent 是一个面向企业级应用的端到端通用智能体（End-to
 
 ### 安装与启动
 
-前后端融合为**一个服务**：FastAPI 直接服务 Vue 构建产物，页面与接口同端口。
+浏览器仍只访问一个 FastAPI 入口，FastAPI 直接服务 Vue 构建产物；长任务由同机独立的 Python Execution Worker 消费。API、Worker 和前端由启动器统一编排。
 
 ```bash
 # 1) 首次：安装并构建前端
 npm --prefix frontend install
 npm --prefix frontend run build
 
-# 2) 启动单服务（页面 + API + 技能控制台都在 8888）
-npm start        # 等价于 python -m uvicorn main:app --host 127.0.0.1 --port 8888
+# 2) 启动网关 + Execution Worker（页面、API、技能控制台仍在 8888）
+npm start
 ```
 
 启动后：
@@ -57,7 +57,10 @@ npm start        # 等价于 python -m uvicorn main:app --host 127.0.0.1 --port 
 | 应用页面 | http://127.0.0.1:8888/ |
 | 后端 API 文档 | http://127.0.0.1:8888/docs |
 | 健康检查 | http://127.0.0.1:8888/health |
+| 就绪检查 | http://127.0.0.1:8888/health/ready |
 | 技能控制台 | http://127.0.0.1:8888/console |
+
+`npm start` 启动 FastAPI Gateway 和 Python Execution Worker 两个进程。当前执行队列、运行状态和 SSE 事件保存在被忽略的 `data/execution.db`，是同机 SQLite 队列，支持 Worker 重启后的事件回放；它还不承担多主机分布式调度。Worker 不在线时 `/health/ready` 返回 503，新的 Agent 运行会被拒绝。
 
 ### 常见问题
 
@@ -72,13 +75,13 @@ taskkill /PID <PID> /F
 
 ### 热部署（改代码自动更新，推荐日常使用）
 
-一个服务跑在 8888，改完代码不用手动重启或构建：
+网关跑在 8888，改完代码不用手动重启或构建：
 
 ```bash
 npm run hot
 ```
 
-- 改 Python（`python_backend/`、`main.py` 等所有 `.py`）→ 后端自动重启
+- 改 Python（`python_backend/`、`main.py` 等所有 `.py`）→ 网关和 Execution Worker 自动重启
 - 改 Vue/CSS（`frontend/src/`）→ 自动重新构建，浏览器页面自动刷新（页面内置热部署探针）
 - 窗口里会分别提示前端构建完成、后端启动完成，全部就绪后直接访问 <http://127.0.0.1:8888/>
 
@@ -90,7 +93,7 @@ npm run hot
 node dev-launcher.mjs    # 或 npm run dev
 ```
 
-前端使用 Vite HMR（修改即时更新），后端使用 Uvicorn reload（改 Python 自动重启）。端口可用 `DODO_DEV_FRONTEND_PORT` 和 `DODO_DEV_BACKEND_PORT` 覆盖。改完前端要回到单服务模式时，重新执行 `npm --prefix frontend run build` 即可。
+前端使用 Vite HMR（修改即时更新），后端 Gateway 与 Python Execution Worker 一起启动；端口可用 `DODO_DEV_FRONTEND_PORT` 和 `DODO_DEV_BACKEND_PORT` 覆盖。改完前端要回到网关 + Worker 模式时，重新执行 `npm --prefix frontend run build` 即可。
 
 ### 仅启动后端 / 其他方式
 
@@ -177,8 +180,14 @@ python skill-center/pull_samples.py      # 更新上游样本（anthropics/skill
 ```text
 ├─ frontend/          # Vue 3 前端（Vite）
 │  └─ src/modules/     # chat、workspaces、memory、retrieval、skills、MCP 等前端模块边界
-├─ python_backend/    # FastAPI 后端（agents、documents、skills、skill_center 等）
-│  └─ modules/         # memory、retrieval、storage、上下文、技能、MCP、执行器等后端模块边界
+├─ python_backend/    # Python 后端
+│  ├─ api/             # FastAPI Router 与 HTTP/SSE 接口
+│  ├─ application/    # 用例编排服务
+│  ├─ domain/          # 领域实体、状态和规则
+│  ├─ infrastructure/ # SQLite 队列及外部系统适配器
+│  ├─ runtime/        # Agent Runtime 抽象
+│  ├─ workers/        # 后台 Worker 进程入口
+│  └─ modules/        # memory、retrieval、storage、技能、MCP 等能力边界
 ├─ static/            # favicon 与 console/ 技能控制台页面（Vue 产物由后端服务 frontend/dist）
 ├─ skill-center/      # 技能中心命令行工具与研究样本
 ├─ deploy/            # 数据库初始化脚本
@@ -191,7 +200,7 @@ python skill-center/pull_samples.py      # 更新上游样本（anthropics/skill
 
 ### 模块边界
 
-前后端按同名能力模块逐步拆分，当前旧入口继续负责装配，迁移不会改变现有接口：
+前后端按同名能力模块逐步拆分，API、应用服务、领域和基础设施按依赖方向组织；现有旧入口继续负责兼容装配，迁移不会改变现有接口：
 
 | 模块 | 负责内容 | 当前实现入口 |
 | --- | --- | --- |
@@ -201,7 +210,7 @@ python skill-center/pull_samples.py      # 更新上游样本（anthropics/skill
 | `context_engineering` | 历史、检索、技能和提示词组装 | `agents.py` |
 | `skills` | Skill 版本、绑定、运行时加载 | `skills.py`、`skill_center.py` |
 | `mcp` | 外部工具协议和搜索工具 | `agents.py`（逐步迁移） |
-| `execution` | 任务生命周期、停止、脚本和 EXE 执行 | `agents.py`（逐步迁移） |
+| `execution` | 任务生命周期、停止、脚本和 EXE 执行 | `domain/execution`、`application/execution_service.py`、`workers/execution_worker.py` |
 | `workspaces` | 文件夹、工作区和任务归属 | 前端工作区状态（逐步持久化） |
 | `artifacts` | PPT、文档预览、下载和结果交付 | `ppt.py`、`documents.py` |
 
@@ -210,7 +219,7 @@ python skill-center/pull_samples.py      # 更新上游样本（anthropics/skill
 ## 设计原则
 
 1. **单项目单仓库**：一个应用一个仓库，前端、后端、工具、文档同仓维护，不再有平台与项目之分。
-2. **一个服务一个端口**：FastAPI 直接服务 Vue 构建产物，页面、接口、技能控制台同源同端口；开发时才拆成 Vite + Uvicorn 双进程（Vite 代理保持同源）。
+2. **一个浏览器入口，运行面解耦**：FastAPI 直接服务 Vue 构建产物，页面、接口、技能控制台同源同端口；长任务由独立 Python Execution Worker 承载，执行 API 通过应用服务和队列端口连接基础设施，后续按数据所有权逐步抽取其他服务。
 3. **事实优先**：不把计划、推测或未验证结果描述成已实现能力。
 4. **可重复验证**：`python skill-center/test_center.py`、`npm --prefix frontend run build` 等命令可重复执行。
 5. **安全优先**：不提交密钥、访问令牌、真实个人信息或生产数据；技能内容保存前自动做敏感信息与提示注入扫描。

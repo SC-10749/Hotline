@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import mimetypes
 import os
 import sqlite3
@@ -10,29 +9,30 @@ from uuid import uuid4
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from .agents import AgentEngine, TaskManager
 from .config import settings
 from .documents import DocumentError, DocumentService
 from .models import DocumentRecord, FileInfo, now_iso
 from .object_store import ObjectStorage
 from .parser import parse_file
-from .ppt import generate_ppt
 from .skill_center import Catalog
 from .skills import SkillError, SkillRegistry
 from .storage import Storage
 from .vector_store import PgVectorStore
+from .application.execution_service import ExecutionApplicationService
+from .infrastructure.queue import SqliteExecutionQueue
+from .api.routers.execution import create_execution_router
 
 settings.ensure_dirs()
 storage = Storage(settings)
 object_store = ObjectStorage(settings)
-tasks = TaskManager(settings)
 vector_store = PgVectorStore(settings)
 skills = SkillRegistry(settings)
 documents = DocumentService(settings, storage, object_store, vector_store)
-engine = AgentEngine(settings, storage, tasks, vector_store, skills, documents)
+execution_store = SqliteExecutionQueue(settings.execution_db_path)
+execution_service = ExecutionApplicationService(execution_store)
 
 STATIC_DIR = Path(__file__).parent.parent / "static"
 CONSOLE_DIR = STATIC_DIR / "console"
@@ -74,6 +74,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(
+    create_execution_router(
+        execution_service,
+        lambda file_id: bool(storage.get_file(file_id) or storage.get_document(file_id)),
+    )
+)
 
 
 def ok(data=None, message="操作成功", code=200):
@@ -87,6 +93,16 @@ def fail(message: str, code: int = 400):
 @app.get("/health")
 def health():
     return {"status": "UP", "service": "hotline-agent", "version": "fastapi"}
+
+
+@app.get("/health/ready")
+def readiness():
+    worker_available = execution_store.has_live_worker()
+    return JSONResponse(
+        {"status": "UP" if worker_available else "DEGRADED", "service": "hotline-agent",
+         "executionWorker": "available" if worker_available else "unavailable"},
+        status_code=200 if worker_available else 503,
+    )
 
 
 @app.get("/file/list")
@@ -384,77 +400,6 @@ def session_delete(conversation_id: str):
     if not existed:
         return fail("会话不存在", 404)
     return ok("会话删除成功" if deleted else None)
-
-
-@app.get("/agent/stop")
-def agent_stop(conversationId: str = Query(...)):
-    stopped = tasks.stop(conversationId)
-    return {"success": stopped, "message": "已停止执行" if stopped else "没有找到正在执行的任务"}
-
-
-def _sse_stream(agent: str, query: str, conversation_id: str, file_id: str | None):
-    if agent == "ppt":
-        output = generate_ppt(query, settings.generated_dir)
-        events = list(engine.stream(agent, conversation_id, query, file_id))
-        ppt_url = object_store.upload_bytes(
-            output.read_bytes(),
-            f"ppt/{conversation_id}/{output.name}",
-            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        )
-        download_url = ppt_url if settings.file_storage_backend == "minio" else f"/generated/{output.name}"
-        events.insert(-1, engine.event("text", f"\n下载文件: {download_url}"))
-        if settings.file_storage_backend == "minio":
-            output.unlink(missing_ok=True)
-    else:
-        events = engine.stream(agent, conversation_id, query, file_id)
-
-    for event in events:
-        yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-    yield "data: [DONE]\n\n"
-
-
-def _agent_stream(agent: str, query: str, conversationId: str, fileId: str | None = None):
-    text = (query or "").strip()
-    conversation_id = (conversationId or "").strip()
-    file_id = (fileId or "").strip() or None
-    if not text:
-        raise HTTPException(status_code=400, detail="查询参数不能为空")
-    if not conversation_id:
-        raise HTTPException(status_code=400, detail="conversationId 不能为空")
-    if agent == "file" and not file_id:
-        raise HTTPException(status_code=400, detail="fileId 不能为空")
-    if agent == "file" and not (storage.get_file(file_id) or storage.get_document(file_id)):
-        raise HTTPException(status_code=404, detail="文件或文档不存在")
-    return StreamingResponse(
-        _sse_stream(agent, text, conversation_id, file_id),
-        media_type="text/event-stream; charset=utf-8",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
-    )
-
-
-@app.get("/agent/chat/stream")
-def chat_stream(query: str, conversationId: str):
-    return _agent_stream("chat", query, conversationId)
-
-
-@app.get("/agent/file/stream")
-def file_stream(query: str, conversationId: str, fileId: str):
-    return _agent_stream("file", query, conversationId, fileId)
-
-
-@app.get("/agent/pptx/stream")
-def pptx_stream(query: str, conversationId: str):
-    return _agent_stream("ppt", query, conversationId)
-
-
-@app.get("/agent/deep/stream")
-def deep_stream(query: str, conversationId: str):
-    return _agent_stream("deep", query, conversationId)
-
-
-@app.get("/agent/skills/stream")
-def skills_stream(query: str, conversationId: str, fileId: str | None = None):
-    return _agent_stream("skills", query, conversationId, fileId)
 
 
 @app.get("/doc-asset/{object_path:path}")

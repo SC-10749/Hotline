@@ -12,10 +12,9 @@ const backendRoutes = [
 
 export default defineConfig({
   plugins: [vue()],
-  // Watched rebuilds (hot-deploy mode) must not empty dist: the rmtree races
-  // with transient Windows locks (Defender/open handles) and dies with EPERM.
-  // Stale hashed assets are harmless; a normal `npm run build` cleans them.
-  build: process.argv.includes('--watch') ? { emptyOutDir: false } : {},
+  build: {
+    ...(process.argv.includes('--watch') ? { emptyOutDir: false } : {}),
+  },
   server: {
     host: '127.0.0.1',
     port: 5180,

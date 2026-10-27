@@ -3,10 +3,11 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "start": "python -m uvicorn main:app --host 127.0.0.1 --port 8888",
+    "start": "node start-services.mjs",
     "hot": "node hot-deploy.mjs",
     "dev": "node dev-launcher.mjs",
     "backend": "python -m uvicorn main:app --host 127.0.0.1 --port 8888 --reload",
+    "worker": "python -m python_backend.modules.execution.worker",
     "frontend": "npm --prefix frontend run dev",
     "build": "npm --prefix frontend run build",
     "test": "python skill-center/test_center.py"

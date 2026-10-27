@@ -16,6 +16,7 @@ const root = dirname(fileURLToPath(import.meta.url));
 const children = [];
 let closing = false;
 let backendChild = null;
+let workerChild = null;
 let restartTimer = null;
 let restartCount = 0;
 const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
@@ -25,20 +26,25 @@ const hasUv = spawnSync('uv', ['--version'], { windowsHide: true }).status === 0
 const backendCommand = hasUv ? 'uv' : pythonCommand;
 const backendPrefix = hasUv ? ['run', 'python'] : [];
 
+const terminateProcessTree = (child) => {
+  if (!child?.pid || child.exitCode !== null) return Promise.resolve();
+  if (process.platform !== 'win32') {
+    child.kill('SIGTERM');
+    return Promise.resolve();
+  }
+  return new Promise(resolve => {
+    const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+    killer.on('error', resolve);
+    killer.on('close', resolve);
+  });
+};
+
 const shutdown = async (code = 0) => {
   if (closing) return;
   closing = true;
   await Promise.all(children.map(child => {
     if (!child.pid || child.exitCode !== null) return;
-    if (process.platform !== 'win32') {
-      child.kill('SIGTERM');
-      return;
-    }
-    return new Promise(resolve => {
-      const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
-      killer.on('error', resolve);
-      killer.on('close', resolve);
-    });
+    return terminateProcessTree(child);
   }));
   process.exitCode = code;
 };
@@ -98,17 +104,37 @@ const startBackend = () => {
   return child;
 };
 
+const startWorker = () => {
+  console.log(`▶ 启动执行 Worker（${[backendCommand, ...backendPrefix, '-m', 'python_backend.modules.execution.worker'].join(' ')}）…`);
+  const child = spawn(backendCommand, [...backendPrefix, '-m', 'python_backend.modules.execution.worker'], {
+    cwd: root,
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', NO_COLOR: '1', FORCE_COLOR: '0' },
+  });
+  pipeChildOutput(child);
+  child.on('error', error => {
+    console.error(`Failed to start execution worker: ${error.message}`);
+    shutdown(1);
+  });
+  child.on('exit', code => {
+    if (closing || code === 0 || workerChild !== child || child._hotRestarting) return;
+    console.error(`✗ 执行 Worker 退出（退出码 ${code}），修复代码后保存即自动重启。`);
+  });
+  children.push(child);
+  return child;
+};
+
 const restartBackend = (trigger) => {
   if (closing) return;
   restartCount += 1;
   const old = backendChild;
-  const killOld = () => new Promise(resolve => {
-    if (!old?.pid || old.exitCode !== null) return resolve();
-    old._hotRestarting = true;
-    const killer = spawn('taskkill', ['/pid', String(old.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
-    killer.on('error', resolve);
-    killer.on('close', resolve);
-  });
+  const oldWorker = workerChild;
+  const killOld = async () => {
+    const targets = [old, oldWorker].filter(child => child?.pid && child.exitCode === null);
+    targets.forEach(child => { child._hotRestarting = true; });
+    await Promise.all(targets.map(terminateProcessTree));
+  };
   void killOld().then(async () => {
     if (closing) return;
     // Give Windows a beat to actually release the listen socket; spawning too
@@ -116,7 +142,8 @@ const restartBackend = (trigger) => {
     await new Promise(resolve => setTimeout(resolve, 800));
     if (closing) return;
     backendChild = startBackend();
-    console.log(`✓ 检测到 Python 改动${trigger ? `（${trigger}）` : ''}，后端重启中（第 ${restartCount} 次），页面将自动刷新`);
+    workerChild = startWorker();
+    console.log(`✓ 检测到 Python 改动${trigger ? `（${trigger}）` : ''}，后端与 Worker 重启中（第 ${restartCount} 次），页面将自动刷新`);
   });
 };
 
@@ -147,7 +174,7 @@ frontendChild.on('error', error => {
 });
 children.push(frontendChild);
 
-console.log('Hotline Agent 热部署：改 Python 自动重启后端，改 Vue 自动重建前端并刷新页面。');
+console.log('Hotline Agent 热部署：改 Python 自动重启网关与 Execution Worker，改 Vue 自动重建前端并刷新页面。');
 console.log(`服务地址：http://127.0.0.1:${port}/（Ctrl+C 退出）`);
 
 let frontendBuilt = false;
@@ -158,6 +185,7 @@ const reportAllReady = () => {
   }
 };
 backendChild = startBackend();
+workerChild = startWorker();
 
 frontendChild.stdout.on('data', chunk => {
   // `watching for file changes` prints before the initial build; only a real

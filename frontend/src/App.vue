@@ -24,6 +24,7 @@ import {
   LibraryBig, GitBranch, History, MessagesSquare,
 } from 'lucide-vue-next'
 import { apiUrl, compensateDocuments, getAllSessions, getDocumentPreview, getDocumentVersions, getDocuments, getSessions, getSession, getSkills, removeDocument, removeSession, removeSkill, setSkillEnabled, stopAgent, streamUrl, testBackend, uploadDocument, uploadFile, uploadSkill, vectorizeDocument } from './api'
+import HarnessApp from './HarnessApp.vue'
 
 marked.setOptions({ breaks: true, gfm: true })
 Object.entries({ bash, css, java, javascript, json, markdown, python, sql, typescript, xml }).forEach(([name, language]) => hljs.registerLanguage(name, language))
@@ -1056,7 +1057,7 @@ onUnmounted(() => {
       <button class="rail-button" :class="{ active: activePage === 'plugins' }" type="button" aria-label="插件" title="插件" @click="openPlugins"><Puzzle :size="20" /></button>
       <button class="rail-button" :class="{ active: activePage === 'bot' }" type="button" aria-label="轻量机器人" title="轻量机器人" @click="openBotPage"><Bot :size="20" /></button>
       <button class="rail-button" :class="{ active: activePage === 'docs' }" type="button" aria-label="文档库" title="文档库" @click="openDocsPage"><LibraryBig :size="20" /></button>
-      <button class="rail-button" :class="{ active: activePage === 'harness' }" type="button" aria-label="Harness 工程" title="Harness 工程" @click="openHarnessPage"><GitBranch :size="20" /></button>
+      <button class="rail-button" :class="{ active: activePage === 'harness' }" type="button" aria-label="Harness 工程" title="Harness 工程" @click="openHarnessPage"><Workflow :size="20" /></button>
       <button class="rail-button" :class="{ active: activePage === 'export' }" type="button" aria-label="导出历史聊天" title="导出历史聊天" @click="openExportPage"><History :size="20" /></button>
       <button class="rail-profile" type="button" aria-label="用户设置" title="用户设置" @click="openMore"><CircleUserRound :size="19" :stroke-width="1.9" /></button>
     </aside>
@@ -1266,13 +1267,13 @@ onUnmounted(() => {
           <button v-else-if="activePage === 'plugins'" class="page-subitem active" type="button" @click="openSkills"><Puzzle :size="16" />技能<span>{{ skills.length }}</span></button>
           <button v-else-if="activePage === 'bot'" class="page-subitem active" type="button" disabled><Bot :size="16" />轻量机器人<span>规划中</span></button>
           <button v-else-if="activePage === 'docs'" class="page-create" type="button" @click="openDocs"><Plus :size="18" />上传文档</button>
-          <button v-else-if="activePage === 'harness'" class="page-subitem active" type="button" disabled><Bot :size="16" />执行工作台<span>规划中</span></button>
+          <button v-else-if="activePage === 'harness'" class="page-subitem active" type="button" disabled><Workflow :size="16" />Harness 控制面<span>演示</span></button>
           <button v-else class="page-create" type="button" :disabled="exportingHistory" @click="exportChatHistory"><LoaderCircle v-if="exportingHistory" :size="18" class="spin" /><Download v-else :size="18" />导出全部聊天</button>
-          <p v-if="activePage !== 'profile'" class="page-sidebar-empty">{{ activePage === 'automation' ? '暂无已安排的任务' : activePage === 'plugins' ? '插件功能集中在这里管理' : activePage === 'bot' ? '轻量机器人能力正在规划' : activePage === 'docs' ? '暂无已上传的文档' : activePage === 'harness' ? '工作台能力正在规划' : `${sessions.filter((session) => !session.isDraft).length} 个会话可导出` }}</p>
+          <p v-if="activePage !== 'profile'" class="page-sidebar-empty">{{ activePage === 'automation' ? '暂无已安排的任务' : activePage === 'plugins' ? '插件功能集中在这里管理' : activePage === 'bot' ? '轻量机器人能力正在规划' : activePage === 'docs' ? '暂无已上传的文档' : activePage === 'harness' ? '统一管理 Agent 运行、工具与产物 · 演示数据' : `${sessions.filter((session) => !session.isDraft).length} 个会话可导出` }}</p>
         </aside>
 
         <div class="page-main">
-          <header class="standalone-header">
+          <header v-if="activePage !== 'harness'" class="standalone-header">
             <div>
               <span class="standalone-kicker">Hotline 工作台</span>
               <h1 :id="`${activePage}-page-title`">{{ activePage === 'profile' ? ({ basics: '基础信息', api: 'API Key', personalization: '个性化', pet: '虚拟桌宠' })[profileSection] : ({ automation: '安排任务', plugins: '插件', bot: '轻量机器人', docs: '文档库', harness: 'Harness 工程', export: '导出历史聊天' })[activePage] }}</h1>
@@ -1302,15 +1303,15 @@ onUnmounted(() => {
               <button class="primary-button" type="button" disabled>选择桌宠</button>
             </template>
           </section>
-          <div v-else class="page-empty-state">
-            <div class="page-empty-icon"><Workflow v-if="activePage === 'automation'" :size="44" /><Puzzle v-else-if="activePage === 'plugins'" :size="44" /><Bot v-else-if="activePage === 'bot'" :size="44" /><FileText v-else-if="activePage === 'docs'" :size="44" /><FileCode2 v-else-if="activePage === 'harness'" :size="44" /><Archive v-else :size="44" /></div>
-            <h2>{{ activePage === 'automation' ? '安排任务' : activePage === 'plugins' ? '管理插件' : activePage === 'bot' ? '轻量级机器人' : activePage === 'docs' ? '管理文档' : activePage === 'harness' ? 'Harness 工作台' : '导出历史聊天' }}</h2>
-            <p>{{ activePage === 'automation' ? 'Hotline 可以帮你处理持续性任务，让你不必亲自自动手。' : activePage === 'plugins' ? '安装和管理技能，让 Hotline 拥有更适合你的工作能力。' : activePage === 'bot' ? '创建专注单一任务的轻量机器人，配置名称、角色指令和常用能力，并从独立入口快速开始对话。当前项目尚未接入机器人配置与运行服务。' : activePage === 'docs' ? '上传文档后，可以预览、提问并建立检索索引。' : activePage === 'harness' ? '按项目管理 Agent 执行环境，追踪任务步骤、工具调用、错误与生成文件。当前模块尚未接入执行服务。' : '将历史会话及完整问答记录导出为 JSON 文件，便于备份和迁移。' }}</p>
+          <HarnessApp v-if="activePage === 'harness'" embedded />
+          <div v-if="activePage !== 'harness'" class="page-empty-state">
+            <div class="page-empty-icon"><Workflow v-if="activePage === 'automation'" :size="44" /><Puzzle v-else-if="activePage === 'plugins'" :size="44" /><Bot v-else-if="activePage === 'bot'" :size="44" /><FileText v-else-if="activePage === 'docs'" :size="44" /><Archive v-else :size="44" /></div>
+            <h2>{{ activePage === 'automation' ? '安排任务' : activePage === 'plugins' ? '管理插件' : activePage === 'bot' ? '轻量级机器人' : activePage === 'docs' ? '管理文档' : '导出历史聊天' }}</h2>
+            <p>{{ activePage === 'automation' ? 'Hotline 可以帮你处理持续性任务，让你不必亲自自动手。' : activePage === 'plugins' ? '安装和管理技能，让 Hotline 拥有更适合你的工作能力。' : activePage === 'bot' ? '创建专注单一任务的轻量机器人，配置名称、角色指令和常用能力，并从独立入口快速开始对话。当前项目尚未接入机器人配置与运行服务。' : activePage === 'docs' ? '上传文档后，可以预览、提问并建立检索索引。' : '将历史会话及完整问答记录导出为 JSON 文件，便于备份和迁移。' }}</p>
             <button v-if="activePage === 'plugins'" class="primary-button" type="button" @click="openSkills"><Puzzle :size="15" />打开技能</button>
             <button v-else-if="activePage === 'bot'" class="primary-button" type="button" disabled>规划中</button>
             <button v-else-if="activePage === 'docs'" class="primary-button" type="button" @click="openDocs"><Plus :size="15" />上传文档</button>
             <button v-else-if="activePage === 'export'" class="primary-button" type="button" :disabled="exportingHistory" @click="exportChatHistory"><LoaderCircle v-if="exportingHistory" :size="15" class="spin" /><Download v-else :size="15" />{{ exportingHistory ? '正在导出' : '导出 JSON' }}</button>
-            <button v-else-if="activePage === 'harness'" class="primary-button" type="button" disabled>规划中</button>
             <button v-else class="primary-button" type="button" disabled>新建任务</button>
           </div>
         </div>
