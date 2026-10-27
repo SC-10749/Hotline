@@ -11,7 +11,7 @@ DEST = Path(__file__).resolve().parent / 'samples'
 
 
 def fetch(url):
-    with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'DodoAgent-Skill-Research'}), timeout=90) as response:
+    with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'HotlineAgent-Skill-Research'}), timeout=90) as response:
         return response.read()
 
 
@@ -47,3 +47,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

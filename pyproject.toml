@@ -1,7 +1,7 @@
 [project]
-name = "dodo-agent"
+name = "hotline-agent"
 version = "1.0.0"
-description = "Dodo Agent Python / FastAPI backend"
+description = "Hotline Agent Python / FastAPI backend"
 requires-python = ">=3.11"
 dependencies = [
     "pypdf>=5.0",
@@ -18,3 +18,4 @@ dependencies = [
 
 [tool.uv]
 package = false
+

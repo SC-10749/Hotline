@@ -251,7 +251,7 @@ class AgentEngine:
         # Same for a matched skill: the SKILL.md definitions govern the answer.
         web_agent = agent in {"chat", "deep"} or (agent == "skills" and not skill)
         refs = self._search(query) if not context and web_agent and not grounded else []
-        system = "你是 Dodo Agent，请用中文给出准确、结构清晰的回答。"
+        system = "你是 Hotline Agent，请用中文给出准确、结构清晰的回答。"
         if skill and self.skills:
             system = f"{self.skills.prompt_block(skill)}\n\n{system}"
         messages = [{"role": "system", "content": system}]
@@ -321,3 +321,4 @@ class AgentEngine:
             yield self.event("error", str(exc))
         finally:
             self.tasks.remove(conversation_id)
+
