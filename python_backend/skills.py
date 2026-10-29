@@ -103,6 +103,13 @@ class SkillResourceSession:
         self._texts: dict[str, str] = {}
         self._lock = threading.RLock()
 
+    def read_skill(self, skill_id: str, path: str = 'SKILL.md', offset: int = 0, limit: int = 12000) -> dict:
+        source = self._sources.get(skill_id) if isinstance(skill_id, str) else None
+        if source is None or not isinstance(path, str) or not path or len(path) > 2048:
+            return {'error': '技能资源不可读：请检查技能标识、相对路径或分页参数；技能变化后请重试。'}
+        resource_uri = source.descriptor.entry_uri.rsplit('/', 1)[0] + '/' + path
+        return self.read_file(resource_uri, offset, limit)
+
     def read_file(self, resource_uri: str, offset: int = 0, limit: int = 12000) -> dict:
         try:
             if type(offset) is not int or type(limit) is not int or offset < 0 or not 1 <= limit <= 12000:
