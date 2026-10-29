@@ -78,6 +78,87 @@ class DisclosureTests(unittest.TestCase):
         self.assertEqual(len(session.descriptors), 1)
         self.assertEqual(reads, ['SKILL.md'])
 
+    def test_metadata_cache_reads_only_new_or_changed_skill_headers(self):
+        first = self.registry.open_resource_session('request-1')
+        self.assertEqual([item.name for item in first.descriptors], ['demo'])
+        added = self.repo / 'another'
+        added.mkdir()
+        added_file = added / 'SKILL.md'
+        added_file.write_text(CONTENT.replace('name: demo', 'name: another').replace('用于演示', '新增技能'), encoding='utf-8')
+
+        original_header_reader = __import__('python_backend.skills', fromlist=['_read_skill_header'])._read_skill_header
+        read_names = []
+
+        def track_header(path):
+            read_names.append(path.parent.name)
+            return original_header_reader(path)
+
+        with patch('python_backend.skills._read_skill_header', side_effect=track_header):
+            second = self.registry.open_resource_session('request-2')
+            third = self.registry.open_resource_session('request-3')
+
+        self.assertEqual({item.name for item in second.descriptors}, {'demo', 'another'})
+        self.assertEqual({item.name for item in third.descriptors}, {'demo', 'another'})
+        self.assertEqual(read_names, ['another'])
+
+    def test_metadata_cache_reloads_only_skill_with_changed_header(self):
+        original = self.registry.open_resource_session('request-1')
+        (self.package / 'SKILL.md').write_text(CONTENT.replace('用于演示', '更新后的说明'), encoding='utf-8')
+        another = self.repo / 'another'
+        another.mkdir()
+        (another / 'SKILL.md').write_text(
+            CONTENT.replace('name: demo', 'name: another').replace('用于演示', '另一个技能'), encoding='utf-8')
+
+        original_header_reader = __import__('python_backend.skills', fromlist=['_read_skill_header'])._read_skill_header
+        read_names = []
+
+        def track_header(path):
+            read_names.append(path.parent.name)
+            return original_header_reader(path)
+
+        with patch('python_backend.skills._read_skill_header', side_effect=track_header):
+            refreshed = self.registry.open_resource_session('request-3')
+        self.assertCountEqual(read_names, ['demo', 'another'])
+        descriptions = {item.name: item.description for item in refreshed.descriptors}
+        self.assertEqual(descriptions['demo'], '更新后的说明')
+        self.assertEqual(descriptions['another'], '另一个技能')
+        self.assertNotEqual(original.descriptors[0].description, descriptions['demo'])
+
+    def test_installed_skill_manifest_is_cached_until_changed(self):
+        import io
+        import zipfile
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, 'w') as package:
+            package.writestr('installed-demo/SKILL.md', CONTENT)
+        installed = self.registry.install(archive.getvalue(), 'demo.zip')
+        self.registry.open_resource_session('request-1')
+        manifest = self.registry._skill_dir(installed.dirName) / '.skill-meta.json'
+        original_reader = Path.read_text
+        reads = []
+
+        def track_manifest(path, *args, **kwargs):
+            if path.name == '.skill-meta.json':
+                reads.append(path)
+            return original_reader(path, *args, **kwargs)
+
+        with patch.object(Path, 'read_text', track_manifest):
+            self.registry.open_resource_session('request-2')
+            self.assertEqual(reads, [])
+            metadata = json.loads(original_reader(manifest, encoding='utf-8'))
+            metadata['description'] = '变更后的摘要'
+            manifest.write_text(json.dumps(metadata, ensure_ascii=False), encoding='utf-8')
+            self.registry.open_resource_session('request-3')
+        self.assertEqual(reads, [manifest])
+
+    def test_metadata_cache_drops_deleted_skill_without_reading_other_headers(self):
+        first = self.registry.open_resource_session('request-1')
+        self.assertEqual(len(first.descriptors), 1)
+        (self.package / 'SKILL.md').unlink()
+        with patch('python_backend.skills._read_skill_header') as read_header:
+            second = self.registry.open_resource_session('request-2')
+        self.assertEqual(second.descriptors, ())
+        read_header.assert_not_called()
+
     def test_catalog_metadata_does_not_select_content(self):
         self.bind_catalog()
         with closing(Catalog(self.settings.skill_catalog_db).db) as database:

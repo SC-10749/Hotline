@@ -286,23 +286,62 @@ class SkillRegistry:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.root = settings.skills_dir
+        self._metadata_lock = threading.RLock()
+        self._descriptor_cache: dict[tuple[str, str], tuple[tuple[int, int, int], tuple[str, str] | None, SkillDescriptor]] = {}
+        self._installed_metadata_cache: dict[str, tuple[tuple[int, int, int], Skill | None]] = {}
 
     def _skill_dir(self, dir_name: str) -> Path:
         return self.root / dir_name
 
     def open_resource_session(self, request_id: str) -> SkillResourceSession:
+        with self._metadata_lock:
+            return self._build_resource_session(request_id)
+
+    def _build_resource_session(self, request_id: str) -> SkillResourceSession:
         sources: list[_SkillSource] = []
+        seen_cache_keys: set[tuple[str, str]] = set()
 
         def local_source(entry: Path, name: str, description: str, key: str,
-                         installed_id: str | None = None) -> None:
+                         source_kind: str, installed_id: str | None = None) -> None:
             if not entry.is_file() or entry.is_symlink() or entry.parent.is_symlink():
-                return
+                return None
             if not isinstance(name, str) or not isinstance(description, str):
-                return
-            identity = hashlib.sha256(key.encode('utf-8')).hexdigest()[:24]
-            descriptor = SkillDescriptor(identity, name, description, None, f'skill://{identity}/SKILL.md')
+                return None
+            resolved_entry = entry.resolve()
+            cache_key = (source_kind, str(resolved_entry))
+            seen_cache_keys.add(cache_key)
+            stamp = _file_stamp(entry)
+            metadata_hint = (name, description) if source_kind == 'installed' else None
+            cached = self._descriptor_cache.get(cache_key)
+            if cached and cached[0] == stamp and cached[1] == metadata_hint:
+                descriptor = cached[2]
+            else:
+                identity = hashlib.sha256(key.encode('utf-8')).hexdigest()[:24]
+                descriptor = SkillDescriptor(identity, name, description, None, f'skill://{identity}/SKILL.md')
+                self._descriptor_cache[cache_key] = (stamp, metadata_hint, descriptor)
             sources.append(_SkillSource(descriptor, entry.parent.resolve(), entry.resolve(),
                                         _file_stamp(entry), installed_id))
+
+        def repository_source(entry: Path, directory_name: str) -> None:
+            if not entry.is_file() or entry.is_symlink() or entry.parent.is_symlink():
+                return
+            resolved_entry = entry.resolve()
+            cache_key = ('repo', str(resolved_entry))
+            seen_cache_keys.add(cache_key)
+            stamp = _file_stamp(entry)
+            cached = self._descriptor_cache.get(cache_key)
+            if cached and cached[0] == stamp:
+                descriptor = cached[2]
+            else:
+                metadata = _read_skill_header(entry)
+                name, description = metadata.get('name'), metadata.get('description')
+                if not name or not description:
+                    self._descriptor_cache.pop(cache_key, None)
+                    return
+                identity = hashlib.sha256(f'repo:{directory_name}'.encode('utf-8')).hexdigest()[:24]
+                descriptor = SkillDescriptor(identity, name, description, None, f'skill://{identity}/SKILL.md')
+                self._descriptor_cache[cache_key] = (stamp, None, descriptor)
+            sources.append(_SkillSource(descriptor, entry.parent.resolve(), resolved_entry, stamp))
 
         repo = Path(getattr(self.settings, 'repo_skills_dir', Path(__file__).resolve().parents[1] / 'skills'))
         if repo.is_dir():
@@ -312,20 +351,28 @@ class SkillRegistry:
                     continue
                 try:
                     validate_resource_path(directory.name + '/SKILL.md')
-                    metadata = _read_skill_header(entry)
-                    if metadata.get('name') and metadata.get('description'):
-                        local_source(entry, metadata['name'], metadata['description'], 'repo:' + directory.name)
+                    repository_source(entry, directory.name)
                 except (OSError, UnicodeError, ValueError):
                     continue
-        for skill in self.list():
+        installed_skills, installed_meta_paths = self._installed_skills_for_discovery()
+        for skill in installed_skills:
             if skill.enabled:
                 try:
                     validate_resource_path(skill.dirName + '/' + skill.entry)
                     entry = self.skill_file(skill)
                     if entry.resolve().is_relative_to(self.root.resolve()):
-                        local_source(entry, skill.name, skill.description, 'installed:' + skill.id, skill.id)
+                        local_source(entry, skill.name, skill.description, 'installed:' + skill.id,
+                                     'installed', skill.id)
                 except (OSError, ValueError, TypeError):
                     continue
+        self._descriptor_cache = {
+            cache_key: cached for cache_key, cached in self._descriptor_cache.items()
+            if cache_key[0] not in {'repo', 'installed'} or cache_key in seen_cache_keys
+        }
+        self._installed_metadata_cache = {
+            key: cached for key, cached in self._installed_metadata_cache.items()
+            if key in installed_meta_paths
+        }
         if self.settings.skill_catalog_db.is_file():
             catalog = Catalog.open_readonly(self.settings.skill_catalog_db)
             try:
@@ -340,6 +387,36 @@ class SkillRegistry:
             finally:
                 catalog.db.close()
         return SkillResourceSession(self, sources, request_id)
+
+    def _installed_skills_for_discovery(self) -> tuple[list[Skill], set[str]]:
+        skills: list[Skill] = []
+        seen: set[str] = set()
+        if not self.root.is_dir() or self.root.is_symlink():
+            return skills, seen
+        for directory in sorted(self.root.iterdir()):
+            if directory.is_symlink() or not directory.is_dir():
+                continue
+            meta = directory / META_NAME
+            if meta.is_symlink() or not meta.is_file():
+                continue
+            try:
+                key = str(meta.resolve())
+                stamp = _file_stamp(meta)
+                seen.add(key)
+                cached = self._installed_metadata_cache.get(key)
+                if cached and cached[0] == stamp:
+                    skill = cached[1]
+                else:
+                    try:
+                        skill = Skill(**json.loads(meta.read_text('utf-8')))
+                    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+                        skill = None
+                    self._installed_metadata_cache[key] = (stamp, skill)
+                if skill is not None:
+                    skills.append(skill)
+            except OSError:
+                continue
+        return skills, seen
 
     def list(self) -> list[Skill]:
         if not self.root.exists():
