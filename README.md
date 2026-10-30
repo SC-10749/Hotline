@@ -148,7 +148,10 @@ uv sync                                                             # 可选：�
 技能中心已并入后端：版本目录、项目绑定、评测用例、自进化门禁、灰度发布与自动回滚，全部通过 FastAPI 提供服务，数据库位于 `data/skill-center/catalog.db`（Git 忽略）。
 
 - **技能控制台**：后端启动后打开 <http://127.0.0.1:8888/console>，可新建/编辑技能（SKILL.md + 可选资源）、按版本启用或停用、运行自进化并查看门禁结果。
-- **运行时加载**：技能智能体（`/agent/skills/stream`）按请求匹配技能；`$技能名` 显式指定，否则按名称与描述匹配。每次技能请求读取当前绑定版本，灰度发布按 `requestId` 稳定哈希命中。
+- **渐进式披露**：技能智能体（`/agent/skills/stream`）使用 LangChain `create_agent` 处理模型与工具调用。技能名称与摘要仅放在动态生成的 `read_skill` 工具描述中，不注入初始消息，也不将技能名称注册成独立工具；模型需要时按技能 ID 调用工具读取完整 `SKILL.md`，参考资料另行按相对路径按需读取。
+- **技能来源**：仓库根 `skills/*/SKILL.md`（当前包含开发流程技能 `hotline-tdd`）、原安装目录 `data/skills/`、技能中心中绑定当前项目的版本。仓库技能仅扫描元数据头部；目录查询不读取数据库正文/资源，不自动加载 `skill-center/samples/`。`$技能名` 是传给模型的显式使用提示，不再通过关键词预选后直接注入正文。
+- **元数据缓存**：后端进程内按来源缓存文件技能的名称与摘要。每次请求枚举技能并检查 `SKILL.md` 的 inode、修改时间和大小；未变化的条目复用缓存，新增或变更的条目才重新解析头部，删除项从缓存移除。技能中心仍按请求 ID 查询当前灰度版本，避免缓存绕过版本路由。目录变化在下一次技能请求生效；同尺寸内容若被外部程序同时恢复完全相同的 inode/时间戳/大小，stat 签名无法检测。
+- **请求隔离**：每次只向 LangChain 提供当前问题，不接入 history、checkpointer 或持久化记忆；当次工具循环消息临时保留。原接口仍可保存最终问答结果，但不作为下一次技能请求的模型输入。技能中心灰度按该请求 ID 稳定分桶，任务内固定选中版本；解绑/禁用后后续读取被拒绝。
 - **自进化闭环**：评测用例按 `train / selection / test` 分段；`evolve` 只接受最多 8 条 `add/delete/replace` patch，通过静态、动态、回归、增益、安全五道门禁后进入 `staged`，再用 `promote` 灰度绑定、`rollback` 回滚；错误率达到阈值自动回滚。
 - **可选模型配置**：`SKILL_EVOLUTION_*`（自动生成 patch）与 `SKILL_JUDGE_*`（独立评分），见 `.env.example`。
 
@@ -156,11 +159,21 @@ uv sync                                                             # 可选：�
 
 ```bash
 python skill-center/test_center.py       # 目录库回归测试
+python skill-center/test_skill_disclosure.py  # 渐进披露、版本和资源安全
+python skill-center/test_agent_tools.py  # 离线 LangChain 工具调用及接口兼容
 python skill-center/import_samples.py    # 导入 samples/ 研究样本（默认不绑定）
 python skill-center/pull_samples.py      # 更新上游样本（anthropics/skills 固定提交）
 ```
 
 `samples/` 内容来自 [Anthropic 官方 skills 仓库](https://github.com/anthropics/skills)，`samples/sources.json` 记录固定提交号。这些文件属于研究数据，不是本仓库开发的行为指令。
+
+技能执行边界：
+
+- 模型适配在 `python_backend/llm.py`，通用工具调用及 `read_skill` 工具定义在 `python_backend/modules/execution/`，技能目录和受限资源读取在 `python_backend/skills.py`；根 `skills/` 只放技能包，不承载 Agent 基础设施。
+- `read_skill` 只按本次登记的技能 ID 读取技能包内文本资源，禁止宿主机任意路径、越界链接、隐藏/私密文件及二进制内容；不执行 Shell/Python 脚本，不安装工具，不启动工作流引擎。Skill 中提到命令不代表已具备相应执行能力。
+- 技能工具描述预算为 8000 字符，超出时提示省略；单文件最多 1 MiB，每页最多 12000 字符，按 `next_offset` 继续读取，不静默截断正文。
+- 每次请求最多 8 次模型调用、16 次工具调用，工具结果累计最多 64000 字符；错误、超限和停止均返回错误事件，不标记完成。在途模型请求不保证即时取消，返回后会检查停止信号。
+- 需要支持工具调用的 OpenAI-compatible 模型；缺少配置、协议不支持或调用失败时明确报错，不退化为虚构技能执行。执行期间关闭 LangSmith 自动追踪。接口保持 SSE 事件格式，当前在最终答案就绪后发送文本，不承诺逐 Token 流式输出。
 
 ## 配置
 
@@ -170,7 +183,9 @@ python skill-center/pull_samples.py      # 更新上游样本（anthropics/skill
 | `DODO_ENV_PROFILE` | `remote` 时应用 `REMOTE_` 前缀配置 |
 | `DODO_STORAGE_BACKEND` / `DODO_FILE_STORAGE_BACKEND` | `sqlite`/`mysql`、`local`/`minio`，本地开发默认 SQLite + 本地文件 |
 | `DODO_VECTOR_ENABLED` | 向量检索开关，本地默认关闭 |
-| `DODO_SKILL_CATALOG_DB` / `DODO_SKILL_PROJECT` | 技能目录库路径（默认 `data/skill-center/catalog.db`）与绑定项目 ID（默认 `hotline-agent`） |
+| `DODO_SKILL_CATALOG_DB` / `DODO_SKILL_PROJECT` | 技能目录库路径（默认 `data/skill-center/catalog.db`）与绑定项目 ID（默认 `dodo-agent`） |
+| `DODO_REPO_SKILLS_DIRECTORY` | 仓库技能包目录，默认根据源码位置定位根 `skills/`，不受启动工作目录影响 |
+| `SKILLS_DIRECTORY` | 原技能安装目录，默认 `data/skills/`，与仓库技能目录分别管理 |
 | `DODO_DEV_FRONTEND_PORT` / `DODO_DEV_BACKEND_PORT` | 开发端口覆盖，默认 5180 / 8888 |
 
 完整清单见 [.env.example](./.env.example)。

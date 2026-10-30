@@ -22,6 +22,21 @@ DEFAULT_DB = ROOT / 'data/skill-center/catalog.db'
 DEFAULT_PROJECT = 'hotline-agent'
 
 
+def validate_resource_path(name):
+    if not isinstance(name, str) or not name or '%' in name or '\\' in name or ':' in name:
+        raise ValueError('非法技能资源路径')
+    parts = name.split('/')
+    if any(not part or part.startswith('.') or part.lower() in {'private', 'secrets'}
+           or '.env' in part.lower() or '.local.' in part.lower() or '.private.' in part.lower()
+           or part.lower().startswith(('service-addresses', 'server-addresses')) for part in parts):
+        raise ValueError('禁止访问该技能资源')
+    allowed = {'.md', '.txt', '.json', '.yaml', '.yml', '.toml', '.csv', '.tsv', '.xml',
+               '.html', '.css', '.js', '.ts', '.py', '.sh', '.sql', '.ini', '.cfg', '.rst'}
+    if Path(name).suffix.lower() not in allowed:
+        raise ValueError('仅支持技能文本资源')
+    return name
+
+
 def validate(content):
     match = re.match(r'\A---\s*\n(.*?)\n---\s*\n(.*)', content, re.S)
     if not match or not match[2].strip():
@@ -130,6 +145,13 @@ def run_sandbox(case):
 
 
 class Catalog:
+    @classmethod
+    def open_readonly(cls, path):
+        catalog = cls.__new__(cls)
+        catalog.db = sqlite3.connect(Path(path).resolve().as_uri() + '?mode=ro', uri=True)
+        catalog.db.row_factory = sqlite3.Row
+        return catalog
+
     def __init__(self, path=DEFAULT_DB):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(path)
@@ -339,16 +361,39 @@ class Catalog:
         if action == 'list':
             return {'skills': [dict(r) for r in self.db.execute('SELECT * FROM versions ORDER BY created_at DESC, rowid DESC')],
                     'bindings': [dict(r) for r in self.db.execute('SELECT * FROM bindings')]}
-        if action == 'runtime':
+        if action == 'authorize_runtime_skill':
+            authorized = self.db.execute(
+                'SELECT 1 FROM bindings b JOIN versions v ON b.name=v.name '
+                'WHERE b.project=? AND b.name=? AND v.version=?',
+                (args['project'], args['name'], args['version']),
+            ).fetchone()
+            return {'authorized': bool(authorized)}
+        if action == 'read_runtime_file':
+            name, version, project = args['name'], args['version'], args['project']
+            path = validate_resource_path(args['path'])
+            if not self.db.execute('SELECT 1 FROM bindings WHERE project=? AND name=?', (project, name)).fetchone():
+                raise ValueError('技能未绑定或已撤销')
+            column = 'content' if path == 'SKILL.md' else 'resources'
+            row = self.db.execute(f'SELECT {column} FROM versions WHERE name=? AND version=?', (name, version)).fetchone()
+            if not row:
+                raise ValueError('技能版本不可用')
+            text = row[column] if path == 'SKILL.md' else json.loads(row[column]).get(path)
+            if not isinstance(text, str):
+                raise ValueError('技能资源不存在')
+            if len(text.encode('utf-8')) > 1024 * 1024 or '\x00' in text:
+                raise ValueError('技能资源过大或不是文本')
+            return {'text': text}
+        if action in {'runtime', 'runtime_metadata'}:
             project = args['project']
-            rows = self.db.execute('SELECT v.* FROM versions v JOIN bindings b ON v.name=b.name AND v.version=b.version WHERE b.project=? ORDER BY v.name', (project,)).fetchall()
+            columns = 'v.name,v.version,v.description' if action == 'runtime_metadata' else 'v.*'
+            rows = self.db.execute(f'SELECT {columns} FROM versions v JOIN bindings b ON v.name=b.name AND v.version=b.version WHERE b.project=? ORDER BY v.name', (project,)).fetchall()
             request_id = str(args.get('requestId', ''))
             for index, row in enumerate(rows):
-                rollout = self.db.execute('SELECT * FROM rollouts WHERE project=? AND name=? AND active=1', (project, row['name'])).fetchone()
+                rollout = self.db.execute('SELECT percentage,previous_version FROM rollouts WHERE project=? AND name=? AND active=1', (project, row['name'])).fetchone()
                 if rollout and rollout['percentage'] > 0 and request_id:
                     bucket = int(hashlib.sha256(request_id.encode()).hexdigest()[:8], 16) % 100
                     if bucket >= rollout['percentage']:
-                        previous = self.db.execute('SELECT * FROM versions WHERE name=? AND version=?', (row['name'], rollout['previous_version'])).fetchone()
+                        previous = self.db.execute(f'SELECT {columns} FROM versions v WHERE name=? AND version=?', (row['name'], rollout['previous_version'])).fetchone()
                         if previous: rows[index] = previous
             return {'skills': [dict(r) for r in rows]}
         raise ValueError('未知操作')

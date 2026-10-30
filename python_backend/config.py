@@ -32,6 +32,7 @@ class Settings:
     upload_dir: Path = Path(os.getenv("DODO_UPLOAD_DIR", "data/uploads"))
     generated_dir: Path = Path(os.getenv("DODO_GENERATED_DIR", "data/generated"))
     skills_dir: Path = Path(os.getenv("SKILLS_DIRECTORY", "data/skills"))
+    repo_skills_dir: Path = Path(os.getenv("DODO_REPO_SKILLS_DIRECTORY", str(Path(__file__).resolve().parents[1] / "skills")))
     skill_catalog_db: Path = Path(os.getenv("DODO_SKILL_CATALOG_DB", "data/skill-center/catalog.db"))
     skill_project: str = os.getenv("DODO_SKILL_PROJECT", "hotline-agent")
     max_file_size: int = int(os.getenv("DODO_MAX_FILE_SIZE", str(50 * 1024 * 1024)))
