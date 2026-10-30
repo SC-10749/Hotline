@@ -72,6 +72,35 @@ uv run python eval\collect.py --limit 20 --prompt current,cited  # 一次跑两�
 > `cited` 是示例变体：要求逐句标注 `[片段N]`、不足时明确拒答。用它可以直接看出
 > 「引用」和「拒答」这两条约束有没有生效。
 
+## 提示词检查（静态 lint + 输出契约）
+
+不调模型、秒出结果，可以直接当回归门禁。
+
+```powershell
+uv run python eval\prompt_checks.py                                        # 只查提示词本身
+uv run python eval\prompt_checks.py --samples "eval\runs\<时间戳>\samples.jsonl"  # 再查输出
+```
+
+**静态**（对每个变体）：
+
+- 模板里有没有 `{query}`、`{context}`
+- 有没有未知占位符
+- 系统提示是否为空
+- 声明的契约，提示词里有没有对应的指令（声明了"要标来源"却没写"标注/引用"，直接报错）
+
+**输出契约**（对样本）：
+
+- `no_system_leak`：答案里没有泄露系统提示
+- `no_placeholder_leak`：没有残留 `{context}` 这类未替换占位符
+- `length_limit`：不超过 2000 字
+- `cites_sources`：有召回片段时，答案里必须出现 `[片段N]`
+- `refuses_when_empty`：没有召回时，必须出现拒答话术
+
+退出码：静态有失败，或任一输出检查通过率低于 `--min-pass`（默认 0.8），返回 1。
+
+契约在 `prompts.py` 里按变体声明，`current` 不声明任何契约（线上本来就没要求），
+`cited` 声明了 `cites_sources` 和 `refuses_when_empty`。
+
 ## 指标
 
 | 指标 | 衡量什么 | 需要什么 | 备注 |

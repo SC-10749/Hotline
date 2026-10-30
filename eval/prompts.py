@@ -19,6 +19,9 @@ class PromptVariant:
     system: str
     user: str
     description: str = ""
+    # 这个版本对外承诺的输出契约，由 prompt_checks.py 逐条验证。
+    # 只有能被确定性判定的才写进来，别写"答案要有帮助"这种。
+    contracts: tuple[str, ...] = ()
 
     def fingerprint(self) -> str:
         payload = f"{self.system}\x00{self.user}".encode("utf-8")
@@ -42,6 +45,7 @@ VARIANTS: dict[str, PromptVariant] = {
         ),
         user="本次选择的召回链路：{route}\n知识库内容（按编号引用）：\n{context}\n\n问题：{query}",
         description="要求逐句标注来源、不足时明确拒答；用于验证“引用”和“拒答”这两条提示词约束是否生效",
+        contracts=("cites_sources", "refuses_when_empty"),
     ),
 }
 
