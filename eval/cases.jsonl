@@ -1,0 +1,5 @@
+{"id": "q01", "question": "星云平台的接入层由哪些组件组成？", "source_id": "", "reference": ""}
+{"id": "q02", "question": "ERR_4021 是什么错误？", "source_id": "", "reference": ""}
+{"id": "q03", "question": "网关服务和鉴权服务之间是什么依赖关系？", "source_id": "", "reference": ""}
+{"id": "q04", "question": "文档里一共提到几个运维检查项？", "source_id": "", "reference": ""}
+{"id": "q05", "question": "这份文档里有没有提到 Kubernetes 的版本？", "source_id": "", "reference": ""}
