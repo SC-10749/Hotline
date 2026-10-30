@@ -31,12 +31,11 @@ button { cursor: pointer; }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--h-accent); outline-offset: 2px; }
 ::selection { color: var(--h-text); background: #f2c5b6; }
 .harness-shell { display: grid; min-height: 100dvh; grid-template-columns: 232px minmax(0, 1fr); }
-.harness-shell.is-embedded { display: block; min-height: 0; width: 100%; }
-.is-embedded .main-surface { min-height: 0; }
-.is-embedded .page-scroll { min-height: 0; }
-.is-embedded .page-content { width: 100%; padding: 0 0 20px; }
-.is-embedded .page-heading-row { padding-top: 18px; }
-.embedded-source-label { margin-right: 4px; color: var(--h-muted); font-size: 10px; white-space: nowrap; }
+.harness-shell { width: 100%; min-height: 100dvh; }
+.harness-brand-home { display: flex; min-width: 0; flex: 1; align-items: center; gap: 10px; padding: 0; border: 0; background: transparent; text-align: left; }
+.harness-brand-home:hover .brand-copy strong { color: #a64d33; }
+.harness-back { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; color: var(--h-secondary); background: transparent; cursor: pointer; font: inherit; }
+.harness-back:hover { color: #a64d33; }
 .harness-sidebar { position: sticky; top: 0; display: flex; height: 100dvh; min-height: 620px; flex-direction: column; overflow-y: auto; border-right: 1px solid var(--h-line-soft); background: var(--h-sidebar); }
 .brand-lockup { display: flex; height: 68px; flex: 0 0 auto; align-items: center; gap: 10px; padding: 0 19px; border-bottom: 1px solid var(--h-line-soft); }
 .brand-symbol { display: grid; width: 31px; height: 31px; flex: 0 0 auto; place-items: center; border: 1px solid #e5b5a5; border-radius: 8px; color: var(--h-accent); background: #fff8f5; }
@@ -393,7 +392,6 @@ kbd { padding: 2px 4px; border: 1px solid var(--h-line-soft); border-radius: 3px
   .overview-stat > strong { font-size: 19px; }
   .module-content-grid { grid-template-columns: minmax(0, 1fr) 235px; gap: 9px; }
   .module-table-head, .module-table-row { grid-template-columns: minmax(130px, 1.2fr) minmax(90px, .8fr) minmax(95px, .9fr) minmax(62px, .5fr) 14px; gap: 6px; padding-right: 8px; padding-left: 8px; }
-  .is-embedded .run-workbench { grid-template-columns: minmax(215px, .72fr) minmax(0, 1.5fr); }
 }
 @media (max-width: 780px) {
   .harness-shell { display: block; }
@@ -441,8 +439,6 @@ kbd { padding: 2px 4px; border: 1px solid var(--h-line-soft); border-radius: 3px
   .page-footer { font-size: 8px; }
   .planned-notice { align-items: flex-start; padding: 10px; }
   .planned-badge { display: none; }
-  .is-embedded .page-content { padding: 0 10px 16px; }
-  .is-embedded .page-heading-row { padding-top: 16px; }
   .module-toolbar { flex-wrap: wrap; padding: 0 8px 8px; }
   .module-tabs { width: 100%; height: 40px; flex: 0 0 100%; }
   .module-search { width: auto; min-width: 100px; flex: 1; }
@@ -500,4 +496,49 @@ kbd { padding: 2px 4px; border: 1px solid var(--h-line-soft); border-radius: 3px
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
+
+/* Keep the embedded control plane fluid when the host viewport narrows. */
+html, body, #app, #harness-app { width: 100%; max-width: 100%; min-width: 0; }
+html, body { overflow-x: hidden; }
+.harness-shell { width: 100%; max-width: 100%; min-width: 0; grid-template-columns: clamp(200px, 18vw, 232px) minmax(0, 1fr); }
+.harness-shell, .main-surface, .page-scroll, .page-content { width: 100%; max-width: 100%; min-width: 0; }
+.main-surface, .page-scroll, .page-content, .run-workbench, .run-detail-panel, .run-inspector, .run-list-panel, .run-list { min-width: 0; max-width: 100%; }
+.page-content { width: min(100%, 1760px); padding-inline: clamp(12px, 2.2vw, 28px); }
+.topbar { padding-inline: clamp(12px, 2.2vw, 28px); }
+.page-heading-row, .heading-actions, .detail-toolbar, .module-toolbar { min-width: 0; }
+.page-heading-row h1, .detail-title-group h2 { overflow-wrap: anywhere; }
+.overview-strip, .run-workbench, .module-content-grid { min-width: 0; }
+
+@media (max-width: 1160px) and (min-width: 781px) {
+  .harness-shell { grid-template-columns: clamp(190px, 20vw, 214px) minmax(0, 1fr); }
+  .page-heading-row { flex-wrap: wrap; }
+  .heading-actions { margin-left: auto; }
+}
+
+@media (max-width: 780px) {
+  .harness-shell { display: block; }
+  .main-surface { width: 100%; }
+  .page-content { padding-inline: 12px; }
+  .page-heading-row { flex-wrap: wrap; }
+  .page-heading-row > div:first-child { min-width: 0; flex: 1 1 220px; }
+  .heading-actions { max-width: 100%; flex-wrap: wrap; }
+  .overview-strip { width: 100%; }
+  .module-table-panel { max-width: 100%; overflow-x: auto; }
+}
+
+@media (max-width: 470px) {
+  .page-content { padding-inline: 9px; }
+  .topbar { padding-inline: 9px; }
+  .page-heading-row h1 { font-size: clamp(18px, 6vw, 22px); }
+  .heading-actions { width: 100%; }
+  .heading-actions .button { flex: 1 1 auto; }
+  .overview-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Account for the scrollbar consuming a few CSS pixels at very narrow widths. */
+@media (max-width: 540px) {
+  .run-list { grid-template-columns: minmax(0, 1fr); }
+  .run-row { min-width: 0; width: 100%; border-right: 0; }
+  .run-workbench { width: 100%; }
 }

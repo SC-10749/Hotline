@@ -7,7 +7,7 @@ const sections = [
   { label: '能力注册表', items: [{ id: 'tools', label: '工具与 MCP', icon: Wrench, count: '18' }, { id: 'skills', label: 'Skills', icon: Sparkles, count: '23' }, { id: 'models', label: '模型路由', icon: Network, count: '5' }] },
   { label: '运行治理', items: [{ id: 'machines', label: '机器与运行时', icon: Cpu, count: '3' }, { id: 'approvals', label: '待审批', icon: ShieldCheck, count: '2' }, { id: 'artifacts', label: '产物与存储', icon: Archive }, { id: 'observability', label: '追踪与日志', icon: Terminal }] },
 ]
-const props = defineProps({ embedded: { type: Boolean, default: false } })
+const emit = defineEmits(['exit'])
 const runs = ref([
   { id: 'RUN-2048', title: '梳理客服工单中的退款异常', workspace: 'support-ops / main', agent: 'Support analyst', model: 'Claude Sonnet 4', status: 'running', elapsed: '02:41', tokens: '18.4k', cost: '$0.042', progress: 68, phase: '正在归纳 24 条关联工单' },
   { id: 'RUN-2047', title: '为知识库补充 API 错误码说明', workspace: 'docs-platform / feature/api-errors', agent: 'Docs engineer', model: 'GPT-5', status: 'running', elapsed: '01:18', tokens: '9.2k', cost: '$0.019', progress: 42, phase: '等待 Playwright 页面验证' },
@@ -122,19 +122,19 @@ function sectionRecords(id) {
 </script>
 
 <template>
-  <div class="harness-shell" :class="{ 'is-embedded': props.embedded }">
+  <div class="harness-shell">
     <div v-if="mobileNavOpen" class="mobile-scrim" @click="mobileNavOpen = false"></div>
-    <aside v-if="!props.embedded" class="harness-sidebar" :class="{ 'is-open': mobileNavOpen }">
-      <div class="brand-lockup"><div class="brand-symbol"><Workflow :size="18" :stroke-width="2" /></div><div class="brand-copy"><strong>HOTLINE</strong><span>AGENT HARNESS</span></div><button class="close-mobile" aria-label="关闭导航" @click="mobileNavOpen = false"><X :size="17" /></button></div>
+    <aside class="harness-sidebar" :class="{ 'is-open': mobileNavOpen }">
+      <div class="brand-lockup"><button class="harness-brand-home" type="button" aria-label="返回 Hotline" title="返回 Hotline" @click="emit('exit')"><div class="brand-symbol"><Workflow :size="18" :stroke-width="2" /></div><div class="brand-copy"><strong>HOTLINE</strong><span>AGENT HARNESS</span></div></button><button class="close-mobile" aria-label="关闭导航" @click="mobileNavOpen = false"><X :size="17" /></button></div>
       <button class="workspace-switch" @click="notify('工作空间切换器暂为演示状态')"><span class="workspace-mark">H</span><span class="workspace-copy"><strong>Hotline Agent</strong><small>个人工作区</small></span><ChevronDown :size="15" /></button>
       <nav class="side-navigation" aria-label="Harness 导航"><div v-for="group in sections" :key="group.label" class="nav-group"><div class="nav-group-label">{{ group.label }}</div><button v-for="item in group.items" :key="item.id" class="nav-link" :class="{ active: activeSection === item.id }" @click="selectSection(item.id)"><component :is="item.icon" :size="16" :stroke-width="1.8" /><span>{{ item.label }}</span><small v-if="item.count">{{ item.count }}</small></button></div></nav>
       <div class="sidebar-bottom"><div class="runtime-health"><span class="health-led"></span><span>本地控制面</span><strong>健康</strong></div><button class="nav-link" @click="selectSection('settings')"><Settings2 :size="16" /><span>Harness 设置</span><MoreHorizontal :size="15" /></button><div class="user-row"><div class="user-avatar">SC</div><div class="user-copy"><strong>Song Chen</strong><small>管理员</small></div><CircleHelp :size="16" /></div></div>
     </aside>
 
     <main class="main-surface">
-      <header v-if="!props.embedded" class="topbar"><button class="mobile-menu" aria-label="打开导航" @click="mobileNavOpen = true"><Menu :size="19" /></button><div class="breadcrumbs"><span>Harness</span><span class="crumb-slash">/</span><strong>{{ navTitle }}</strong></div><div class="topbar-actions"><span class="demo-label" :class="{ planned: sectionMode === 'planned' }"><span></span>{{ sourceLabel }}</span><button class="top-icon" aria-label="搜索" title="搜索" @click="$refs.searchField?.focus()"><Search :size="16" /></button><button class="command-shortcut" @click="$refs.searchField?.focus()"><Command :size="13" />快速查找<kbd>Ctrl K</kbd></button><button class="avatar-small" aria-label="个人账户">SC</button></div></header>
+      <header class="topbar"><button class="mobile-menu" aria-label="打开导航" @click="mobileNavOpen = true"><Menu :size="19" /></button><div class="breadcrumbs"><button class="harness-back" type="button" @click="emit('exit')"><Home :size="15" /> Hotline</button><span class="crumb-slash">/</span><strong>{{ navTitle }}</strong></div><div class="topbar-actions"><span class="demo-label" :class="{ planned: sectionMode === 'planned' }"><span></span>{{ sourceLabel }}</span><button class="top-icon" aria-label="搜索" title="搜索" @click="$refs.searchField?.focus()"><Search :size="16" /></button><button class="command-shortcut" @click="$refs.searchField?.focus()"><Command :size="13" />快速查找<kbd>Ctrl K</kbd></button><button class="avatar-small" aria-label="个人账户">SC</button></div></header>
       <div class="page-scroll"><div class="page-content">
-      <div class="page-heading-row"><div><h1>{{ pageHeading }}</h1><p v-if="activeSection === 'overview'">统一查看 Agent 执行、工具治理与运行环境。</p><p v-else>{{ sectionSummary(activeSection)[1] }}</p></div><div class="heading-actions"><span v-if="props.embedded" class="embedded-source-label">{{ sourceLabel }}</span><button class="button button-subtle refresh-button" title="刷新状态" aria-label="刷新状态" @click="notify('已刷新本地演示状态')"><Activity :size="15" /><span>刷新状态</span></button><button class="button button-primary" @click="createRun"><Plus :size="16" />新建运行</button></div></div>
+      <div class="page-heading-row"><div><h1>{{ pageHeading }}</h1><p v-if="activeSection === 'overview'">统一查看 Agent 执行、工具治理与运行环境。</p><p v-else>{{ sectionSummary(activeSection)[1] }}</p></div><div class="heading-actions"><button class="button button-subtle refresh-button" title="刷新状态" aria-label="刷新状态" @click="notify('已刷新本地演示状态')"><Activity :size="15" /><span>刷新状态</span></button><button class="button button-primary" @click="createRun"><Plus :size="16" />新建运行</button></div></div>
 
         <div v-if="sectionMode === 'planned'" class="planned-notice"><div class="planned-mark"><ShieldCheck :size="18" /></div><div><strong>{{ navTitle }}尚未接入运行控制 API</strong><span>当前展示规划范围和待接入状态。接入后此处会显示来自后端的实时资源、版本与审计数据。</span></div><span class="planned-badge">目标模块 · {{ activeSection }}</span></div>
         <template v-if="activeSection === 'overview' || activeSection === 'runs'">

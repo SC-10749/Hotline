@@ -51,7 +51,7 @@ const supportedExtensions = new Set(['pdf', 'doc', 'docx', 'txt', 'png', 'jpg', 
 const backendUrl = ref(localStorage.getItem('dodo-api-base') || import.meta.env.VITE_API_BASE_URL || '')
 const settingsDraft = ref(backendUrl.value)
 const activeMode = ref('chat')
-const activePage = ref('home')
+const activePage = ref(window.location.pathname === '/harness' ? 'harness' : 'home')
 const profileSection = ref('basics')
 const exportingHistory = ref(false)
 const sessions = ref([])
@@ -72,6 +72,7 @@ const showDeleteConfirm = ref(false)
 const deletingId = ref(null)
 const mobileSidebarOpen = ref(false)
 const sidebarCollapsed = ref(false)
+const isMobileViewport = ref(false)
 const showWorkspacePanel = ref(false)
 const workspacePanelTab = ref('files')
 const selectedProjectName = ref('')
@@ -111,6 +112,9 @@ let pendingSkillFile = null
 let readerController = null
 let toastTimer
 let keydownHandler
+let viewportHandler
+let previousMobileViewport = false
+let routeHandler
 let docPollTimer
 
 const currentSession = computed(() => sessions.value.find((session) => session.id === activeId.value) || null)
@@ -222,7 +226,7 @@ function newSession() {
 }
 
 function toggleSidebar() {
-  if (window.matchMedia('(max-width: 960px)').matches) {
+  if (isMobileViewport.value) {
     mobileSidebarOpen.value = !mobileSidebarOpen.value
     sidebarCollapsed.value = false
     return
@@ -231,9 +235,10 @@ function toggleSidebar() {
 }
 
 function openHome() {
+  if (window.location.pathname !== '/') window.history.pushState({}, '', '/')
   activePage.value = 'home'
   showWorkspacePanel.value = false
-  mobileSidebarOpen.value = false
+  mobileSidebarOpen.value = isMobileViewport.value
   if (!currentSession.value) newSession()
   nextTick(() => composer.value?.focus())
 }
@@ -263,6 +268,7 @@ function openDocsPage() {
 }
 
 function openHarnessPage() {
+  if (window.location.pathname !== '/harness') window.history.pushState({}, '', '/harness')
   activePage.value = 'harness'
   showWorkspacePanel.value = false
   mobileSidebarOpen.value = false
@@ -378,14 +384,14 @@ async function onProjectFolderPicked(event) {
 }
 
 function sidebarToggleLabel() {
-  if (window.matchMedia('(max-width: 960px)').matches) {
+  if (isMobileViewport.value) {
     return mobileSidebarOpen.value ? '关闭会话栏' : '打开会话栏'
   }
   return sidebarCollapsed.value ? '展开会话栏' : '收起会话栏'
 }
 
 function sidebarIsExpanded() {
-  return window.matchMedia('(max-width: 960px)').matches ? mobileSidebarOpen.value : !sidebarCollapsed.value
+  return isMobileViewport.value ? mobileSidebarOpen.value : !sidebarCollapsed.value
 }
 
 async function refreshSessions() {
@@ -1029,6 +1035,22 @@ watch(input, async () => {
 })
 
 onMounted(() => {
+  routeHandler = () => {
+    activePage.value = window.location.pathname === '/harness' ? 'harness' : 'home'
+    mobileSidebarOpen.value = isMobileViewport.value && activePage.value === 'home'
+  }
+  window.addEventListener('popstate', routeHandler)
+  viewportHandler = () => {
+    const mobileViewport = window.matchMedia('(max-width: 960px)').matches
+    isMobileViewport.value = mobileViewport
+    if (mobileViewport !== previousMobileViewport) {
+      mobileSidebarOpen.value = mobileViewport
+      sidebarCollapsed.value = false
+      previousMobileViewport = mobileViewport
+    }
+  }
+  viewportHandler()
+  window.addEventListener('resize', viewportHandler)
   keydownHandler = (event) => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
       event.preventDefault()
@@ -1044,12 +1066,14 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', keydownHandler)
+  window.removeEventListener('resize', viewportHandler)
+  window.removeEventListener('popstate', routeHandler)
   stopDocPolling()
 })
 </script>
 
 <template>
-  <div class="app-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed, 'standalone-page-active': activePage !== 'home' }">
+  <div class="app-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed, 'standalone-page-active': activePage !== 'home', 'harness-route-active': activePage === 'harness' }">
     <div v-if="mobileSidebarOpen" class="drawer-backdrop" @click="mobileSidebarOpen = false"></div>
     <aside class="app-rail" aria-label="主导航">
       <button class="rail-button" :class="{ active: activePage === 'home' }" type="button" aria-label="首页" title="首页" @click="openHome"><Home :size="20" fill="currentColor" /></button>
@@ -1120,6 +1144,14 @@ onUnmounted(() => {
         </div>
         <div v-if="recentList.length === 0" class="session-empty">{{ searchText ? '没有匹配的会话' : '还没有历史会话' }}</div>
       </nav>
+
+      <div class="sidebar-bottom mobile-sidebar-footer">
+        <button class="profile-bar" type="button" aria-label="打开用户设置" @click="openMore">
+          <span class="profile-avatar"><CircleUserRound :size="17" :stroke-width="1.9" /></span>
+          <span class="profile-meta"><strong>我的账户</strong><small>个人设置</small></span>
+          <ChevronRight :size="16" aria-hidden="true" />
+        </button>
+      </div>
 
     </aside>
 
@@ -1303,7 +1335,9 @@ onUnmounted(() => {
               <button class="primary-button" type="button" disabled>选择桌宠</button>
             </template>
           </section>
-          <HarnessApp v-if="activePage === 'harness'" embedded />
+          <Teleport to="body">
+            <HarnessApp v-if="activePage === 'harness'" @exit="openHome" />
+          </Teleport>
           <div v-if="activePage !== 'harness'" class="page-empty-state">
             <div class="page-empty-icon"><Workflow v-if="activePage === 'automation'" :size="44" /><Puzzle v-else-if="activePage === 'plugins'" :size="44" /><Bot v-else-if="activePage === 'bot'" :size="44" /><FileText v-else-if="activePage === 'docs'" :size="44" /><Archive v-else :size="44" /></div>
             <h2>{{ activePage === 'automation' ? '安排任务' : activePage === 'plugins' ? '管理插件' : activePage === 'bot' ? '轻量级机器人' : activePage === 'docs' ? '管理文档' : '导出历史聊天' }}</h2>
