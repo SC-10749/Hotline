@@ -1,5 +1,5 @@
 {
-  "name": "dodo-agent-frontend",
+  "name": "hotline-agent-frontend",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -21,3 +21,4 @@
     "vite": "^6.2.6"
   }
 }
+

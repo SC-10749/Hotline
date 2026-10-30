@@ -416,7 +416,7 @@ wheels = [
 ]
 
 [[package]]
-name = "dodo-agent"
+name = "hotline-agent"
 version = "1.0.0"
 source = { virtual = "." }
 dependencies = [

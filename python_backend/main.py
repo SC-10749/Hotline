@@ -36,7 +36,7 @@ def result(data=None, message="操作成功", code=200):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "DodoAgentPython/1.0"
+    server_version = "HotlineAgentPython/1.0"
 
     def log_message(self, fmt, *args):
         sys.stderr.write("[%s] %s\n" % (self.log_date_time_string(), fmt % args))
@@ -80,7 +80,7 @@ class Handler(BaseHTTPRequestHandler):
                 relative = path.removeprefix("/static/").lstrip("/")
                 return self._serve_static(relative, mimetypes.guess_type(relative)[0] or "application/octet-stream")
             if path == "/health":
-                return self._json({"status": "UP", "service": "dodo-agent", "version": "python"})
+                return self._json({"status": "UP", "service": "hotline-agent", "version": "python"})
             if path == "/file/list":
                 files = [item.to_dict() for item in storage.list_files()]
                 return self._json(result({"count": len(files), "files": files}))
@@ -274,7 +274,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def run() -> None:
     server = ThreadingHTTPServer((settings.host, settings.port), Handler)
-    print(f"Dodo Agent Python backend listening on http://{settings.host}:{settings.port}")
+    print(f"Hotline Agent Python backend listening on http://{settings.host}:{settings.port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -285,3 +285,4 @@ def run() -> None:
 
 if __name__ == "__main__":
     run()
+

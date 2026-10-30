@@ -8,6 +8,7 @@ const children = [];
 let closing = false;
 let backendChild = null;
 let backendReused = false;
+let workerChild = null;
 let frontendChild = null;
 const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
 // Backend deps live in the uv-managed .venv (uv.lock); system python may lack
@@ -84,7 +85,7 @@ const releaseFrontendPort = () => {
 };
 
 const root = dirname(fileURLToPath(import.meta.url));
-console.log('Dodo Agent: starting Vue frontend and FastAPI backend.');
+console.log('Hotline Agent: starting Vue frontend, FastAPI gateway and Python Execution Worker.');
 console.log(`Backend API: http://127.0.0.1:${backendPort}/docs`);
 // Start one ordinary backend process and one ordinary Vite server.
 // Development hot reload is intentionally disabled to avoid stale duplicate
@@ -94,7 +95,7 @@ console.log(`Backend API: http://127.0.0.1:${backendPort}/docs`);
 try {
   const response = await fetch(`http://127.0.0.1:${backendPort}/health`, { signal: AbortSignal.timeout(800) });
   const payload = await response.json().catch(() => null);
-  backendReused = response.ok && payload?.service === 'dodo-agent';
+  backendReused = response.ok && payload?.service === 'hotline-agent';
 } catch { /* No existing backend; start one below. */ }
 
 if (backendReused) {
@@ -105,6 +106,7 @@ if (backendReused) {
     '--host', '127.0.0.1', '--port', backendPort, '--no-use-colors',
   ], root);
 }
+workerChild = start(backendCommand, [...backendPrefix, '-m', 'python_backend.modules.execution.worker'], root);
 releaseFrontendPort();
 frontendChild = start(process.execPath, [join(root, 'frontend', 'node_modules', 'vite', 'bin', 'vite.js'), 'preview', '--host', '127.0.0.1', '--port', frontendPort, '--strictPort'], join(root, 'frontend'));
 
@@ -138,10 +140,11 @@ void waitUntilReady('前端', `http://127.0.0.1:${frontendPort}/`, () => {
   console.log(`✓ 前端启动完成  http://127.0.0.1:${frontendPort}/`);
   reportAllReady();
 });
-void waitUntilReady('后端', `http://127.0.0.1:${backendPort}/health`, () => {
+void waitUntilReady('后端与执行 Worker', `http://127.0.0.1:${backendPort}/health/ready`, () => {
   // A reused service is already verified above. For a newly started service,
   // only report readiness while its own child process is still alive.
-  if (!backendReused && (!backendChild || backendChild.exitCode !== null)) return;
+  if ((!backendReused && (!backendChild || backendChild.exitCode !== null))
+      || !workerChild || workerChild.exitCode !== null) return;
   backendReady = true;
   console.log(`✓ 后端启动完成  http://127.0.0.1:${backendPort}/docs`);
   reportAllReady();
@@ -149,3 +152,4 @@ void waitUntilReady('后端', `http://127.0.0.1:${backendPort}/health`, () => {
 
 process.on('SIGINT', () => shutdown());
 process.on('SIGTERM', () => shutdown());
+

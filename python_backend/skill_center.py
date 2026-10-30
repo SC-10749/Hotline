@@ -1,4 +1,4 @@
-"""Versioned skill catalog for Dodo Agent. JSON RPC over stdin/stdout; Python 3.11+.
+"""Versioned skill catalog for Hotline Agent. JSON RPC over stdin/stdout; Python 3.11+.
 
 Also imported in-process by the FastAPI backend (python_backend.fastapi_app) and
 SkillRegistry, so keep this module standard-library only.
@@ -19,7 +19,7 @@ from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB = ROOT / 'data/skill-center/catalog.db'
-DEFAULT_PROJECT = 'dodo-agent'
+DEFAULT_PROJECT = 'hotline-agent'
 
 
 def validate_resource_path(name):
@@ -411,3 +411,4 @@ if __name__ == '__main__':
     except (ValueError, KeyError, TypeError, sqlite3.Error) as exc:
         print(json.dumps({'error': str(exc)}, ensure_ascii=True))
         sys.exit(1)
+
