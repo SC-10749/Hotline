@@ -1,14 +1,14 @@
-"""阶段 2：用 Ragas 给采集到的样本打分。
+"""阶段 2：用 Ragas 给采集到的样本打分，并按提示词变体分组对比。
 
     用隔离环境执行（不要用主环境，ragas 会和 langchain 版本打架）：
         eval\\.venv\\Scripts\\python.exe eval/score.py --samples "eval/runs/<时间戳>/samples.jsonl"
 
 产物：report.md（人看）+ scores.json（机器比基线用）
 
-默认三个指标：
-- Faithfulness                     答案是否有上下文依据（反幻觉）
-- ContextPrecisionWithoutReference 召回片段的相关性排序（不需要标准答案）
-- AnswerRelevancy                  是否答非所问（需要 embedding 配置，没配就自动跳过）
+指标：
+- faithfulness                     答案是否有上下文依据（反幻觉）
+- context_precision                召回片段的相关性排序（不需要标准答案）
+- answer_relevancy                 是否答非所问（需要 embedding 配置，没配自动跳过）
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def read_env_file() -> None:
-    """读仓库根目录的 .env，不覆盖已有环境变量（沿用主项目的配置习惯）。"""
+    """读仓库根目录的 .env，不覆盖已有环境变量。"""
     env_path = Path(os.environ.get("DODO_ENV_FILE", ROOT / ".env"))
     if not env_path.is_file():
         return
@@ -49,17 +49,11 @@ def pick(*names: str, default: str = "") -> str:
 
 
 def load_samples(path: Path) -> list[dict[str, Any]]:
-    samples = []
-    for line in path.read_text("utf-8").splitlines():
-        line = line.strip()
-        if line:
-            samples.append(json.loads(line))
-    return samples
+    return [json.loads(line) for line in path.read_text("utf-8").splitlines() if line.strip()]
 
 
 def build_metrics(judge_model: str, judge_base: str, judge_key: str, embedding_model: str):
     from openai import AsyncOpenAI
-    from ragas.embeddings import OpenAIEmbeddings
     from ragas.llms import llm_factory
     from ragas.metrics.collections import (
         AnswerRelevancy,
@@ -70,19 +64,22 @@ def build_metrics(judge_model: str, judge_base: str, judge_key: str, embedding_m
     client = AsyncOpenAI(base_url=judge_base or None, api_key=judge_key)
     llm = llm_factory(judge_model, client=client)
 
-    scorers: dict[str, Callable[[dict[str, Any]], Any]] = {}
-
     faithfulness = Faithfulness(llm=llm)
-    scorers["faithfulness"] = lambda s: faithfulness.ascore(
-        user_input=s["question"], response=s["answer"], retrieved_contexts=s["contexts"])
     precision = ContextPrecisionWithoutReference(llm=llm)
-    scorers["context_precision"] = lambda s: precision.ascore(
-        user_input=s["question"], response=s["answer"], retrieved_contexts=s["contexts"])
+    scorers: dict[str, Callable[[dict[str, Any]], Any]] = {
+        "faithfulness": lambda s: faithfulness.ascore(
+            user_input=s["question"], response=s["answer"], retrieved_contexts=s["contexts"]),
+        "context_precision": lambda s: precision.ascore(
+            user_input=s["question"], response=s["answer"], retrieved_contexts=s["contexts"]),
+    }
 
     if embedding_model:
+        from ragas.embeddings import OpenAIEmbeddings
+
         embeddings = OpenAIEmbeddings(
-            client=AsyncOpenAI(base_url=pick("EVAL_EMBEDDING_BASE_URL", "DODO_EMBEDDING_BASE_URL") or None,
-                               api_key=pick("EVAL_EMBEDDING_API_KEY", "DODO_EMBEDDING_API_KEY", "DASHSCOPE_API_KEY")),
+            client=AsyncOpenAI(
+                base_url=pick("EVAL_EMBEDDING_BASE_URL", "DODO_EMBEDDING_BASE_URL") or None,
+                api_key=pick("EVAL_EMBEDDING_API_KEY", "DODO_EMBEDDING_API_KEY", "DASHSCOPE_API_KEY")),
             model=embedding_model)
         relevancy = AnswerRelevancy(llm=llm, embeddings=embeddings)
         scorers["answer_relevancy"] = lambda s: relevancy.ascore(
@@ -96,9 +93,16 @@ async def score_all(samples, scorers, concurrency: int) -> list[dict[str, Any]]:
     semaphore = asyncio.Semaphore(max(1, concurrency))
 
     async def one(sample: dict[str, Any]) -> dict[str, Any]:
-        row = {"id": sample["id"], "question": sample["question"], "route": sample.get("route", ""),
-               "contexts": len(sample.get("contexts") or []), "latency_ms": sample.get("latency_ms", 0),
-               "scores": {}, "reasons": {}, "skipped": [], "error": sample.get("error", "")}
+        row = {
+            "id": sample["id"],
+            "variant": sample.get("prompt_variant", "current"),
+            "prompt_sha": sample.get("prompt_sha", ""),
+            "question": sample["question"],
+            "route": sample.get("route", ""),
+            "contexts": len(sample.get("contexts") or []),
+            "latency_ms": sample.get("latency_ms", 0),
+            "scores": {}, "reasons": {}, "skipped": [], "error": sample.get("error", ""),
+        }
         if not sample.get("answer"):
             row["skipped"].append("空答案，跳过全部生成侧指标")
             return row
@@ -106,7 +110,7 @@ async def score_all(samples, scorers, concurrency: int) -> list[dict[str, Any]]:
             row["skipped"].append("无召回片段，跳过上下文侧指标")
         async with semaphore:
             for name, scorer in scorers.items():
-                if name in {"faithfulness", "context_precision"} and not sample.get("contexts"):
+                if not sample.get("contexts") and name in {"faithfulness", "context_precision"}:
                     continue
                 try:
                     result = await scorer(sample)
@@ -121,60 +125,77 @@ async def score_all(samples, scorers, concurrency: int) -> list[dict[str, Any]]:
     return await asyncio.gather(*(one(sample) for sample in samples))
 
 
-def summarize(rows: list[dict[str, Any]], metric_names: list[str]) -> dict[str, Any]:
-    summary = {}
-    for name in metric_names:
-        values = [row["scores"][name] for row in rows if name in row["scores"]]
-        if values:
-            summary[name] = {"mean": round(statistics.fmean(values), 4), "min": round(min(values), 4),
-                             "max": round(max(values), 4), "n": len(values)}
+def summarize(rows: list[dict[str, Any]], metric_names: list[str]) -> dict[str, dict[str, Any]]:
+    """按提示词变体分组统计。"""
+    variants: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        variants.setdefault(row["variant"], []).append(row)
+
+    summary: dict[str, dict[str, Any]] = {}
+    for variant, group in variants.items():
+        stats: dict[str, Any] = {}
+        for name in metric_names:
+            values = [r["scores"][name] for r in group if name in r["scores"]]
+            if values:
+                stats[name] = {"mean": round(statistics.fmean(values), 4), "min": round(min(values), 4),
+                               "max": round(max(values), 4), "n": len(values)}
+        summary[variant] = stats
     return summary
 
 
-def write_report(out_dir: Path, rows: list[dict[str, Any]], summary: dict[str, Any],
+def write_report(out_dir: Path, rows: list[dict[str, Any]], summary: dict[str, dict[str, Any]],
                  meta: dict[str, Any], baseline: dict[str, Any] | None, note: str) -> Path:
+    metric_names = sorted({name for stats in summary.values() for name in stats})
     lines = ["# RAGAS 评测报告", ""]
     lines.append(f"- 时间：{meta['created_at']}")
     if note:
         lines.append(f"- 备注：{note}")
     lines.append(f"- 样本数：{len(rows)}（采集时报错 {meta.get('errors', 0)} 条）")
-    lines.append(f"- 判分模型：{meta.get('judge_model', '-')}")
+    lines.append(f"- 提示词版本：{', '.join(f'{k}({v})' for k, v in meta.get('prompts', {}).items())}")
+    lines.append(f"- 判分模型：{meta.get('judge_model', '-')}｜embedding：{meta.get('embedding_model', '-')}")
     lines.append("")
 
-    lines += ["## 汇总", "", "| 指标 | 均值 | 最低 | 最高 | 样本 | 对比基线 |", "|---|---|---|---|---|---|"]
-    for name, stats in summary.items():
-        delta = ""
-        if baseline and name in baseline.get("summary", {}):
-            old = baseline["summary"][name]["mean"]
-            change = stats["mean"] - old
-            arrow = "↑" if change > 0.005 else ("↓" if change < -0.005 else "→")
-            delta = f"{old:.3f} → {stats['mean']:.3f} {arrow}{abs(change):.3f}"
-        lines.append(f"| {name} | {stats['mean']:.3f} | {stats['min']:.3f} | {stats['max']:.3f} | {stats['n']} | {delta} |")
+    lines += ["## 按提示词版本对比", "", "| 版本 | 指标 | 均值 | 最低 | 最高 | 样本 | 对比基线 |",
+              "|---|---|---|---|---|---|---|"]
+    for variant, stats in summary.items():
+        for name in metric_names:
+            if name not in stats:
+                continue
+            item = stats[name]
+            delta = ""
+            old = ((baseline or {}).get("variants", {}).get(variant, {}).get("summary", {}).get(name, {}).get("mean"))
+            if old is not None:
+                change = item["mean"] - old
+                arrow = "↑" if change > 0.005 else ("↓" if change < -0.005 else "→")
+                delta = f"{old:.3f} → {item['mean']:.3f} {arrow}{abs(change):.3f}"
+            lines.append(f"| {variant} | {name} | {item['mean']:.3f} | {item['min']:.3f} | "
+                         f"{item['max']:.3f} | {item['n']} | {delta} |")
     lines.append("")
 
-    metric_names = list(summary.keys())
-    header = "| 用例 | 路由 | 片段 | 耗时 | " + " | ".join(metric_names) + " | 备注 |"
-    lines += ["## 逐条", "", header, "|" + "---|" * (len(metric_names) + 5)]
+    header = "| 版本 | 用例 | 路由 | 片段 | 耗时 | " + " | ".join(metric_names) + " | 备注 |"
+    lines += ["## 逐条", "", header, "|" + "---|" * (len(metric_names) + 6)]
     for row in rows:
         cells = [f"{row['scores'][m]:.3f}" if m in row["scores"] else "—" for m in metric_names]
         remark = row["error"] or "；".join(row["skipped"])
-        lines.append(f"| {row['id']} | {row['route'] or '-'} | {row['contexts']} | {row['latency_ms']}ms | "
-                     + " | ".join(cells) + f" | {remark[:80]} |")
+        lines.append(f"| {row['variant']} | {row['id']} | {row['route'] or '-'} | {row['contexts']} | "
+                     f"{row['latency_ms']}ms | " + " | ".join(cells) + f" | {remark[:70]} |")
     lines.append("")
 
-    low = sorted((r for r in rows if "faithfulness" in r["scores"]), key=lambda r: r["scores"]["faithfulness"])[:5]
+    low = sorted((r for r in rows if "faithfulness" in r["scores"]),
+                 key=lambda r: r["scores"]["faithfulness"])[:5]
     if low:
         lines += ["## 最低分样本（看原因）", ""]
         for row in low:
             reason = row["reasons"].get("faithfulness", "")
-            lines.append(f"- **{row['id']}** faithfulness={row['scores']['faithfulness']:.3f} — {reason or '无原因'}")
+            lines.append(f"- **{row['variant']}/{row['id']}** faithfulness={row['scores']['faithfulness']:.3f} — "
+                         f"{reason or '无原因'}")
     report = out_dir / "report.md"
     report.write_text("\n".join(lines) + "\n", "utf-8")
     return report
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="用 Ragas 给采集样本打分")
+    parser = argparse.ArgumentParser(description="用 Ragas 给采集样本打分（按提示词版本分组）")
     parser.add_argument("--samples", required=True)
     parser.add_argument("--out", default="", help="输出目录，默认与 samples 同级")
     parser.add_argument("--note", default="")
@@ -192,10 +213,10 @@ def main() -> int:
     out_dir = Path(args.out) if args.out else samples_path.parent
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    judge_model = pick("EVAL_JUDGE_MODEL", "DODO_MODEL", default="")
-    judge_base = pick("EVAL_JUDGE_BASE_URL", "OPENAI_BASE_URL", default="")
-    judge_key = pick("EVAL_JUDGE_API_KEY", "DEEPSEEK_API_KEY", "DASHSCOPE_API_KEY", "OPENAI_API_KEY", default="")
-    embedding_model = pick("EVAL_EMBEDDING_MODEL", "DODO_EMBEDDING_MODEL", default="")
+    judge_model = pick("EVAL_JUDGE_MODEL", "DODO_MODEL")
+    judge_base = pick("EVAL_JUDGE_BASE_URL", "OPENAI_BASE_URL")
+    judge_key = pick("EVAL_JUDGE_API_KEY", "DEEPSEEK_API_KEY", "DASHSCOPE_API_KEY", "OPENAI_API_KEY")
+    embedding_model = pick("EVAL_EMBEDDING_MODEL", "DODO_EMBEDDING_MODEL")
     if not judge_model or not judge_key:
         print("缺判分模型配置：设 EVAL_JUDGE_MODEL / EVAL_JUDGE_API_KEY（或复用 DODO_MODEL / DEEPSEEK_API_KEY）",
               file=sys.stderr)
@@ -211,10 +232,15 @@ def main() -> int:
         if baseline_path.is_file():
             baseline = json.loads(baseline_path.read_text("utf-8"))
 
-    meta = {"created_at": datetime.now().isoformat(timespec="seconds"), "judge_model": judge_model,
-            "embedding_model": embedding_model or "(未启用)", "count": len(samples),
-            "errors": sum(1 for s in samples if s.get("error"))}
-    payload = {"meta": meta, "summary": summary, "rows": rows}
+    meta = {
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "judge_model": judge_model,
+        "embedding_model": embedding_model or "(未启用)",
+        "prompts": {s.get("prompt_variant", "current"): s.get("prompt_sha", "") for s in samples},
+        "count": len(samples),
+        "errors": sum(1 for s in samples if s.get("error")),
+    }
+    payload = {"meta": meta, "variants": {k: {"summary": v} for k, v in summary.items()}, "rows": rows}
 
     (out_dir / "scores.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), "utf-8")
     if args.set_baseline:
@@ -222,9 +248,10 @@ def main() -> int:
     report = write_report(out_dir, rows, summary, meta, baseline, args.note)
 
     print(f"报告：{report}")
-    for name, stats in summary.items():
-        print(f"  {name:20} mean={stats['mean']:.3f} n={stats['n']}")
-    if not summary:
+    for variant, stats in summary.items():
+        for name, item in stats.items():
+            print(f"  {variant:10} {name:20} mean={item['mean']:.3f} n={item['n']}")
+    if not any(summary.values()):
         print("没有任何指标算出结果，检查样本是否为空答案或缺少片段", file=sys.stderr)
         return 1
     return 0

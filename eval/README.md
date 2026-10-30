@@ -50,6 +50,28 @@ eval\.venv\Scripts\python.exe eval\score.py --samples "..." --set-baseline
 - `reference`：标准答案。留空时 `ContextPrecisionWithoutReference` 会替代带标准答案的版本。
 - 建议按问题类型分层：事实型 / 精确匹配（编号、错误码）/ 关系型 / 统计型 / 无答案（考拒答）。
 
+## 提示词 A/B（prompt 评测台）
+
+同一批题、**同一份召回**，跑多个提示词版本，分数并排比。检索只跑一次，所以差异只来自提示词。
+
+```powershell
+uv run python eval\collect.py --list-prompts                    # 看有哪些版本
+uv run python eval\collect.py --limit 20 --prompt current,cited  # 一次跑两个版本
+```
+
+报告里会多一列「版本」，汇总表按版本分组。
+
+**排错怎么用**：分数掉了，先看报告头部的 `提示词版本：current(2958d613012b)`。
+
+- 指纹没变 → 不是提示词的锅，去查模型、检索或数据
+- 指纹变了 → 这次比的是另一版提示词，先确认是不是有人改了
+
+新增版本：在 `eval/prompts.py` 的 `VARIANTS` 里加一条 `system` / `user` 模板，
+`{route}` `{context}` `{query}` 是占位符。`current` 必须始终与 `agents._fallback` 保持一致。
+
+> `cited` 是示例变体：要求逐句标注 `[片段N]`、不足时明确拒答。用它可以直接看出
+> 「引用」和「拒答」这两条约束有没有生效。
+
 ## 指标
 
 | 指标 | 衡量什么 | 需要什么 | 备注 |

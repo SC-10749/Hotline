@@ -1,14 +1,14 @@
-"""阶段 1：跑仓库真实的 RAG，收集「答案 + 召回片段」。
+"""阶段 1：跑真实 RAG，收集「答案 + 召回片段 + 用的哪版提示词」。
 
     在仓库根目录、用主环境执行：
-        uv run python eval/collect.py --cases eval/cases.jsonl --limit 5
+        uv run python eval/collect.py --limit 5
+        uv run python eval/collect.py --limit 5 --prompt current,cited   # 提示词 A/B
 
 产物：eval/runs/<时间戳>/samples.jsonl（阶段 2 的输入）
 
-为什么单独一个阶段：
-- 收集要 import python_backend，必须在主环境跑；
-- 打分只需要 ragas，放在隔离环境（eval/.venv）；
-- 分开之后可以换模型、换指标重打分，不用重跑检索和生成。
+设计要点：
+- 每个用例只检索一次，所有提示词变体共用同一份召回 —— 比较的是提示词，不是检索波动。
+- 每条样本记录 prompt_variant 和 prompt_sha：分数掉了先看指纹变没变。
 """
 from __future__ import annotations
 
@@ -21,17 +21,12 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+EVAL_DIR = Path(__file__).resolve().parent
+for path in (ROOT, EVAL_DIR):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
 
-# 与 python_backend/agents.py 的 _fallback 保持一致。
-# 主链路改 prompt 时这里要同步，否则评的不是线上那套。
-SYSTEM_PROMPT = "你是 Hotline Agent，请用中文给出准确、结构清晰的回答。"
-
-
-def build_prompt(query: str, contexts: list[str], route: str) -> str:
-    context = "\n\n".join(contexts)
-    return f"本次选择的召回链路：{route}\n请基于以下知识库内容回答问题：\n{context}\n\n问题：{query}"
+import prompts  # noqa: E402  (同目录模块，需先补 sys.path)
 
 
 def load_cases(path: Path, limit: int | None) -> list[dict[str, Any]]:
@@ -75,88 +70,114 @@ def build_engine():
     return engine, settings
 
 
-def collect_one(engine, case: dict[str, Any]) -> dict[str, Any]:
+def retrieve(engine, question: str, source_id: str | None) -> tuple[str, list[str]]:
+    """复用主链路的两个步骤：路由分类 + 分路召回。"""
+    route = engine._choose_retrieval(question)
+    contexts = list(engine._retrieve(source_id, question, route)) if source_id else []
+    return route, contexts
+
+
+def collect_case(engine, case: dict[str, Any], variants: list[prompts.PromptVariant]) -> list[dict[str, Any]]:
     question = case["question"]
     source_id = case.get("source_id")
-    record: dict[str, Any] = {
-        "id": case["id"],
-        "question": question,
-        "reference": case.get("reference", ""),
-        "source_id": source_id,
-        "route": "",
-        "contexts": [],
-        "answer": "",
-        "latency_ms": 0,
-        "error": "",
-    }
     started = time.perf_counter()
+
+    route, contexts, error = "", [], ""
     try:
-        # 复用主链路的两个步骤：路由分类 + 分路召回。
-        route = engine._choose_retrieval(question)
-        record["route"] = route
-        if source_id:
-            record["contexts"] = list(engine._retrieve(source_id, question, route))
-        if not engine.settings.model_api_key:
-            record["error"] = "未配置模型 Key，答案为空（上下文仍可用于检索侧指标）"
-        else:
-            record["answer"] = engine.model.chat([
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": build_prompt(question, record["contexts"], route)},
-            ])
-            if not record["answer"]:
-                record["error"] = "模型返回空答案（被静默降级或调用失败）"
-    except Exception as exc:  # 单条失败不拖垮整批
-        record["error"] = f"{type(exc).__name__}: {exc}"
-    record["latency_ms"] = int((time.perf_counter() - started) * 1000)
-    return record
+        route, contexts = retrieve(engine, question, source_id)
+    except Exception as exc:
+        error = f"检索失败 {type(exc).__name__}: {exc}"
+    retrieval_ms = int((time.perf_counter() - started) * 1000)
+
+    rows = []
+    for variant in variants:
+        row = {
+            "id": case["id"],
+            "question": question,
+            "reference": case.get("reference", ""),
+            "source_id": source_id,
+            "prompt_variant": variant.name,
+            "prompt_sha": variant.fingerprint(),
+            "route": route,
+            "contexts": contexts,
+            "answer": "",
+            "latency_ms": retrieval_ms,
+            "error": error,
+        }
+        if not error and engine.settings.model_api_key:
+            begin = time.perf_counter()
+            try:
+                row["answer"] = engine.model.chat(prompts.render(variant, question, contexts, route))
+                if not row["answer"]:
+                    row["error"] = "模型返回空答案（被静默降级或调用失败）"
+            except Exception as exc:
+                row["error"] = f"生成失败 {type(exc).__name__}: {exc}"
+            row["latency_ms"] = int((time.perf_counter() - begin) * 1000)
+        elif not error:
+            row["error"] = "未配置模型 Key，答案为空（上下文仍可用于检索侧指标）"
+        rows.append(row)
+    return rows
 
 
-def mock_one(case: dict[str, Any]) -> dict[str, Any]:
+def mock_case(case: dict[str, Any], variants: list[prompts.PromptVariant]) -> list[dict[str, Any]]:
     """不连数据库、不调模型，只验证管线是否通。"""
     question = case["question"]
-    contexts = [f"（mock）与「{question}」相关的第 {i} 个片段" for i in range(1, 4)]
-    return {
+    contexts = [f"与「{question}」相关的第 {i} 个片段" for i in range(1, 4)]
+    return [{
         "id": case["id"],
         "question": question,
         "reference": case.get("reference", ""),
         "source_id": case.get("source_id"),
+        "prompt_variant": variant.name,
+        "prompt_sha": variant.fingerprint(),
         "route": "hybrid",
         "contexts": contexts,
-        "answer": f"（mock）根据检索到的内容回答：{question}",
+        "answer": f"（mock:{variant.name}）根据检索内容回答：{question}",
         "latency_ms": 1,
         "error": "",
-    }
+    } for variant in variants]
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="收集 RAG 答案与召回片段")
-    parser.add_argument("--cases", default=str(Path(__file__).parent / "cases.jsonl"))
+    parser = argparse.ArgumentParser(description="收集 RAG 答案与召回片段（支持提示词 A/B）")
+    parser.add_argument("--cases", default=str(EVAL_DIR / "cases.jsonl"))
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--prompt", default="current", help="提示词变体，逗号分隔：current,cited")
+    parser.add_argument("--list-prompts", action="store_true", help="列出所有变体后退出")
     parser.add_argument("--out", default="", help="输出目录，默认 eval/runs/<时间戳>")
     parser.add_argument("--mock", action="store_true", help="不连库不调模型，只验证管线")
     args = parser.parse_args()
+
+    if args.list_prompts:
+        for variant in prompts.VARIANTS.values():
+            print(f"{variant.name:12} sha={variant.fingerprint()}  {variant.description}")
+        return 0
+
+    names = [name.strip() for name in args.prompt.split(",") if name.strip()]
+    variants = [prompts.get(name) for name in names]
 
     cases = load_cases(Path(args.cases), args.limit)
     if not cases:
         print("没有用例，先在 eval/cases.jsonl 里加几条", file=sys.stderr)
         return 2
 
-    out_dir = Path(args.out) if args.out else Path(__file__).parent / "runs" / datetime.now().strftime("%Y%m%d-%H%M%S")
+    out_dir = Path(args.out) if args.out else EVAL_DIR / "runs" / datetime.now().strftime("%Y%m%d-%H%M%S")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    engine = None
-    settings = None
+    engine = settings = None
     if not args.mock:
         engine, settings = build_engine()
-        print(f"storage={settings.storage_backend} vector={settings.vector_enabled} model={settings.model_name or '-'}")
+        print(f"storage={settings.storage_backend} vector={settings.vector_enabled} "
+              f"model={settings.model_name or '-'} prompts={','.join(names)}")
 
     samples: list[dict[str, Any]] = []
     for index, case in enumerate(cases, start=1):
-        record = mock_one(case) if args.mock else collect_one(engine, case)
-        samples.append(record)
-        mark = "ERR" if record["error"] else "ok "
-        print(f"[{index}/{len(cases)}] {mark} {record['id']} route={record['route'] or '-'} "
-              f"ctx={len(record['contexts'])} {record['latency_ms']}ms")
+        rows = mock_case(case, variants) if args.mock else collect_case(engine, case, variants)
+        samples.extend(rows)
+        for row in rows:
+            mark = "ERR" if row["error"] else "ok "
+            print(f"[{index}/{len(cases)}] {mark} {row['id']}/{row['prompt_variant']} "
+                  f"route={row['route'] or '-'} ctx={len(row['contexts'])} {row['latency_ms']}ms")
 
     samples_path = out_dir / "samples.jsonl"
     with samples_path.open("w", encoding="utf-8") as stream:
@@ -167,7 +188,9 @@ def main() -> int:
         "created_at": datetime.now().isoformat(timespec="seconds"),
         "mode": "mock" if args.mock else "real",
         "cases_file": str(args.cases),
-        "count": len(samples),
+        "cases": len(cases),
+        "samples": len(samples),
+        "prompts": {v.name: v.fingerprint() for v in variants},
         "errors": sum(1 for s in samples if s["error"]),
         "storage": getattr(settings, "storage_backend", "-"),
         "vector_enabled": getattr(settings, "vector_enabled", "-"),
