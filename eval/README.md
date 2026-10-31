@@ -2,6 +2,20 @@
 
 对应任务清单第 13 条「引入 RAG 测评组件 Ragas 自动化指标评测」。
 
+## 本次交付范围
+
+### 核心功能
+
+- 接入 Ragas 评测组件，使用独立的 `eval/.venv` 环境运行评分。
+- 将评测拆成采集和打分两个阶段：采集真实 RAG 样本，再计算 faithfulness、context precision 等指标。
+
+### 扩展功能
+
+- **Prompt 版本对比与检查**：对同一批问题复用同一份召回结果，对比不同 Prompt 版本的回答效果，并记录 Prompt 指纹。
+- **Mock 本地验证**：不连接数据库、不调用大模型，使用模拟数据验证评测流程可以正常运行。
+
+扩展功能用于提高评测效率和可追溯性，不影响 Ragas 核心评测流程。Mock 结果只说明代码流程可运行，不代表真实 RAG 效果。
+
 两阶段设计，收集和打分分开：
 
 ```
@@ -50,7 +64,7 @@ eval\.venv\Scripts\python.exe eval\score.py --samples "..." --set-baseline
 - `reference`：标准答案。留空时 `ContextPrecisionWithoutReference` 会替代带标准答案的版本。
 - 建议按问题类型分层：事实型 / 精确匹配（编号、错误码）/ 关系型 / 统计型 / 无答案（考拒答）。
 
-## 提示词 A/B（prompt 评测台）
+## 扩展功能：提示词 A/B（Prompt 评测台）
 
 同一批题、**同一份召回**，跑多个提示词版本，分数并排比。检索只跑一次，所以差异只来自提示词。
 
@@ -72,7 +86,7 @@ uv run python eval\collect.py --limit 20 --prompt current,cited  # 一次跑两�
 > `cited` 是示例变体：要求逐句标注 `[片段N]`、不足时明确拒答。用它可以直接看出
 > 「引用」和「拒答」这两条约束有没有生效。
 
-## 提示词检查（静态 lint + 输出契约）
+## 扩展功能：提示词检查（静态 lint + 输出契约）
 
 不调模型、秒出结果，可以直接当回归门禁。
 
@@ -100,6 +114,16 @@ uv run python eval\prompt_checks.py --samples "eval\runs\<时间戳>\samples.jso
 
 契约在 `prompts.py` 里按变体声明，`current` 不声明任何契约（线上本来就没要求），
 `cited` 声明了 `cites_sources` 和 `refuses_when_empty`。
+
+## 扩展功能：Mock 本地验证
+
+Mock 模式用于在没有真实文档 ID、数据库或模型 Key 时，快速验证“读取用例 → 生成样本 → 保存结果”的评测管线。
+
+```powershell
+uv run python eval\collect.py --mock --limit 3
+```
+
+它不会验证真实检索质量或模型回答质量；真实评测仍需使用有效的 `source_id` 和模型配置。
 
 ## 指标
 
