@@ -28,7 +28,15 @@ Hotline Agent 是一个面向企业级应用的端到端通用智能体（End-to
 
 ## 友情链接
 
-- [Prompt Vault](https://github.com/zklmiao/prompt-vault)
+<div align="center">
+
+<a href="https://github.com/zklmiao/prompt-vault"><strong>✦ Prompt Vault</strong></a>
+
+收集、整理与复用提示词，让经过验证的好 Prompt 随时可查、持续积累。
+
+<a href="https://github.com/zklmiao/prompt-vault"><img src="https://img.shields.io/badge/GitHub-访问项目-24292f?logo=github&logoColor=white" alt="在 GitHub 查看 Prompt Vault"></a>
+
+</div>
 
 ## 快速开始
 
