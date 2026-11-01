@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/status-working-16803c" alt="Project status: working">
 </p>
 
-[快速开始](#快速开始) · [架构](#整体架构) · [技能中心](#技能中心与-skill-自进化) · [配置](#配置)
+[快速开始](#快速开始) · [架构](#整体架构) · [技能中心](#技能中心与-skill-自进化) · [配置](#配置) · [友情链接](#友情链接)
 
 </div>
 
@@ -25,6 +25,10 @@
 Hotline Agent 是一个面向企业级应用的端到端通用智能体（End-to-End Universal Agent）平台，采用多智能体架构，深度融合大语言模型（LLM）能力与现代软件工程架构，提供从感知、推理到执行的全链路智能化解决方案。
 
 本仓库是**单一项目仓库**：Vue 前端、FastAPI 后端、技能中心与技能控制台都在这里，一条命令启动，不再依赖任何外部平台。
+
+## 友情链接
+
+- [Prompt Vault](https://github.com/zklmiao/prompt-vault)
 
 ## 快速开始
 
