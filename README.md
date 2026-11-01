@@ -334,6 +334,10 @@ ls mcp skills plugins
 
 **Hotline 不追逐热闹，Hotline 负责让有价值的技术真正抵达。**
 
+## 友情链接
+
+- [Prompt Vault](https://github.com/zklmiao/prompt-vault)
+
 <div align="center">
 
 `Explore · Verify · Package · Share`

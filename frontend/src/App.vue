@@ -25,6 +25,8 @@ import {
 } from 'lucide-vue-next'
 import { apiUrl, compensateDocuments, getAllSessions, getDocumentPreview, getDocumentVersions, getDocuments, getSessions, getSession, getSkills, removeDocument, removeSession, removeSkill, setSkillEnabled, stopAgent, streamUrl, testBackend, uploadDocument, uploadFile, uploadSkill, vectorizeDocument } from './api'
 import HarnessApp from './HarnessApp.vue'
+import AgentInstancesPage from './components/AgentInstancesPage.vue'
+import MyAgentsPage from './components/MyAgentsPage.vue'
 
 marked.setOptions({ breaks: true, gfm: true })
 Object.entries({ bash, css, java, javascript, json, markdown, python, sql, typescript, xml }).forEach(([name, language]) => hljs.registerLanguage(name, language))
@@ -51,7 +53,7 @@ const supportedExtensions = new Set(['pdf', 'doc', 'docx', 'txt', 'png', 'jpg', 
 const backendUrl = ref(localStorage.getItem('dodo-api-base') || import.meta.env.VITE_API_BASE_URL || '')
 const settingsDraft = ref(backendUrl.value)
 const activeMode = ref('chat')
-const activePage = ref(window.location.pathname === '/harness' ? 'harness' : 'home')
+const activePage = ref(window.location.pathname === '/harness' ? 'harness' : window.location.pathname === '/instances' || window.location.pathname === '/bot' ? 'instances' : 'home')
 const profileSection = ref('basics')
 const exportingHistory = ref(false)
 const sessions = ref([])
@@ -256,7 +258,8 @@ function openPlugins() {
 }
 
 function openBotPage() {
-  activePage.value = 'bot'
+  if (window.location.pathname !== '/instances') window.history.pushState({}, '', '/instances')
+  activePage.value = 'instances'
   showWorkspacePanel.value = false
   mobileSidebarOpen.value = false
 }
@@ -1036,7 +1039,7 @@ watch(input, async () => {
 
 onMounted(() => {
   routeHandler = () => {
-    activePage.value = window.location.pathname === '/harness' ? 'harness' : 'home'
+    activePage.value = window.location.pathname === '/harness' ? 'harness' : window.location.pathname === '/instances' || window.location.pathname === '/bot' ? 'instances' : 'home'
     mobileSidebarOpen.value = isMobileViewport.value && activePage.value === 'home'
   }
   window.addEventListener('popstate', routeHandler)
@@ -1079,7 +1082,7 @@ onUnmounted(() => {
       <button class="rail-button" :class="{ active: activePage === 'home' }" type="button" aria-label="首页" title="首页" @click="openHome"><Home :size="20" fill="currentColor" /></button>
       <button class="rail-button" :class="{ active: activePage === 'automation' }" type="button" aria-label="自动化" title="自动化" @click="openAutomation"><CalendarClock :size="20" /></button>
       <button class="rail-button" :class="{ active: activePage === 'plugins' }" type="button" aria-label="插件" title="插件" @click="openPlugins"><Puzzle :size="20" /></button>
-      <button class="rail-button" :class="{ active: activePage === 'bot' }" type="button" aria-label="轻量机器人" title="轻量机器人" @click="openBotPage"><Bot :size="20" /></button>
+      <button class="rail-button" :class="{ active: activePage === 'instances' }" type="button" aria-label="智能体实例" title="智能体实例" @click="openBotPage"><Bot :size="20" /></button>
       <button class="rail-button" :class="{ active: activePage === 'docs' }" type="button" aria-label="文档库" title="文档库" @click="openDocsPage"><LibraryBig :size="20" /></button>
       <button class="rail-button" :class="{ active: activePage === 'harness' }" type="button" aria-label="Harness 工程" title="Harness 工程" @click="openHarnessPage"><Workflow :size="20" /></button>
       <button class="rail-button" :class="{ active: activePage === 'export' }" type="button" aria-label="导出历史聊天" title="导出历史聊天" @click="openExportPage"><History :size="20" /></button>
@@ -1283,6 +1286,7 @@ onUnmounted(() => {
       </aside>
       </template>
 
+      <MyAgentsPage v-else-if="activePage === 'instances'" @back="openHome" />
       <section v-else class="standalone-page" :aria-labelledby="`${activePage}-page-title`">
         <aside class="page-sidebar">
           <header class="page-sidebar-header">
