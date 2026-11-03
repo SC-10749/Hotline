@@ -1,0 +1,11 @@
+# 评测专用依赖，装进隔离环境 eval/.venv，不要装进主环境。
+#
+# 为什么隔离：ragas 0.4.3 会把 openai 从 3.39 降到 3.3、rich 降到 14.x，
+# 而且它仍 import `langchain_community.chat_models.vertexai`
+# （0.4 之后的 langchain-community 删掉了这个模块），所以必须钉住 0.3.x。
+#
+# 安装：
+#   uv venv eval/.venv --python 3.13
+#   uv pip install --python eval/.venv/Scripts/python.exe -r eval/requirements-eval.txt
+ragas==0.4.3
+langchain-community==0.3.31
