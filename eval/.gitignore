@@ -1,3 +1,4 @@
 # 评测产物与隔离环境，不进 Git
 runs/
 .venv/
+local-test/
