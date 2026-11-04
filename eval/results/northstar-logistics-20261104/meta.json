@@ -1,0 +1,15 @@
+{
+  "created_at": "2026-11-04T19:43:13",
+  "mode": "real",
+  "cases_file": "eval\\local-test\\cases.jsonl",
+  "cases": 5,
+  "samples": 10,
+  "prompts": {
+    "current": "2958d613012b",
+    "cited": "eb92d35317e6"
+  },
+  "errors": 0,
+  "storage": "sqlite",
+  "vector_enabled": true,
+  "model": "deepseek-chat"
+}

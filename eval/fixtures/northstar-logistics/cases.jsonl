@@ -1,0 +1,5 @@
+{"id":"rag-local-01","question":"北辰物流的标准包裹重量上限是多少？","source_id":"REPLACE_WITH_UPLOADED_FILE_ID","reference":"标准包裹重量上限为 20 千克。"}
+{"id":"rag-local-02","question":"加急配送的承诺时效是什么？","source_id":"REPLACE_WITH_UPLOADED_FILE_ID","reference":"加急配送承诺在下单后的 6 小时内送达。"}
+{"id":"rag-local-03","question":"冷链配送的温度范围是多少？","source_id":"REPLACE_WITH_UPLOADED_FILE_ID","reference":"冷链配送温度范围为 2 至 8 摄氏度。"}
+{"id":"rag-local-04","question":"易碎品打包需要使用什么材料？","source_id":"REPLACE_WITH_UPLOADED_FILE_ID","reference":"易碎品需要使用双层气泡膜并在外箱标记易碎。"}
+{"id":"rag-local-05","question":"北辰物流是否提供月球配送？","source_id":"REPLACE_WITH_UPLOADED_FILE_ID","reference":"文档未提及月球配送服务，因此无法确认是否提供。"}

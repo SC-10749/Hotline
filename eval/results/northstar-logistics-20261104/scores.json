@@ -1,0 +1,231 @@
+{
+  "meta": {
+    "created_at": "2026-11-04T19:45:29",
+    "judge_model": "deepseek-chat",
+    "embedding_model": "BAAI/bge-m3",
+    "prompts": {
+      "current": "2958d613012b",
+      "cited": "eb92d35317e6"
+    },
+    "count": 10,
+    "errors": 0
+  },
+  "variants": {
+    "current": {
+      "summary": {
+        "faithfulness": {
+          "mean": 0.95,
+          "min": 0.75,
+          "max": 1.0,
+          "n": 5
+        },
+        "context_precision": {
+          "mean": 1.0,
+          "min": 1.0,
+          "max": 1.0,
+          "n": 5
+        },
+        "answer_relevancy": {
+          "mean": 0.7773,
+          "min": 0.0,
+          "max": 1.0,
+          "n": 5
+        }
+      }
+    },
+    "cited": {
+      "summary": {
+        "faithfulness": {
+          "mean": 0.85,
+          "min": 0.5,
+          "max": 1.0,
+          "n": 5
+        },
+        "context_precision": {
+          "mean": 1.0,
+          "min": 1.0,
+          "max": 1.0,
+          "n": 5
+        },
+        "answer_relevancy": {
+          "mean": 0.7454,
+          "min": 0.0,
+          "max": 0.9937,
+          "n": 5
+        }
+      }
+    }
+  },
+  "rows": [
+    {
+      "id": "rag-local-01",
+      "variant": "current",
+      "prompt_sha": "2958d613012b",
+      "question": "北辰物流的标准包裹重量上限是多少？",
+      "route": "semantic",
+      "contexts": 1,
+      "latency_ms": 1493,
+      "scores": {
+        "faithfulness": 0.75,
+        "context_precision": 0.9999999999,
+        "answer_relevancy": 0.9999534804308178
+      },
+      "reasons": {},
+      "skipped": [],
+      "error": ""
+    },
+    {
+      "id": "rag-local-01",
+      "variant": "cited",
+      "prompt_sha": "eb92d35317e6",
+      "question": "北辰物流的标准包裹重量上限是多少？",
+      "route": "semantic",
+      "contexts": 1,
+      "latency_ms": 952,
+      "scores": {
+        "faithfulness": 0.5,
+        "context_precision": 0.9999999999,
+        "answer_relevancy": 0.9936811894261096
+      },
+      "reasons": {},
+      "skipped": [],
+      "error": ""
+    },
+    {
+      "id": "rag-local-02",
+      "variant": "current",
+      "prompt_sha": "2958d613012b",
+      "question": "加急配送的承诺时效是什么？",
+      "route": "semantic",
+      "contexts": 1,
+      "latency_ms": 1130,
+      "scores": {
+        "faithfulness": 1.0,
+        "context_precision": 0.9999999999,
+        "answer_relevancy": 0.9830361156928987
+      },
+      "reasons": {},
+      "skipped": [],
+      "error": ""
+    },
+    {
+      "id": "rag-local-02",
+      "variant": "cited",
+      "prompt_sha": "eb92d35317e6",
+      "question": "加急配送的承诺时效是什么？",
+      "route": "semantic",
+      "contexts": 1,
+      "latency_ms": 1027,
+      "scores": {
+        "faithfulness": 1.0,
+        "context_precision": 0.9999999999,
+        "answer_relevancy": 0.9161878847344177
+      },
+      "reasons": {},
+      "skipped": [],
+      "error": ""
+    },
+    {
+      "id": "rag-local-03",
+      "variant": "current",
+      "prompt_sha": "2958d613012b",
+      "question": "冷链配送的温度范围是多少？",
+      "route": "semantic",
+      "contexts": 1,
+      "latency_ms": 1480,
+      "scores": {
+        "faithfulness": 1.0,
+        "context_precision": 0.9999999999,
+        "answer_relevancy": 0.9999605886794951
+      },
+      "reasons": {},
+      "skipped": [],
+      "error": ""
+    },
+    {
+      "id": "rag-local-03",
+      "variant": "cited",
+      "prompt_sha": "eb92d35317e6",
+      "question": "冷链配送的温度范围是多少？",
+      "route": "semantic",
+      "contexts": 1,
+      "latency_ms": 1357,
+      "scores": {
+        "faithfulness": 1.0,
+        "context_precision": 0.9999999999,
+        "answer_relevancy": 0.9483968000007262
+      },
+      "reasons": {},
+      "skipped": [],
+      "error": ""
+    },
+    {
+      "id": "rag-local-04",
+      "variant": "current",
+      "prompt_sha": "2958d613012b",
+      "question": "易碎品打包需要使用什么材料？",
+      "route": "semantic",
+      "contexts": 1,
+      "latency_ms": 1388,
+      "scores": {
+        "faithfulness": 1.0,
+        "context_precision": 0.9999999999,
+        "answer_relevancy": 0.9034546108790549
+      },
+      "reasons": {},
+      "skipped": [],
+      "error": ""
+    },
+    {
+      "id": "rag-local-04",
+      "variant": "cited",
+      "prompt_sha": "eb92d35317e6",
+      "question": "易碎品打包需要使用什么材料？",
+      "route": "semantic",
+      "contexts": 1,
+      "latency_ms": 1295,
+      "scores": {
+        "faithfulness": 1.0,
+        "context_precision": 0.9999999999,
+        "answer_relevancy": 0.8687614992388836
+      },
+      "reasons": {},
+      "skipped": [],
+      "error": ""
+    },
+    {
+      "id": "rag-local-05",
+      "variant": "current",
+      "prompt_sha": "2958d613012b",
+      "question": "北辰物流是否提供月球配送？",
+      "route": "semantic",
+      "contexts": 1,
+      "latency_ms": 1740,
+      "scores": {
+        "faithfulness": 1.0,
+        "context_precision": 0.9999999999,
+        "answer_relevancy": 0.0
+      },
+      "reasons": {},
+      "skipped": [],
+      "error": ""
+    },
+    {
+      "id": "rag-local-05",
+      "variant": "cited",
+      "prompt_sha": "eb92d35317e6",
+      "question": "北辰物流是否提供月球配送？",
+      "route": "semantic",
+      "contexts": 1,
+      "latency_ms": 1438,
+      "scores": {
+        "faithfulness": 0.75,
+        "context_precision": 0.9999999999,
+        "answer_relevancy": 0.0
+      },
+      "reasons": {},
+      "skipped": [],
+      "error": ""
+    }
+  ]
+}
