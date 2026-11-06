@@ -120,6 +120,31 @@ class ExecutionStore:
         finally:
             db.close()
 
+    def retry_run(self, run_id: str) -> dict[str, Any] | None:
+        db = self._connect()
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            source = db.execute("SELECT conversation_id,agent,query,file_id,status FROM execution_run WHERE run_id=?", (run_id,)).fetchone()
+            if not source or source["status"] not in TERMINAL_STATUSES:
+                db.commit()
+                return None
+            active = db.execute("SELECT run_id FROM execution_run WHERE conversation_id=? AND status IN ('queued','running')", (source["conversation_id"],)).fetchone()
+            if active:
+                raise ActiveExecutionError("该会话正在执行中，请稍后再试")
+            new_run_id = uuid4().hex
+            db.execute(
+                "INSERT INTO execution_run(run_id,conversation_id,agent,query,file_id,status,created_at) VALUES(?,?,?,?,?,'queued',?)",
+                (new_run_id, source["conversation_id"], source["agent"], source["query"], source["file_id"], self._now_iso()),
+            )
+            row = db.execute("SELECT * FROM execution_run WHERE run_id=?", (new_run_id,)).fetchone()
+            db.commit()
+            return self._run_dict(row)
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
     def claim_next(self, worker_id: str) -> dict[str, Any] | None:
         db = self._connect()
         try:
@@ -184,10 +209,10 @@ class ExecutionStore:
     def events_after(self, run_id: str, event_id: int = 0) -> list[dict[str, Any]]:
         with self._db() as db:
             rows = db.execute(
-                "SELECT event_id,event_json FROM execution_event WHERE run_id=? AND event_id>? ORDER BY event_id",
+                "SELECT event_id,event_json,created_at FROM execution_event WHERE run_id=? AND event_id>? ORDER BY event_id",
                 (run_id, event_id),
             ).fetchall()
-        return [{"event_id": row["event_id"], "event": json.loads(row["event_json"])} for row in rows]
+        return [{"event_id": row["event_id"], "created_at": row["created_at"], "event": json.loads(row["event_json"])} for row in rows]
 
     def find_run_by_event(self, conversation_id: str, agent: str, query: str,
                           file_id: str | None, event_id: int) -> dict[str, Any] | None:
@@ -206,6 +231,36 @@ class ExecutionStore:
         with self._db() as db:
             row = db.execute("SELECT status FROM execution_run WHERE run_id=?", (run_id,)).fetchone()
         return row["status"] if row else None
+
+    def get_run(self, run_id: str) -> dict[str, Any] | None:
+        with self._db() as db:
+            row = db.execute("SELECT * FROM execution_run WHERE run_id=?", (run_id,)).fetchone()
+        return self._run_dict(row) if row else None
+
+    def list_runs(self, status: str | None = None, search: str | None = None,
+                  limit: int = 100, offset: int = 0) -> tuple[list[dict[str, Any]], int]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if status:
+            clauses.append("status=?")
+            params.append(status)
+        if search:
+            clauses.append("(run_id LIKE ? OR conversation_id LIKE ? OR agent LIKE ? OR query LIKE ?)")
+            term = f"%{search}%"
+            params.extend([term, term, term, term])
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        safe_limit = max(1, min(int(limit), 200))
+        safe_offset = max(0, int(offset))
+        with self._db() as db:
+            total = int(db.execute(f"SELECT COUNT(*) FROM execution_run{where}", params).fetchone()[0])
+            rows = db.execute(
+                f"SELECT * FROM execution_run{where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                [*params, safe_limit, safe_offset],
+            ).fetchall()
+        return [self._run_dict(row) for row in rows], total
+
+    def get_events(self, run_id: str, event_id: int = 0) -> list[dict[str, Any]]:
+        return self.events_after(run_id, event_id)
 
     def request_cancel(self, conversation_id: str) -> bool:
         db = self._connect()
@@ -226,6 +281,33 @@ class ExecutionStore:
                 )
             else:
                 db.execute("UPDATE execution_run SET cancel_requested=1 WHERE run_id=?", (row["run_id"],))
+            db.commit()
+            return True
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    def request_cancel_run(self, run_id: str) -> bool:
+        db = self._connect()
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                "SELECT run_id,status FROM execution_run WHERE run_id=? AND status IN ('queued','running')",
+                (run_id,),
+            ).fetchone()
+            if not row:
+                db.commit()
+                return False
+            if row["status"] == "queued":
+                self._append_event(db, run_id, {"type": "error", "content": "任务已停止"})
+                db.execute(
+                    "UPDATE execution_run SET status='cancelled',cancel_requested=1,finished_at=? WHERE run_id=?",
+                    (self._now_iso(), run_id),
+                )
+            else:
+                db.execute("UPDATE execution_run SET cancel_requested=1 WHERE run_id=?", (run_id,))
             db.commit()
             return True
         except Exception:
@@ -277,3 +359,10 @@ class ExecutionStore:
                 (time.time() - self.worker_stale_seconds,),
             ).fetchone()
         return row is not None
+
+    def list_workers(self) -> list[dict[str, Any]]:
+        with self._db() as db:
+            rows = db.execute(
+                "SELECT worker_id,process_id,last_seen,current_run_id FROM execution_worker ORDER BY last_seen DESC"
+            ).fetchall()
+        return [self._run_dict(row) for row in rows]

@@ -7,7 +7,7 @@ const backendPort = process.env.DODO_DEV_BACKEND_PORT || '8888'
 const backend = `http://127.0.0.1:${backendPort}`
 const backendRoutes = [
   '/health', '/file', '/document', '/skill', '/session', '/agent',
-  '/doc-asset', '/generated', '/console', '/docs', '/openapi.json', '/favicon.ico',
+  '/execution', '/evaluation', '/release', '/harness', '/doc-asset', '/generated', '/console', '/docs', '/openapi.json', '/favicon.ico',
 ]
 
 export default defineConfig({

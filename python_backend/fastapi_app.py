@@ -24,6 +24,16 @@ from .vector_store import PgVectorStore
 from .application.execution_service import ExecutionApplicationService
 from .infrastructure.queue import SqliteExecutionQueue
 from .api.routers.execution import create_execution_router
+from .api.routers.evaluation import create_evaluation_router
+from .api.routers.release import create_release_router
+from .api.routers.resources import create_resource_router
+from .api.routers.registry import create_registry_router
+from .api.routers.governance import create_governance_router
+from .api.routers.observability import create_observability_router
+from .infrastructure.evaluation_store import EvaluationStore
+from .infrastructure.resource_store import ResourceStore
+from .infrastructure.registry_store import RegistryStore
+from .infrastructure.governance_store import GovernanceStore
 
 settings.ensure_dirs()
 storage = Storage(settings)
@@ -33,6 +43,10 @@ skills = SkillRegistry(settings)
 documents = DocumentService(settings, storage, object_store, vector_store)
 execution_store = SqliteExecutionQueue(settings.execution_db_path)
 execution_service = ExecutionApplicationService(execution_store)
+evaluation_store = EvaluationStore(settings.data_dir / "evaluation.db")
+resource_store = ResourceStore(settings.data_dir / "harness-resources.db")
+registry_store = RegistryStore(settings.data_dir / "harness-registry.db")
+governance_store = GovernanceStore(settings.data_dir / "harness-governance.db")
 
 STATIC_DIR = Path(__file__).parent.parent / "static"
 CONSOLE_DIR = STATIC_DIR / "console"
@@ -80,6 +94,11 @@ app.include_router(
         lambda file_id: bool(storage.get_file(file_id) or storage.get_document(file_id)),
     )
 )
+app.include_router(create_evaluation_router(evaluation_store))
+app.include_router(create_resource_router(resource_store))
+app.include_router(create_registry_router(registry_store))
+app.include_router(create_governance_router(execution_store.list_workers, governance_store))
+app.include_router(create_observability_router(execution_store.list_runs, execution_store.get_run, execution_store.get_events, settings.generated_dir))
 
 
 def ok(data=None, message="操作成功", code=200):
@@ -288,6 +307,9 @@ def run_catalog(action: str, args: dict):
         return catalog.call(action, args)
     finally:
         catalog.db.close()
+
+
+app.include_router(create_release_router(run_catalog, settings.skill_project, evaluation_store.get_run, governance_store))
 
 
 @app.get("/console")

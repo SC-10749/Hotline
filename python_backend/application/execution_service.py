@@ -17,6 +17,17 @@ class ExecutionQueue(Protocol):
     def find_run_by_event(self, conversation_id: str, agent: str, query: str,
                           file_id: str | None, event_id: int) -> dict[str, Any] | None: ...
 
+    def get_run(self, run_id: str) -> dict[str, Any] | None: ...
+
+    def list_runs(self, status: str | None = None, search: str | None = None,
+                  limit: int = 100, offset: int = 0) -> tuple[list[dict[str, Any]], int]: ...
+
+    def get_events(self, run_id: str, event_id: int = 0) -> list[dict[str, Any]]: ...
+
+    def request_cancel_run(self, run_id: str) -> bool: ...
+
+    def retry_run(self, run_id: str) -> dict[str, Any] | None: ...
+
 
 @dataclass(slots=True)
 class ExecutionApplicationService:
@@ -36,6 +47,29 @@ class ExecutionApplicationService:
 
     def cancel(self, conversation_id: str) -> bool:
         return self.queue.request_cancel(conversation_id)
+
+    def create(self, request: ExecutionRequest) -> dict[str, Any]:
+        if not self.queue.has_live_worker():
+            raise WorkerUnavailableError("Agent Execution Worker 未运行")
+        return self.queue.enqueue(request.conversation_id, request.agent, request.query, request.file_id)
+
+    def get_run(self, run_id: str) -> dict[str, Any] | None:
+        return self.queue.get_run(run_id)
+
+    def list_runs(self, status: str | None = None, search: str | None = None,
+                  limit: int = 100, offset: int = 0) -> tuple[list[dict[str, Any]], int]:
+        return self.queue.list_runs(status, search, limit, offset)
+
+    def get_events(self, run_id: str, event_id: int = 0) -> list[dict[str, Any]]:
+        return self.queue.get_events(run_id, event_id)
+
+    def cancel_run(self, run_id: str) -> bool:
+        return self.queue.request_cancel_run(run_id)
+
+    def retry_run(self, run_id: str) -> dict[str, Any] | None:
+        if not self.queue.has_live_worker():
+            raise WorkerUnavailableError("Agent Execution Worker 未运行")
+        return self.queue.retry_run(run_id)
 
 
 class WorkerUnavailableError(RuntimeError):

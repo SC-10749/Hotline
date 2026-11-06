@@ -813,6 +813,73 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
   .image-preview-item img { height: 150px; }
 }
 
+/* Explicit access confirmation for local files and workspace edits. */
+.permission-backdrop { background: rgba(29, 39, 56, 0.58); }
+.permission-dialog { width: min(100%, 500px); padding: 26px 27px 23px; border-radius: 15px; }
+.permission-symbol { width: 40px; height: 40px; border-color: #f0d2c7; color: var(--accent); background: #fff4ef; }
+.permission-dialog h2 { margin-top: 20px; font-size: 20px; letter-spacing: -0.02em; }
+.permission-dialog > p { max-width: 44em; font-size: 13px; line-height: 1.75; }
+.permission-scope { display: grid; gap: 8px; margin-top: 19px; padding: 12px 13px; border: 1px solid var(--line-soft); border-radius: 10px; background: #f8fafc; }
+.permission-scope-row { display: flex; align-items: flex-start; gap: 9px; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.permission-scope-row svg { flex: 0 0 auto; margin-top: 1px; color: #4b9a6c; }
+.permission-note { display: flex; align-items: center; gap: 7px; margin-top: 13px !important; color: var(--muted) !important; font-size: 11px !important; }
+.permission-note svg { flex: 0 0 auto; color: #6a83c7; }
+.permission-dialog .dialog-actions { margin-top: 24px; }
+.permission-dialog .secondary-button, .permission-dialog .primary-button { min-height: 42px; padding: 0 17px; border-radius: 21px; font-size: 12px; }
+.permission-confirm { min-width: 132px; }
+.project-name-dialog { width: min(100%, 500px); }
+.project-name-field { display: grid; gap: 7px; margin-top: 20px; color: #48556a; font-size: 12px; font-weight: 600; }
+.project-name-field .text-field { height: 43px; margin: 0; font-family: inherit; font-size: 13px; }
+.project-name-dialog .dialog-actions { margin-top: 22px; }
+
+/* Workspace folder import: a Codex-style confirmation card with file preview. */
+.folder-import-backdrop { background: rgba(23, 33, 48, 0.42); backdrop-filter: blur(2px); }
+.folder-import-dialog { width: min(100%, 520px); padding: 0; overflow: hidden; border: 1px solid #e3e9f1; border-radius: 16px; background: #ffffff; box-shadow: 0 24px 64px rgba(21, 32, 48, 0.18), 0 2px 8px rgba(21, 32, 48, 0.05); }
+.folder-import-head { display: flex; align-items: flex-start; gap: 12px; padding: 22px 22px 0; }
+.folder-import-icon { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; border: 1px solid #d9e5fb; border-radius: 11px; color: #3b6fd4; background: #eff5ff; }
+.folder-import-headings { min-width: 0; flex: 1; }
+.folder-import-dialog h2 { margin: 2px 0 4px; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.folder-import-dialog .folder-import-headings p { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+.folder-import-head > .icon-button { flex: 0 0 auto; }
+.folder-import-card { display: flex; align-items: center; gap: 11px; margin: 16px 22px 0; padding: 13px 14px; border: 1px solid #e8edf5; border-radius: 12px; background: #f8fafd; }
+.folder-import-card-icon { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border: 1px solid #d9e5fb; border-radius: 9px; color: #3b6fd4; background: #eff5ff; }
+.folder-import-card-copy { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.folder-import-card-copy strong { overflow: hidden; color: var(--text); font-size: 13.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.folder-import-card-copy span { color: var(--muted); font-size: 11.5px; }
+.folder-import-warning { display: flex; align-items: center; gap: 7px; margin: 12px 22px 0; color: #b0742a; font-size: 11.5px; }
+.folder-import-warning svg { flex: 0 0 auto; }
+.folder-import-progress { margin: 14px 22px 0; padding: 12px 13px; border: 1px solid #e6ecf5; border-radius: 12px; background: #f7fafe; }
+.folder-import-progress-head { display: flex; align-items: center; justify-content: space-between; color: var(--text-secondary); font-size: 11.5px; }
+.folder-import-progress-head strong { color: #3b6fd4; font-weight: 600; }
+.folder-import-track { height: 5px; margin-top: 9px; overflow: hidden; border-radius: 99px; background: #e4eaf3; }
+.folder-import-track i { display: block; height: 100%; border-radius: 99px; background: #3b6fd4; transition: width 220ms var(--ease); }
+.folder-import-current { display: block; margin-top: 8px; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.folder-import-dialog .folder-import-note { display: flex; align-items: center; gap: 7px; margin: 14px 22px 0; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+.folder-import-note svg { flex: 0 0 auto; color: #6a83c7; }
+.folder-import-dialog .dialog-actions { margin: 0; padding: 16px 22px 18px; border-top: 1px solid #eef1f5; background: #fcfdfe; }
+.folder-import-dialog .secondary-button, .folder-import-dialog .primary-button { min-height: 38px; padding: 0 18px; border-radius: 19px; font-size: 12px; }
+.folder-import-dialog .secondary-button { border-color: #dfe5ee; color: #5a6675; background: #ffffff; }
+.folder-import-dialog .secondary-button:hover:not(:disabled) { background: #f4f6fa; }
+.folder-import-dialog .primary-button { border-color: #2f6fd0; color: #ffffff; background: #2f6fd0; }
+.folder-import-dialog .primary-button:hover:not(:disabled) { background: #2860bb; }
+.folder-import-dialog .primary-button:disabled, .folder-import-dialog .secondary-button:disabled { opacity: .6; cursor: not-allowed; }
+.folder-import-confirm { min-width: 104px; }
+
+@media (max-width: 560px) {
+  .folder-import-dialog { border-radius: 14px; }
+  .folder-import-head { padding: 18px 17px 0; }
+  .folder-import-card { margin: 14px 17px 0; }
+  .folder-import-dialog .dialog-actions { padding: 14px 17px 16px; }
+  .folder-import-dialog .secondary-button, .folder-import-dialog .primary-button { flex: 1; }
+}
+
+@media (max-width: 560px) {
+  .permission-dialog { padding: 22px 19px 18px; border-radius: 13px; }
+  .permission-dialog h2 { font-size: 18px; }
+  .permission-dialog .dialog-actions { gap: 7px; }
+  .permission-dialog .secondary-button, .permission-dialog .primary-button { flex: 1; padding: 0 10px; }
+}
+
 /* Keep the conversation list compact while preserving a full-width chat canvas. */
 .app-shell { grid-template-columns: 68px 290px minmax(0, 1fr); }
 .sidebar-toggle { display: inline-grid; }

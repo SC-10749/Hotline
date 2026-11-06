@@ -21,7 +21,7 @@ import {
   Home, Workflow, Bell, PanelLeft, FileCode2, GitCompare, CircleDot,
   Sparkles, Square, Trash2, ToggleLeft, ToggleRight, X, Copy, ExternalLink, Download, Bot, Archive,
   UserRound, KeyRound, Palette, Smile, Headset, CircleUserRound, CalendarClock,
-  LibraryBig, GitBranch, History, MessagesSquare,
+  LibraryBig, GitBranch, History, MessagesSquare, ShieldCheck, Upload,
 } from 'lucide-vue-next'
 import { apiUrl, compensateDocuments, getAllSessions, getDocumentPreview, getDocumentVersions, getDocuments, getSessions, getSession, getSkills, removeDocument, removeSession, removeSkill, setSkillEnabled, stopAgent, streamUrl, testBackend, uploadDocument, uploadFile, uploadSkill, vectorizeDocument } from './api'
 import HarnessApp from './HarnessApp.vue'
@@ -69,6 +69,10 @@ const connectionMessage = ref('')
 const toast = ref('')
 const showSettings = ref(false)
 const showDeleteConfirm = ref(false)
+const permissionRequest = ref(null)
+const showProjectNameDialog = ref(false)
+const projectNameDraft = ref('')
+const projectNameOriginal = ref('')
 const deletingId = ref(null)
 const mobileSidebarOpen = ref(false)
 const sidebarCollapsed = ref(false)
@@ -78,6 +82,12 @@ const selectedProjectName = ref('')
 const projectFiles = ref([])
 const projectUploadBusy = ref(false)
 const pendingWorkspaceImport = ref(false)
+const pendingWorkspaceFiles = ref([])
+const pendingWorkspaceEntries = ref([])
+const pendingWorkspaceFolderName = ref('')
+const folderImportOpen = ref(false)
+const folderImportSkipped = ref(0)
+const folderImportProgress = ref({ done: 0, total: 0, current: '' })
 const fileInput = ref(null)
 const projectFolderInput = ref(null)
 const messageList = ref(null)
@@ -129,6 +139,13 @@ const docCounts = computed(() => {
     else if (['PENDING', 'CONVERTING', 'CONVERTED', 'VECTORIZING'].includes(doc.status)) counts.waiting += 1
   }
   return counts
+})
+
+// ===== 工作区文件夹导入：文件清单与上传进度 =====
+const folderImportTotalSize = computed(() => pendingWorkspaceEntries.value.reduce((sum, entry) => sum + (entry.size || 0), 0))
+const folderImportPercent = computed(() => {
+  const { done, total } = folderImportProgress.value
+  return total ? Math.min(100, Math.round((done / total) * 100)) : 0
 })
 
 function makeId() {
@@ -320,10 +337,154 @@ function openProjectView() {
   mobileSidebarOpen.value = false
 }
 
+function requestPermission(request) {
+  permissionRequest.value = request
+}
+
 function addWorkspace() {
   if (projectUploadBusy.value) return
   pendingWorkspaceImport.value = true
+  // Chrome / Edge 支持目录选择 API：它不会弹出浏览器自带的「上传文件夹」确认框，
+  // 由我们自己渲染确认弹窗；其他浏览器回退到 webkitdirectory 输入框。
+  if (typeof window.showDirectoryPicker === 'function') {
+    pickWorkspaceDirectory()
+    return
+  }
   projectFolderInput.value?.click()
+}
+
+async function pickWorkspaceDirectory() {
+  try {
+    const handle = await window.showDirectoryPicker({ id: 'hotline-workspace', mode: 'read' })
+    const entries = []
+    await collectDirectoryEntries(handle, handle.name, entries)
+    if (!entries.length) {
+      resetWorkspaceImport()
+      showToast('这个文件夹里没有可上传的文件')
+      return
+    }
+    prepareWorkspaceImport(entries, handle.name)
+  } catch (error) {
+    resetWorkspaceImport()
+    if (error?.name !== 'AbortError') showToast(error.message || '读取文件夹失败')
+  }
+}
+
+async function collectDirectoryEntries(handle, prefix, output) {
+  for await (const entry of handle.values()) {
+    if (entry.kind === 'file') {
+      const file = await entry.getFile()
+      output.push({ file, name: entry.name, path: `${prefix}/${entry.name}`, size: file.size })
+      continue
+    }
+    if (entry.kind === 'directory') await collectDirectoryEntries(entry, `${prefix}/${entry.name}`, output)
+  }
+}
+
+function prepareWorkspaceImport(entries, folderName) {
+  const supported = entries.filter((entry) => entry.size <= 50 * 1024 * 1024)
+  const skipped = entries.length - supported.length
+  if (skipped) showToast(`已跳过 ${skipped} 个超过 50 MB 的文件`)
+  if (!supported.length) {
+    resetWorkspaceImport()
+    showToast('没有可上传的文件')
+    return
+  }
+  pendingWorkspaceEntries.value = supported
+  pendingWorkspaceFiles.value = supported.map((entry) => entry.file)
+  pendingWorkspaceFolderName.value = folderName
+  folderImportSkipped.value = skipped
+  folderImportProgress.value = { done: 0, total: supported.length, current: '' }
+  folderImportOpen.value = true
+}
+
+function resetWorkspaceImport() {
+  pendingWorkspaceImport.value = false
+  pendingWorkspaceFiles.value = []
+  pendingWorkspaceEntries.value = []
+  pendingWorkspaceFolderName.value = ''
+  folderImportSkipped.value = 0
+  folderImportProgress.value = { done: 0, total: 0, current: '' }
+}
+
+function cancelFolderImport() {
+  folderImportOpen.value = false
+  resetWorkspaceImport()
+}
+
+function openFilePicker() {
+  if (uploadBusy.value || sending.value) return
+  requestPermission({
+    kind: 'file-read',
+    icon: FileText,
+    title: '允许 Hotline 读取这个文件？',
+    description: 'Hotline 会读取这份文件并上传到当前对话，用于回答你的问题。',
+    scope: ['只读取你主动选择的文件', '文件会用于当前对话', '单个文件不超过 50 MB'],
+    confirmLabel: '允许读取文件',
+  })
+}
+
+function requestTextEdit(file) {
+  requestPermission({
+    kind: 'text-edit',
+    icon: FileCode2,
+    title: '允许 Hotline 编辑这份文本？',
+    description: 'Hotline 会先展示修改内容，只有你允许后才会写入文件。',
+    scope: [`文件：${file.path}`, '修改前会展示变更内容', '你可以随时取消这次操作'],
+    confirmLabel: '允许编辑文本',
+    target: file.path,
+  })
+}
+
+function cancelPermission() {
+  permissionRequest.value = null
+}
+
+function confirmPermission() {
+  const request = permissionRequest.value
+  permissionRequest.value = null
+  if (!request) return
+  if (request.kind === 'file-read') {
+    fileInput.value?.click()
+  } else if (request.kind === 'text-edit') {
+    showToast(`已允许编辑「${request.target}」`)
+  }
+}
+
+async function startFolderUpload() {
+  if (projectUploadBusy.value) return
+  const entries = pendingWorkspaceEntries.value
+  const folderName = pendingWorkspaceFolderName.value || '新工作区'
+  if (!entries.length) {
+    cancelFolderImport()
+    return
+  }
+  if (!projectGroups.value.some((project) => project.name === folderName)) {
+    projectGroups.value.push({ name: folderName, child: '', tasks: [] })
+  }
+  selectedProjectName.value = folderName
+  projectFiles.value = entries.map((entry) => ({ name: entry.path, size: entry.size }))
+  projectUploadBusy.value = true
+  folderImportProgress.value = { done: 0, total: entries.length, current: '' }
+  try {
+    let uploaded = 0
+    for (const entry of entries) {
+      folderImportProgress.value = { done: uploaded, total: entries.length, current: entry.path }
+      await uploadFile(backendUrl.value, entry.file, entry.name)
+      uploaded += 1
+      folderImportProgress.value = { done: uploaded, total: entries.length, current: entry.path }
+    }
+    folderImportOpen.value = false
+    resetWorkspaceImport()
+    showWorkspacePanel.value = true
+    workspacePanelTab.value = 'files'
+    showToast(`已上传文件夹「${selectedProjectName.value}」中的 ${uploaded} 个文件`)
+    openProjectNameDialog(selectedProjectName.value)
+  } catch (error) {
+    showToast(error.message || '文件夹上传失败，请检查文件服务')
+  } finally {
+    projectUploadBusy.value = false
+  }
 }
 
 function addWorkspaceTask(project) {
@@ -332,6 +493,21 @@ function addWorkspaceTask(project) {
   project.tasks.unshift({ id: makeId(), title: '新任务' })
   newSession()
   showToast(`已在工作区「${project.name}」中新建任务`)
+}
+
+function openProjectNameDialog(name) {
+  projectNameOriginal.value = name
+  projectNameDraft.value = name
+  showProjectNameDialog.value = true
+}
+
+function saveProjectName() {
+  const name = projectNameDraft.value.trim() || projectNameOriginal.value || '新工作区'
+  const project = projectGroups.value.find((item) => item.name === projectNameOriginal.value)
+  if (project) project.name = name
+  if (selectedProjectName.value === projectNameOriginal.value) selectedProjectName.value = name
+  showProjectNameDialog.value = false
+  showToast(`项目已命名为「${name}」`)
 }
 
 function showNotifications() {
@@ -348,33 +524,18 @@ function openMore() {
 async function onProjectFolderPicked(event) {
   const files = Array.from(event.target.files || [])
   event.target.value = ''
-  if (!files.length) return
+  if (!files.length) {
+    resetWorkspaceImport()
+    return
+  }
   const folderName = files[0].webkitRelativePath?.split('/')[0] || '新工作区'
-  if (pendingWorkspaceImport.value) {
-    if (!projectGroups.value.some((project) => project.name === folderName)) {
-      projectGroups.value.push({ name: folderName, child: '', tasks: [] })
-    }
-    selectedProjectName.value = folderName
-    pendingWorkspaceImport.value = false
-  }
-  const supported = files.filter((file) => file.size <= 50 * 1024 * 1024)
-  if (supported.length !== files.length) showToast('已跳过超过 50 MB 的文件')
-  projectFiles.value = supported.map((file) => ({ name: file.webkitRelativePath || file.name, size: file.size }))
-  projectUploadBusy.value = true
-  try {
-    let uploaded = 0
-    for (const file of supported) {
-      await uploadFile(backendUrl.value, file)
-      uploaded += 1
-    }
-    showWorkspacePanel.value = true
-    workspacePanelTab.value = 'files'
-    showToast(`已上传文件夹「${selectedProjectName.value}」中的 ${uploaded} 个文件`)
-  } catch (error) {
-    showToast(error.message || '文件夹上传失败，请检查文件服务')
-  } finally {
-    projectUploadBusy.value = false
-  }
+  const entries = files.map((file) => ({
+    file,
+    name: file.name,
+    path: file.webkitRelativePath || file.name,
+    size: file.size,
+  }))
+  prepareWorkspaceImport(entries, folderName)
 }
 
 function sidebarToggleLabel() {
@@ -1204,7 +1365,7 @@ onUnmounted(() => {
             <div class="composer-bottom">
               <div class="composer-tools">
                 <input ref="fileInput" class="visually-hidden" type="file" accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg" @change="onFilePicked" />
-                <button class="attach-button icon-button" type="button" :disabled="uploadBusy || sending" aria-label="上传文件" title="上传文件" @click="fileInput?.click()"><Paperclip :size="17" /></button>
+                <button class="attach-button icon-button" type="button" :disabled="uploadBusy || sending" aria-label="上传文件" title="上传文件" @click="openFilePicker"><Paperclip :size="17" /></button>
                 <span class="composer-hint"><span v-if="activeMode === 'skills'">技能助手接口</span><span v-else>{{ activeModeInfo.description }}</span><span class="hint-divider"></span><kbd>Enter</kbd> 发送 <span class="hint-divider"></span><kbd>Shift Enter</kbd> 换行</span>
               </div>
               <div class="send-actions">
@@ -1241,7 +1402,7 @@ onUnmounted(() => {
         </div>
         <div v-else class="changes-list">
           <div class="changes-summary"><CircleDot :size="15" /> 3 个文件待审阅</div>
-          <button v-for="file in changedFiles" :key="file.path" class="change-file" type="button">
+          <button v-for="file in changedFiles" :key="file.path" class="change-file" type="button" @click="requestTextEdit(file)">
             <span class="change-status" :class="file.tone">{{ file.status }}</span>
             <span class="change-file-copy"><strong>{{ file.path }}</strong><small>{{ file.detail }}</small></span>
             <ChevronRight :size="15" />
@@ -1303,7 +1464,7 @@ onUnmounted(() => {
               <button class="primary-button" type="button" disabled>选择桌宠</button>
             </template>
           </section>
-          <HarnessApp v-if="activePage === 'harness'" embedded />
+          <HarnessApp v-if="activePage === 'harness'" embedded :api-base="backendUrl" />
           <div v-if="activePage !== 'harness'" class="page-empty-state">
             <div class="page-empty-icon"><Workflow v-if="activePage === 'automation'" :size="44" /><Puzzle v-else-if="activePage === 'plugins'" :size="44" /><Bot v-else-if="activePage === 'bot'" :size="44" /><FileText v-else-if="activePage === 'docs'" :size="44" /><Archive v-else :size="44" /></div>
             <h2>{{ activePage === 'automation' ? '安排任务' : activePage === 'plugins' ? '管理插件' : activePage === 'bot' ? '轻量级机器人' : activePage === 'docs' ? '管理文档' : '导出历史聊天' }}</h2>
@@ -1331,6 +1492,58 @@ onUnmounted(() => {
             <label class="field-label" for="api-base">API 地址</label><input id="api-base" v-model="settingsDraft" class="text-field" placeholder="默认与页面同源，可填写其他后端地址" @keydown.enter="saveSettings" />
             <div class="settings-current"><span class="connection-indicator" :class="connectionState"></span><span>{{ connectionState === 'online' ? '当前服务已连接' : connectionState === 'checking' ? '正在检查连接' : '当前服务不可用' }}</span><code>{{ backendUrl }}</code></div>
             <div class="dialog-actions"><button class="secondary-button" type="button" @click="showSettings = false">取消</button><button class="primary-button" type="button" :disabled="busySettings" @click="saveSettings"><LoaderCircle v-if="busySettings" :size="15" class="spin" /><Activity v-else :size="15" />测试并保存</button></div>
+          </section>
+        </div>
+      </Transition>
+      <Transition name="modal">
+        <div v-if="folderImportOpen" class="modal-backdrop folder-import-backdrop" @click.self="cancelFolderImport">
+          <section class="dialog folder-import-dialog" role="dialog" aria-modal="true" aria-labelledby="folder-import-title" aria-describedby="folder-import-copy">
+            <div class="folder-import-head">
+              <div class="folder-import-icon"><FolderOpen :size="18" /></div>
+              <div class="folder-import-headings">
+                <h2 id="folder-import-title">将「{{ pendingWorkspaceFolderName }}」上传到工作区</h2>
+                <p id="folder-import-copy">只读取你刚刚选中的这个文件夹，确认后开始上传。</p>
+              </div>
+              <button class="icon-button" type="button" aria-label="关闭上传确认框" :disabled="projectUploadBusy" @click="cancelFolderImport"><X :size="18" /></button>
+            </div>
+
+            <div class="folder-import-card">
+              <div class="folder-import-card-icon"><FolderOpen :size="17" /></div>
+              <div class="folder-import-card-copy">
+                <strong>{{ pendingWorkspaceFolderName || '新工作区' }}</strong>
+                <span>整个文件夹 · {{ pendingWorkspaceEntries.length }} 个文件 · {{ formatBytes(folderImportTotalSize) }}</span>
+              </div>
+            </div>
+
+            <p v-if="folderImportSkipped" class="folder-import-warning"><AlertCircle :size="14" /> 已跳过 {{ folderImportSkipped }} 个超过 50 MB 的文件</p>
+
+            <div v-if="projectUploadBusy" class="folder-import-progress">
+              <div class="folder-import-progress-head"><span>正在上传 {{ folderImportProgress.done }} / {{ folderImportProgress.total }}</span><strong>{{ folderImportPercent }}%</strong></div>
+              <div class="folder-import-track"><i :style="{ width: `${folderImportPercent}%` }"></i></div>
+              <span class="folder-import-current">{{ folderImportProgress.current }}</span>
+            </div>
+
+            <p class="folder-import-note"><ShieldCheck :size="14" /> 不会读取其他目录，也不会修改你本地的文件。</p>
+
+            <div class="dialog-actions">
+              <button class="secondary-button" type="button" :disabled="projectUploadBusy" @click="cancelFolderImport">取消</button>
+              <button class="primary-button folder-import-confirm" type="button" :disabled="projectUploadBusy" @click="startFolderUpload">
+                <LoaderCircle v-if="projectUploadBusy" :size="15" class="spin" />
+                <Upload v-else :size="15" />
+                {{ projectUploadBusy ? '正在上传…' : '上传' }}
+              </button>
+            </div>
+          </section>
+        </div>
+      </Transition>
+      <Transition name="modal">
+        <div v-if="showProjectNameDialog" class="modal-backdrop" @click.self="showProjectNameDialog = false">
+          <section class="dialog project-name-dialog" role="dialog" aria-modal="true" aria-labelledby="project-name-title" aria-describedby="project-name-copy">
+            <div class="dialog-heading"><div class="dialog-symbol permission-symbol"><FolderOpen :size="19" /></div><button class="icon-button" type="button" aria-label="关闭项目命名框" @click="showProjectNameDialog = false"><X :size="18" /></button></div>
+            <h2 id="project-name-title">给这个项目起个名字</h2>
+            <p id="project-name-copy">文件夹已经上传到工作区。设置一个容易识别的名字，之后可以从项目旁边的 + 开始新的对话。</p>
+            <label class="project-name-field"><span>项目名称</span><input v-model="projectNameDraft" class="text-field" autofocus maxlength="80" @keydown.enter.prevent="saveProjectName" /></label>
+            <div class="dialog-actions"><button class="secondary-button" type="button" @click="showProjectNameDialog = false">稍后再命名</button><button class="primary-button" type="button" @click="saveProjectName">保存项目名称</button></div>
           </section>
         </div>
       </Transition>
@@ -1453,6 +1666,26 @@ onUnmounted(() => {
               </div>
             </template>
             <div class="dialog-actions"><button class="secondary-button" type="button" @click="closeDocPreview">关闭</button></div>
+          </section>
+        </div>
+      </Transition>
+      <Transition name="modal">
+        <div v-if="permissionRequest" class="modal-backdrop permission-backdrop" @click.self="cancelPermission">
+          <section class="dialog permission-dialog" role="dialog" aria-modal="true" aria-labelledby="permission-title" aria-describedby="permission-copy">
+            <div class="dialog-heading">
+              <div class="dialog-symbol permission-symbol"><component :is="permissionRequest.icon" :size="19" /></div>
+              <button class="icon-button" type="button" aria-label="取消授权" @click="cancelPermission"><X :size="18" /></button>
+            </div>
+            <h2 id="permission-title">{{ permissionRequest.title }}</h2>
+            <p id="permission-copy">{{ permissionRequest.description }}</p>
+            <div class="permission-scope" aria-label="授权范围">
+              <div v-for="item in permissionRequest.scope" :key="item" class="permission-scope-row"><Check :size="15" /><span>{{ item }}</span></div>
+            </div>
+            <p class="permission-note"><ShieldCheck :size="15" /> 你可以随时取消，Hotline 只会执行这次明确授权的操作。</p>
+            <div class="dialog-actions">
+              <button class="secondary-button" type="button" @click="cancelPermission">取消</button>
+              <button class="primary-button permission-confirm" type="button" @click="confirmPermission">{{ permissionRequest.confirmLabel }}</button>
+            </div>
           </section>
         </div>
       </Transition>
