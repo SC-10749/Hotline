@@ -125,6 +125,17 @@ let docPollTimer
 
 const currentSession = computed(() => sessions.value.find((session) => session.id === activeId.value) || null)
 const isWelcome = computed(() => activePage.value === 'home' && currentSession.value?.messages.length === 0 && !loadingHistory.value)
+const workspaceDialogSelector = computed(() => folderImportOpen.value ? '.folder-import-dialog' : permissionRequest.value ? '.permission-dialog' : showProjectNameDialog.value ? '.project-name-dialog' : '')
+let workspaceDialogReturnFocus
+watch(workspaceDialogSelector, async (selector, previousSelector) => {
+  if (selector) {
+    if (!previousSelector) workspaceDialogReturnFocus = document.activeElement
+    await nextTick()
+    document.querySelector(selector)?.querySelector('input, .secondary-button')?.focus()
+  } else if (workspaceDialogReturnFocus?.isConnected) {
+    workspaceDialogReturnFocus.focus()
+  }
+})
 const visibleSessions = computed(() => sessions.value.filter((session) => !session.isDraft && session.title.toLowerCase().includes(searchText.value.toLowerCase())))
 const runningItem = computed(() => (sending.value && currentSession.value && !currentSession.value.isDraft ? [currentSession.value] : []))
 const recentList = computed(() => visibleSessions.value.filter((session) => !runningItem.value.includes(session)))
@@ -345,8 +356,7 @@ function requestPermission(request) {
 function addWorkspace() {
   if (projectUploadBusy.value) return
   pendingWorkspaceImport.value = true
-  // Chrome / Edge 支持目录选择 API：它不会弹出浏览器自带的「上传文件夹」确认框，
-  // 由我们自己渲染确认弹窗；其他浏览器回退到 webkitdirectory 输入框。
+  // The browser owns directory access prompts; Hotline confirms the upload afterward.
   if (typeof window.showDirectoryPicker === 'function') {
     pickWorkspaceDirectory()
     return
@@ -409,6 +419,7 @@ function resetWorkspaceImport() {
 }
 
 function cancelFolderImport() {
+  if (projectUploadBusy.value) return
   folderImportOpen.value = false
   resetWorkspaceImport()
 }
@@ -1192,6 +1203,25 @@ watch(input, async () => {
 
 onMounted(() => {
   keydownHandler = (event) => {
+    if (workspaceDialogSelector.value) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        if (folderImportOpen.value) cancelFolderImport()
+        else if (permissionRequest.value) cancelPermission()
+        else showProjectNameDialog.value = false
+      } else if (event.key === 'Tab') {
+        const controls = Array.from(document.querySelector(workspaceDialogSelector.value)?.querySelectorAll('button:not(:disabled), input:not(:disabled), [href], [tabindex="0"]') || []).filter(element => element.getClientRects().length)
+        const first = controls[0]
+        const last = controls[controls.length - 1]
+        if (!first) event.preventDefault()
+        else if (!controls.includes(document.activeElement) || (event.shiftKey && document.activeElement === first) || (!event.shiftKey && document.activeElement === last)) {
+          event.preventDefault()
+          const nextControl = event.shiftKey ? last : first
+          nextControl.focus()
+        }
+      }
+      return
+    }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
       event.preventDefault()
       newSession()
@@ -1497,12 +1527,12 @@ onUnmounted(() => {
         </div>
       </Transition>
       <Transition name="modal">
-        <div v-if="folderImportOpen" class="modal-backdrop folder-import-backdrop" @click.self="cancelFolderImport">
+        <div v-if="folderImportOpen" class="modal-backdrop folder-import-backdrop workspace-dialog-theme" @click.self="cancelFolderImport">
           <section class="dialog folder-import-dialog" role="dialog" aria-modal="true" aria-labelledby="folder-import-title" aria-describedby="folder-import-copy">
             <div class="folder-import-head">
               <div class="folder-import-icon"><FolderOpen :size="18" /></div>
               <div class="folder-import-headings">
-                <h2 id="folder-import-title">将「{{ pendingWorkspaceFolderName }}」上传到工作区</h2>
+                <h2 id="folder-import-title">添加工作区</h2>
                 <p id="folder-import-copy">只读取你刚刚选中的这个文件夹，确认后开始上传。</p>
               </div>
               <button class="icon-button" type="button" aria-label="关闭上传确认框" :disabled="projectUploadBusy" @click="cancelFolderImport"><X :size="18" /></button>
@@ -1514,6 +1544,16 @@ onUnmounted(() => {
                 <strong>{{ pendingWorkspaceFolderName || '新工作区' }}</strong>
                 <span>整个文件夹 · {{ pendingWorkspaceEntries.length }} 个文件 · {{ formatBytes(folderImportTotalSize) }}</span>
               </div>
+            </div>
+
+            <div class="folder-import-files" aria-label="待上传文件预览">
+              <div class="folder-import-files-heading"><span>文件预览</span><span>{{ pendingWorkspaceEntries.length }} 个文件</span></div>
+              <ul>
+                <li v-for="entry in pendingWorkspaceEntries.slice(0, 6)" :key="entry.path">
+                  <File :size="15" /><span>{{ entry.path }}</span><small>{{ formatBytes(entry.size) }}</small>
+                </li>
+              </ul>
+              <p v-if="pendingWorkspaceEntries.length > 6" class="folder-import-more">还有 {{ pendingWorkspaceEntries.length - 6 }} 个文件</p>
             </div>
 
             <p v-if="folderImportSkipped" class="folder-import-warning"><AlertCircle :size="14" /> 已跳过 {{ folderImportSkipped }} 个超过 50 MB 的文件</p>
@@ -1531,14 +1571,14 @@ onUnmounted(() => {
               <button class="primary-button folder-import-confirm" type="button" :disabled="projectUploadBusy" @click="startFolderUpload">
                 <LoaderCircle v-if="projectUploadBusy" :size="15" class="spin" />
                 <Upload v-else :size="15" />
-                {{ projectUploadBusy ? '正在上传…' : '上传' }}
+                {{ projectUploadBusy ? '正在上传…' : '确认并上传' }}
               </button>
             </div>
           </section>
         </div>
       </Transition>
       <Transition name="modal">
-        <div v-if="showProjectNameDialog" class="modal-backdrop" @click.self="showProjectNameDialog = false">
+        <div v-if="showProjectNameDialog" class="modal-backdrop project-name-backdrop workspace-dialog-theme" @click.self="showProjectNameDialog = false">
           <section class="dialog project-name-dialog" role="dialog" aria-modal="true" aria-labelledby="project-name-title" aria-describedby="project-name-copy">
             <div class="dialog-heading"><div class="dialog-symbol permission-symbol"><FolderOpen :size="19" /></div><button class="icon-button" type="button" aria-label="关闭项目命名框" @click="showProjectNameDialog = false"><X :size="18" /></button></div>
             <h2 id="project-name-title">给这个项目起个名字</h2>
@@ -1671,7 +1711,7 @@ onUnmounted(() => {
         </div>
       </Transition>
       <Transition name="modal">
-        <div v-if="permissionRequest" class="modal-backdrop permission-backdrop" @click.self="cancelPermission">
+        <div v-if="permissionRequest" class="modal-backdrop permission-backdrop workspace-dialog-theme" @click.self="cancelPermission">
           <section class="dialog permission-dialog" role="dialog" aria-modal="true" aria-labelledby="permission-title" aria-describedby="permission-copy">
             <div class="dialog-heading">
               <div class="dialog-symbol permission-symbol"><component :is="permissionRequest.icon" :size="19" /></div>

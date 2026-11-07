@@ -1,5 +1,6 @@
 /* Chat surface: one scoped definition, independent of the legacy tool-page theme. */
-.chat-page {
+.chat-page,
+.workspace-dialog-theme {
   --canvas: #fff;
   --sidebar: #f7f7f5;
   --surface: #fff;
@@ -11,16 +12,19 @@
   --muted: #70726c;
   --accent: #292a27;
   --accent-dark: #eeefec;
+  color: var(--text);
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.chat-page {
   height: 100dvh;
   min-height: 0;
   grid-template-columns: 52px 248px minmax(0, 1fr);
   padding: 0;
   overflow: hidden;
-  color: var(--text);
   background: var(--canvas);
-  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  font-size: 13px;
-  -webkit-font-smoothing: antialiased;
 }
 
 .chat-page.sidebar-collapsed { grid-template-columns: 52px 0 minmax(0, 1fr); }
@@ -133,6 +137,81 @@
 .chat-page .attachment-icon { border-color: var(--line); color: var(--text-secondary); background: #eeefe9; }
 .chat-page .attachment-info strong { color: var(--text); }
 .chat-page .attachment-info small { color: var(--muted); }
+
+/* Workspace access dialogs share the chat surface's neutral controls. */
+.workspace-dialog-theme :is(button, input):focus-visible { outline: 2px solid #60675b; outline-offset: 3px; }
+.workspace-dialog-theme .icon-button { color: var(--muted); }
+.workspace-dialog-theme .icon-button:hover:not(:disabled) { color: var(--text); background: var(--surface-hover); }
+.workspace-dialog-theme:is(.folder-import-backdrop, .permission-backdrop, .project-name-backdrop) {
+  padding: 24px;
+  background: #20221e66;
+  backdrop-filter: none;
+}
+.workspace-dialog-theme :is(.folder-import-dialog, .permission-dialog, .project-name-dialog) {
+  width: min(100%, 520px);
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  border: 0;
+  border-radius: 16px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 20px 64px #171a1626;
+}
+.workspace-dialog-theme :is(.permission-dialog, .project-name-dialog) { padding: 24px; }
+.workspace-dialog-theme :is(.folder-import-dialog, .permission-dialog, .project-name-dialog) h2 { color: var(--text); font-size: 18px; font-weight: 600; letter-spacing: -.025em; line-height: 1.45; overflow-wrap: anywhere; }
+.workspace-dialog-theme :is(.permission-dialog, .project-name-dialog) h2 { margin: 20px 0 8px; }
+.workspace-dialog-theme :is(.permission-dialog, .project-name-dialog) > p { color: var(--text-secondary); font-size: 13px; line-height: 1.8; }
+.workspace-dialog-theme :is(.folder-import-icon, .folder-import-card-icon, .permission-symbol) { flex: 0 0 auto; width: 38px; height: 38px; border: 0; border-radius: 10px; color: var(--text-secondary); background: #f0f1ec; }
+.workspace-dialog-theme .folder-import-dialog { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.workspace-dialog-theme .folder-import-head { flex: 0 0 auto; gap: 12px; padding: 24px 24px 0; }
+.workspace-dialog-theme .folder-import-dialog h2 { margin: 1px 0 5px; }
+.workspace-dialog-theme .folder-import-dialog .folder-import-headings p { color: var(--text-secondary); font-size: 12px; line-height: 1.75; }
+.workspace-dialog-theme .folder-import-card { flex: 0 0 auto; gap: 11px; margin: 20px 24px 0; padding: 13px 14px; border: 0; border-radius: 10px; background: #f5f6f2; }
+.workspace-dialog-theme .folder-import-card-icon { width: 32px; height: 32px; background: transparent; }
+.workspace-dialog-theme .folder-import-card-copy { min-width: 0; }
+.workspace-dialog-theme .folder-import-card-copy strong { color: var(--text); font-size: 13px; line-height: 1.5; }
+.workspace-dialog-theme .folder-import-card-copy span { color: var(--muted); font-size: 11px; line-height: 1.6; }
+.workspace-dialog-theme .folder-import-files { flex: 1 1 auto; min-height: 0; max-height: 280px; overflow-y: auto; margin: 18px 24px 0; scrollbar-width: thin; scrollbar-color: #c8cac2 transparent; }
+.workspace-dialog-theme .folder-import-files-heading { display: flex; justify-content: space-between; gap: 12px; padding-bottom: 8px; color: var(--muted); font-size: 11px; }
+.workspace-dialog-theme .folder-import-files ul { margin: 0; padding: 0; list-style: none; }
+.workspace-dialog-theme .folder-import-files li { display: flex; align-items: flex-start; gap: 9px; padding: 9px 0; border-top: 1px solid #eeefea; }
+.workspace-dialog-theme .folder-import-files li > svg { flex: 0 0 auto; margin-top: 2px; color: var(--muted); }
+.workspace-dialog-theme .folder-import-files li > span { min-width: 0; flex: 1; color: var(--text-secondary); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.workspace-dialog-theme .folder-import-files li > small { flex: 0 0 auto; color: var(--muted); font-size: 10px; line-height: 1.9; font-variant-numeric: tabular-nums; }
+.workspace-dialog-theme .folder-import-more { margin: 8px 0 0; color: var(--muted); font-size: 11px; }
+.workspace-dialog-theme .folder-import-warning { flex: 0 0 auto; margin: 12px 24px 0; color: #8a5c16; line-height: 1.6; }
+.workspace-dialog-theme .folder-import-dialog .folder-import-note { flex: 0 0 auto; align-items: flex-start; gap: 7px; margin: 16px 24px; color: var(--muted); font-size: 11px; line-height: 1.7; }
+.workspace-dialog-theme :is(.folder-import-note, .permission-note) svg { flex: 0 0 auto; margin-top: 2px; color: var(--muted); }
+.workspace-dialog-theme .permission-scope { gap: 10px; margin-top: 18px; padding: 14px; border: 0; border-radius: 10px; background: #f5f6f2; }
+.workspace-dialog-theme .permission-scope-row { color: var(--text-secondary); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.workspace-dialog-theme .permission-scope-row svg { color: var(--text-secondary); }
+.workspace-dialog-theme .permission-note { align-items: flex-start; line-height: 1.7; }
+.workspace-dialog-theme .project-name-field { color: var(--text-secondary); font-size: 12px; font-weight: 500; }
+.workspace-dialog-theme .project-name-field .text-field { border-color: var(--line); border-radius: 8px; color: var(--text); background: #fff; }
+.workspace-dialog-theme .project-name-field .text-field:focus { border-color: #8b9182; }
+.workspace-dialog-theme :is(.permission-dialog, .project-name-dialog) .dialog-actions { position: sticky; bottom: -24px; margin-top: 22px; padding: 12px 0 0; background: #fff; }
+.workspace-dialog-theme .folder-import-dialog .dialog-actions { flex: 0 0 auto; gap: 8px; margin: 0; padding: 16px 24px; border-top: 1px solid var(--line-soft); background: #fff; }
+.workspace-dialog-theme :is(.folder-import-dialog, .permission-dialog, .project-name-dialog) :is(.primary-button, .secondary-button) { min-height: 38px; padding: 0 16px; border-radius: 8px; font-size: 12px; font-weight: 500; }
+.workspace-dialog-theme :is(.folder-import-dialog, .permission-dialog, .project-name-dialog) .secondary-button { border-color: var(--line); color: var(--text-secondary); background: #fff; }
+.workspace-dialog-theme :is(.folder-import-dialog, .permission-dialog, .project-name-dialog) .secondary-button:hover:not(:disabled) { background: var(--surface-hover); }
+.workspace-dialog-theme :is(.folder-import-dialog, .permission-dialog, .project-name-dialog) .primary-button { border-color: var(--accent); color: #fff; background: var(--accent); }
+.workspace-dialog-theme :is(.folder-import-dialog, .permission-dialog, .project-name-dialog) .primary-button:hover:not(:disabled) { border-color: #484b42; background: #484b42; }
+.workspace-dialog-theme :is(.folder-import-dialog, .permission-dialog, .project-name-dialog) button:disabled { opacity: .5; cursor: not-allowed; }
+.workspace-dialog-theme .folder-import-progress { flex: 0 0 auto; margin: 14px 24px 0; padding: 0; border: 0; background: transparent; }
+.workspace-dialog-theme .folder-import-progress-head strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.workspace-dialog-theme .folder-import-track { height: 4px; background: #e6e8e0; }
+.workspace-dialog-theme .folder-import-track i { background: var(--accent); }
+
+@media (max-width: 560px), (max-height: 560px) {
+  .workspace-dialog-theme:is(.folder-import-backdrop, .permission-backdrop, .project-name-backdrop) { padding: 16px; }
+  .workspace-dialog-theme :is(.folder-import-dialog, .permission-dialog, .project-name-dialog) { max-height: calc(100dvh - 32px); border-radius: 14px; }
+  .workspace-dialog-theme :is(.permission-dialog, .project-name-dialog) { padding: 20px; }
+  .workspace-dialog-theme .folder-import-head { padding: 20px 20px 0; }
+  .workspace-dialog-theme .folder-import-card { margin: 16px 20px 0; }
+  .workspace-dialog-theme :is(.folder-import-files, .folder-import-progress, .folder-import-warning) { margin-inline: 20px; }
+  .workspace-dialog-theme .folder-import-dialog .folder-import-note { margin: 12px 20px; }
+  .workspace-dialog-theme .folder-import-dialog .dialog-actions { padding: 14px 20px; }
+}
 
 /* Keep the optional file panel spanning all rows of the welcome layout. */
 .chat-page .workspace-welcome.workspace-panel-open .changes-panel { grid-row: 1 / -1; }
