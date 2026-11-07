@@ -17,7 +17,7 @@ import 'highlight.js/styles/github-dark.css'
 import {
   Activity, AlertCircle, ArrowUp, Check, CheckCircle2, ChevronDown,
   ChevronRight, Eye, File, FileText, FlaskConical, FolderOpen, Link2, LoaderCircle,
-  MessageCircle, MoreHorizontal, Paperclip, Plus, Puzzle, Search, Send, Settings2,
+  MessageCircle, MoreHorizontal, Paperclip, Plus, Puzzle, Search, Settings2,
   Home, Workflow, Bell, PanelLeft, FileCode2, GitCompare, CircleDot,
   Sparkles, Square, Trash2, ToggleLeft, ToggleRight, X, Copy, ExternalLink, Download, Bot, Archive,
   UserRound, KeyRound, Palette, Smile, Headset, CircleUserRound, CalendarClock,
@@ -124,6 +124,7 @@ let keydownHandler
 let docPollTimer
 
 const currentSession = computed(() => sessions.value.find((session) => session.id === activeId.value) || null)
+const isWelcome = computed(() => activePage.value === 'home' && currentSession.value?.messages.length === 0 && !loadingHistory.value)
 const visibleSessions = computed(() => sessions.value.filter((session) => !session.isDraft && session.title.toLowerCase().includes(searchText.value.toLowerCase())))
 const runningItem = computed(() => (sending.value && currentSession.value && !currentSession.value.isDraft ? [currentSession.value] : []))
 const recentList = computed(() => visibleSessions.value.filter((session) => !runningItem.value.includes(session)))
@@ -1210,7 +1211,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="app-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed, 'standalone-page-active': activePage !== 'home' }">
+  <div class="app-shell" :class="{ 'chat-page': activePage === 'home', 'sidebar-collapsed': sidebarCollapsed, 'standalone-page-active': activePage !== 'home' }">
     <div v-if="mobileSidebarOpen" class="drawer-backdrop" @click="mobileSidebarOpen = false"></div>
     <aside class="app-rail" aria-label="主导航">
       <button class="rail-button" :class="{ active: activePage === 'home' }" type="button" aria-label="首页" title="首页" @click="openHome"><Home :size="20" fill="currentColor" /></button>
@@ -1284,28 +1285,23 @@ onUnmounted(() => {
 
     </aside>
 
-    <main class="workspace" :class="{ 'workspace-panel-open': showWorkspacePanel }">
+    <main class="workspace" :class="{ 'workspace-panel-open': showWorkspacePanel, 'workspace-welcome': isWelcome }">
       <template v-if="activePage === 'home'">
       <header class="topbar">
         <div class="topbar-left">
           <button class="icon-button sidebar-toggle" type="button" aria-controls="conversation-sidebar" :aria-expanded="sidebarIsExpanded()" :aria-label="sidebarToggleLabel()" :title="sidebarToggleLabel()" @click="toggleSidebar"><PanelLeft :size="19" /></button>
           <div v-if="currentSession && currentSession.title !== '新对话'" class="breadcrumb"><FolderOpen :size="21" /><strong>{{ currentSession.title }}</strong></div>
+          <span v-else class="topbar-title">新对话</span>
         </div>
       </header>
 
       <section ref="messageList" class="message-list" aria-label="对话内容">
         <div v-if="loadingHistory" class="history-loading"><LoaderCircle :size="18" class="spin" /> 正在加载会话记录</div>
 
-        <div v-if="currentSession && currentSession.messages.length === 0 && !loadingHistory" class="welcome-state">
-          <div class="welcome-mark"><Headset :size="28" :stroke-width="1.7" /></div>
-          <div class="welcome-kicker"><span></span> Hotline <span></span></div>
+        <div v-if="isWelcome" class="welcome-state">
+          <div class="welcome-mark"><Headset :size="24" :stroke-width="1.6" /></div>
           <h1>你好，我是 Hotline</h1>
           <p>从一个入口，完成问答、文件和技能任务</p>
-          <div class="quick-prompts">
-            <button v-for="prompt in quickPrompts" :key="prompt.text" class="quick-prompt" type="button" @click="choosePrompt(prompt.text)">
-              <component :is="prompt.icon" :size="17" /> <span>{{ prompt.text }}</span><ArrowUp :size="14" class="prompt-arrow" />
-            </button>
-          </div>
         </div>
 
         <div v-for="message in currentSession?.messages || []" :key="message.id" class="message-row" :class="`message-${message.role}`">
@@ -1371,9 +1367,14 @@ onUnmounted(() => {
               <div class="send-actions">
                 <span v-if="input.length" class="char-count">{{ input.length }}</span>
                 <button v-if="sending" class="send-button stop-button" type="button" aria-label="停止生成" title="停止生成" @click="stopMessage"><Square :size="15" fill="currentColor" /></button>
-                <button v-else class="send-button" type="button" aria-label="发送消息" title="发送消息" :disabled="!canSend" @click="sendMessage"><Send :size="16" /></button>
+                <button v-else class="send-button" type="button" aria-label="发送消息" title="发送消息" :disabled="!canSend" @click="sendMessage"><ArrowUp :size="18" /></button>
               </div>
             </div>
+          </div>
+          <div v-if="isWelcome" class="quick-prompts" aria-label="试试这些任务">
+            <button v-for="prompt in quickPrompts" :key="prompt.text" class="quick-prompt" type="button" @click="choosePrompt(prompt.text)">
+              <component :is="prompt.icon" :size="15" /><span>{{ prompt.text }}</span><ArrowUp :size="13" class="prompt-arrow" />
+            </button>
           </div>
         </div>
       </footer>
