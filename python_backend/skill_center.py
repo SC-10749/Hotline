@@ -144,6 +144,46 @@ def run_sandbox(case):
     return {'returncode': result.returncode, 'output': output, 'verifier': score_output(output, case)}
 
 
+MAX_RESOURCE_DIFF_CHARS = 20000
+MAX_RESOURCE_DIFF_LINES = 500
+MAX_RESOURCE_DIFF_TOTAL = 120000
+
+
+def _resource_diffs(changes, old_resources, new_resources):
+    """逐个附加资源给出正文差异；正文缺失的条目记 unavailable，不伪造 diff。"""
+    import difflib
+    entries = []
+    total = 0
+    truncated = False
+    for change in changes:
+        path = change['path']
+        old_text = old_resources.get(path)
+        new_text = new_resources.get(path)
+        if not isinstance(old_text, str) or not isinstance(new_text, str):
+            entries.append({'path': path, 'change': change['change'], 'diff': None,
+                            'truncated': False, 'unavailable': True})
+            continue
+        lines = list(difflib.unified_diff(old_text.splitlines(), new_text.splitlines(),
+                                          fromfile=path, tofile=path, lineterm=''))
+        entry_truncated = len(lines) > MAX_RESOURCE_DIFF_LINES
+        if entry_truncated:
+            lines = lines[:MAX_RESOURCE_DIFF_LINES]
+        text = '\n'.join(lines)
+        if len(text) > MAX_RESOURCE_DIFF_CHARS:
+            text = text[:MAX_RESOURCE_DIFF_CHARS]
+            entry_truncated = True
+        if total + len(text) > MAX_RESOURCE_DIFF_TOTAL:
+            truncated = True
+            entry_truncated = True
+            entries.append({'path': path, 'change': change['change'], 'diff': text[:1000],
+                            'truncated': True, 'unavailable': False})
+            break
+        total += len(text)
+        entries.append({'path': path, 'change': change['change'], 'diff': text,
+                        'truncated': entry_truncated, 'unavailable': False})
+    return entries, truncated
+
+
 class Catalog:
     @classmethod
     def open_readonly(cls, path):
@@ -177,6 +217,10 @@ class Catalog:
         CREATE TABLE IF NOT EXISTS metrics (
           id INTEGER PRIMARY KEY AUTOINCREMENT, project TEXT, name TEXT, version TEXT,
           request_id TEXT, metric TEXT, value REAL, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+        CREATE TABLE IF NOT EXISTS binding_audit (
+          audit_id INTEGER PRIMARY KEY AUTOINCREMENT, project TEXT, name TEXT,
+          action TEXT, version TEXT, previous_version TEXT, percentage INTEGER,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP);
         ''')
         # Migrate historical hash IDs and their bindings together, once. The write
         # lock also prevents simultaneous service processes allocating the same vN.
@@ -203,7 +247,55 @@ class Catalog:
                     (DEFAULT_PROJECT,),
                 )
 
+    def _audit_binding(self, project, name, action, version, previous, percentage):
+        """绑定变更审计写在本表，release_record 归治理模块，这里只留技能侧痕迹。"""
+        share = None if percentage is None else min(max(int(percentage), 0), 100)
+        cursor = self.db.execute(
+            'INSERT INTO binding_audit(project,name,action,version,previous_version,percentage)'
+            ' VALUES(?,?,?,?,?,?)',
+            (project, name, action, version, previous, share))
+        return {'auditId': cursor.lastrowid, 'project': project, 'name': name, 'action': action,
+                'version': version, 'previousVersion': previous, 'percentage': share,
+                'createdAt': datetime.now(timezone.utc).isoformat(timespec='seconds')}
+
     def call(self, action, args):
+        if action == 'catalog_summary':
+            project = args['project']
+            versions = self.db.execute(
+                'SELECT name,version,description,created_at FROM versions ORDER BY created_at DESC,rowid DESC'
+            ).fetchall()
+            return {'project': project, 'skills': [dict(row) for row in versions],
+                    'bindings': [dict(row) for row in self.db.execute('SELECT * FROM bindings WHERE project=?', (project,))],
+                    'rollouts': [dict(row) for row in self.db.execute('SELECT * FROM rollouts WHERE project=?', (project,))]}
+        if action == 'version_detail':
+            row = self.db.execute('SELECT * FROM versions WHERE name=? AND version=?', (args['name'], args['version'])).fetchone()
+            if not row:
+                raise ValueError('技能版本不存在')
+            resources = json.loads(row['resources'])
+            return {'name': row['name'], 'version': row['version'], 'description': row['description'],
+                    'created_at': row['created_at'], 'content': row['content'][:12000],
+                    'truncated': len(row['content']) > 12000,
+                    'resources': [{'path': key, 'chars': len(value)} for key, value in sorted(resources.items())]}
+        if action == 'version_compare':
+            import difflib
+            rows = {}
+            for version in (args['baseVersion'], args['version']):
+                row = self.db.execute('SELECT content,resources FROM versions WHERE name=? AND version=?', (args['name'], version)).fetchone()
+                if not row:
+                    raise ValueError('比较的技能版本不存在')
+                rows[version] = row
+            before, after = rows[args['baseVersion']], rows[args['version']]
+            diff = list(difflib.unified_diff(before['content'].splitlines(), after['content'].splitlines(),
+                                            fromfile=args['baseVersion'], tofile=args['version'], lineterm=''))
+            old_resources, new_resources = json.loads(before['resources']), json.loads(after['resources'])
+            changes = [{'path': path, 'change': 'added' if path not in old_resources else 'removed' if path not in new_resources else 'modified'}
+                       for path in sorted(old_resources.keys() | new_resources.keys())
+                       if old_resources.get(path) != new_resources.get(path)]
+            diff_text = '\n'.join(diff[:2000])
+            resource_diffs, resource_truncated = _resource_diffs(changes, old_resources, new_resources)
+            return {'name': args['name'], 'baseVersion': args['baseVersion'], 'version': args['version'],
+                    'diff': diff_text[:120000], 'truncated': len(diff) > 2000 or len(diff_text) > 120000, 'resourceChanges': changes,
+                    'resourceDiffs': resource_diffs, 'resourceDiffsTruncated': resource_truncated}
         if action == 'save':
             content = args['content']
             meta = validate(content)
@@ -234,14 +326,45 @@ class Catalog:
         if action == 'bind':
             project, name = args['project'], args['name']
             version = args.get('version')
+            if not isinstance(name, str) or not name.strip():
+                raise ValueError('技能名称不能为空')
+            if version is not None and (not isinstance(version, str) or not version.strip()):
+                raise ValueError('技能版本不能为空')
+            percentage = args.get('percentage')
             with self.db:
+                current = self.db.execute('SELECT version FROM bindings WHERE project=? AND name=?',
+                                          (project, name)).fetchone()
+                previous = current['version'] if current else None
                 if version:
                     if not self.db.execute('SELECT 1 FROM versions WHERE name=? AND version=?', (name, version)).fetchone():
                         raise ValueError('技能版本不存在')
                     self.db.execute('INSERT OR REPLACE INTO bindings VALUES(?,?,?)', (project, name, version))
+                    if percentage is not None:
+                        share = min(max(int(percentage), 0), 100)
+                        if share <= 0:
+                            self.db.execute('DELETE FROM rollouts WHERE project=? AND name=?', (project, name))
+                        else:
+                            self.db.execute('INSERT OR REPLACE INTO rollouts VALUES(?,?,?,?,?,1)',
+                                            (project, name, version, previous, share))
                 else:
                     self.db.execute('DELETE FROM bindings WHERE project=? AND name=?', (project, name))
-            return {'ok': True}
+                audit = self._audit_binding(project, name, 'bind' if version else 'unbind',
+                                            version, previous, percentage)
+            return {'ok': True, 'name': name, 'project': project, 'version': version,
+                    'previousVersion': previous, 'audit': audit}
+        if action == 'unbind':
+            project, name = args['project'], args['name']
+            if not isinstance(name, str) or not name.strip():
+                raise ValueError('技能名称不能为空')
+            with self.db:
+                current = self.db.execute('SELECT version FROM bindings WHERE project=? AND name=?',
+                                          (project, name)).fetchone()
+                previous = current['version'] if current else None
+                self.db.execute('DELETE FROM bindings WHERE project=? AND name=?', (project, name))
+                self.db.execute('DELETE FROM rollouts WHERE project=? AND name=?', (project, name))
+                audit = self._audit_binding(project, name, 'unbind', None, previous, None)
+            return {'ok': True, 'name': name, 'project': project, 'version': None,
+                    'previousVersion': previous, 'audit': audit}
         if action == 'eval_case':
             case_id, split = args.get('caseId'), args.get('split')
             if not isinstance(case_id, str) or not case_id or split not in {'train', 'selection', 'test'}:
@@ -302,8 +425,14 @@ class Catalog:
             project, name, version = args['project'], args['name'], args['version']
             current = self.db.execute('SELECT version FROM bindings WHERE project=? AND name=?', (project, name)).fetchone()
             if not self.db.execute('SELECT 1 FROM versions WHERE name=? AND version=?', (name, version)).fetchone(): raise ValueError('技能版本不存在')
+            previous = current['version'] if current else None
+            if previous == version:
+                # 同一版本只是推进灰度比例时，保留原来的回滚目标，避免回滚退化成空操作。
+                existing = self.db.execute('SELECT previous_version FROM rollouts WHERE project=? AND name=?', (project, name)).fetchone()
+                if existing and existing['previous_version']:
+                    previous = existing['previous_version']
             with self.db:
-                self.db.execute('INSERT OR REPLACE INTO rollouts VALUES(?,?,?,?,?,1)', (project, name, version, current['version'] if current else None, min(max(int(args.get('percentage', 10)), 0), 100)))
+                self.db.execute('INSERT OR REPLACE INTO rollouts VALUES(?,?,?,?,?,1)', (project, name, version, previous, min(max(int(args.get('percentage', 10)), 0), 100)))
                 self.db.execute('INSERT OR REPLACE INTO bindings VALUES(?,?,?)', (project, name, version))
             return {'ok': True, 'status': 'active', 'percentage': int(args.get('percentage', 10))}
         if action == 'rollback':

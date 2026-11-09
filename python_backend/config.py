@@ -119,7 +119,28 @@ class Settings:
         os.getenv("DODO_MULTIMODAL_API_KEY")
         or os.getenv("DASHSCOPE_API_KEY", "")
     )
+    # 决策模型（System One 协议，与 TypeSafe Jev 同接口）。未配置则不启用，
+    # 意图级联照旧走大模型判定。
+    decision_api_key: str = (
+        os.getenv("DODO_DECISION_API_KEY")
+        or os.getenv("DASHSCOPE_API_KEY", "")
+        or os.getenv("DODO_EMBEDDING_API_KEY", "")
+    )
+    decision_base_url: str = os.getenv(
+        "DODO_DECISION_BASE_URL",
+        "https://trial.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+    )
+    decision_model: str = os.getenv("DODO_DECISION_MODEL", "decision-model-preview")
     tavily_api_key: str = os.getenv("TAVILY_API_KEY", "")
+
+    context_enabled: bool = _bool_env('HOTLINE_CONTEXT_ENABLED', True)
+    context_window: int = int(os.getenv('HOTLINE_CONTEXT_WINDOW', '128000'))
+    context_input_budget: int = int(os.getenv('HOTLINE_CONTEXT_INPUT_BUDGET', '64000'))
+    context_output_reserve: int = int(os.getenv('HOTLINE_CONTEXT_OUTPUT_RESERVE', '8192'))
+    context_safety_margin: int = int(os.getenv('HOTLINE_CONTEXT_SAFETY_MARGIN', '2048'))
+    openviking_url: str = os.getenv('HOTLINE_OPENVIKING_URL', '')
+    openviking_api_key: str = os.getenv('HOTLINE_OPENVIKING_API_KEY', '')
+    openviking_timeout: float = float(os.getenv('HOTLINE_OPENVIKING_TIMEOUT', '10'))
 
     @property
     def db_path(self) -> Path:

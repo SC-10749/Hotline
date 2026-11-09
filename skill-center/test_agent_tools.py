@@ -45,14 +45,29 @@ class AgentToolTests(unittest.TestCase):
         from python_backend.modules.execution.langchain_agent import run_agent
         from python_backend.modules.execution.tools import build_read_skill_tool
         available = skills or [SimpleNamespace(id='demo-id', name='demo', description='演示技能', version=None)]
-        return list(run_agent(model, '需要时使用 read_skill 读取相关技能。', '当前问题',
-                              [build_read_skill_tool(reader, available)], stopped))
+        events = run_agent(model, '需要时使用 read_skill 读取相关技能。', '当前问题',
+                           [build_read_skill_tool(reader, available)], stopped)
+        return [event for event in events if event.type != 'step']
+
+    def test_model_planning_progress_surrounds_real_model_call(self):
+        from python_backend.modules.execution.langchain_agent import run_agent
+        model = ScriptedModel(responses=[AIMessage(content='最终答案')])
+        events = list(run_agent(model, 'test', 'test', [], lambda: False))
+        self.assertEqual([event.type for event in events], ['step', 'context_snapshot', 'step', 'text', 'done'])
+        self.assertEqual(events[0].details['status'], 'running')
+        self.assertEqual(events[2].details['status'], 'completed')
+        self.assertEqual(events[0].details['stage'], events[2].details['stage'])
 
     def test_skill_descriptions_live_in_read_skill_tool_description(self):
         model = ScriptedModel(responses=[call_skill(), AIMessage(content='最终答案')])
         reader = Mock(return_value={'text': 'BODY_SENTINEL'})
         events = self.run_model(model, reader)
-        self.assertEqual([event.type for event in events], ['text', 'done'])
+        self.assertEqual([event.type for event in events], ['context_snapshot', 'tool_start', 'tool_end', 'context_snapshot', 'text', 'done'])
+        self.assertEqual(events[1].details['toolCallId'], 'call-1')
+        self.assertEqual(events[1].details['arguments']['skill_id'], 'demo-id')
+        self.assertEqual(events[2].details['output']['text'], 'BODY_SENTINEL')
+        self.assertEqual(events[2].details['status'], 'completed')
+        self.assertGreaterEqual(events[2].details['durationMs'], 0)
         self.assertEqual(model.tools_seen[0].name, 'read_skill')
         self.assertIn('demo-id', model.tools_seen[0].description)
         self.assertIn('演示技能', model.tools_seen[0].description)
@@ -64,8 +79,14 @@ class AgentToolTests(unittest.TestCase):
         model = ScriptedModel(responses=[call_skill(), call_skill(path='references/guide.md', identity='call-2'), AIMessage(content='最终答案')])
         reader = Mock(side_effect=[{'text': 'BODY_SENTINEL'}, {'text': 'REFERENCE_SENTINEL'}])
         events = self.run_model(model, reader)
-        self.assertEqual([event.type for event in events], ['text', 'done'])
-        self.assertEqual(events[0].content, '最终答案')
+        self.assertEqual([event.type for event in events], ['context_snapshot', 'tool_start', 'tool_end', 'context_snapshot', 'tool_start', 'tool_end', 'context_snapshot', 'text', 'done'])
+        snapshots = [event.details['snapshot'] for event in events if event.type == 'context_snapshot']
+        self.assertEqual(len(snapshots), 3)
+        self.assertNotIn('BODY_SENTINEL', repr(snapshots[0]))
+        self.assertIn('BODY_SENTINEL', repr(snapshots[1]))
+        self.assertNotIn('REFERENCE_SENTINEL', repr(snapshots[1]))
+        self.assertIn('REFERENCE_SENTINEL', repr(snapshots[2]))
+        self.assertEqual(events[-2].content, '最终答案')
         self.assertEqual(len(model.requests), 3)
         self.assertEqual([message.type for message in model.requests[0]], ['system', 'human'])
         self.assertNotIn('BODY_SENTINEL', repr(model.requests[0]))
@@ -107,6 +128,8 @@ class AgentToolTests(unittest.TestCase):
         self.assertEqual(events[-1].type, 'done')
         self.assertTrue(any(isinstance(message, ToolMessage) and message.status == 'error'
                             for message in model.requests[-1]))
+        ends = [event for event in events if event.type == 'tool_end']
+        self.assertEqual([event.details['status'] for event in ends], ['failed', 'failed'])
 
     def test_model_calls_are_bounded(self):
         model = ScriptedModel(responses=[call_skill(identity=f'call-{number}') for number in range(10)])
@@ -162,6 +185,77 @@ class AgentToolTests(unittest.TestCase):
                                 Mock(side_effect=RuntimeError(sensitive_error)))
         self.assertEqual(events[-1].type, 'error')
         self.assertNotIn(sensitive_error, repr(events))
+        self.assertEqual(events[-2].type, 'tool_end')
+        self.assertEqual(events[-2].details['status'], 'failed')
+
+    def test_tool_start_streams_before_reader_finishes(self):
+        from python_backend.modules.execution.langchain_agent import run_agent
+        from python_backend.modules.execution.tools import build_read_skill_tool
+        release = threading.Event()
+        entered = threading.Event()
+
+        def reader(*args):
+            entered.set()
+            if not release.wait(3):
+                raise AssertionError('tool_start was not streamed live')
+            return {'text': 'read result'}
+
+        model = ScriptedModel(responses=[call_skill(), AIMessage(content='done')])
+        stream = (event for event in run_agent(model, 'test', 'test', [build_read_skill_tool(reader, [])], lambda: False)
+                  if event.type != 'step')
+        try:
+            self.assertEqual(next(stream).type, 'context_snapshot')
+            self.assertEqual(next(stream).type, 'tool_start')
+            self.assertTrue(entered.wait(1))
+        finally:
+            release.set()
+        self.assertEqual([event.type for event in stream], ['tool_end', 'context_snapshot', 'text', 'done'])
+
+    def test_parallel_tools_keep_individual_ids_and_results(self):
+        calls = [call_skill(path=f'references/{index}.md', identity=f'parallel-{index}').tool_calls[0]
+                 for index in range(2)]
+        model = ScriptedModel(responses=[AIMessage(content='', tool_calls=calls), AIMessage(content='done')])
+        events = self.run_model(model, lambda skill, path, *args: {'text': path})
+        for index in range(2):
+            pair = [event for event in events if event.details.get('toolCallId') == f'parallel-{index}']
+            self.assertEqual([event.type for event in pair], ['tool_start', 'tool_end'])
+            self.assertEqual(pair[0].details['arguments']['path'], f'references/{index}.md')
+            self.assertEqual(pair[1].details['output']['text'], f'references/{index}.md')
+        self.assertEqual(events[-1].type, 'done')
+
+    def test_tool_cancellation_and_returned_error_are_explicit(self):
+        stopped = threading.Event()
+
+        def reader(*args):
+            stopped.set()
+            return {'text': 'unused output'}
+
+        events = self.run_model(ScriptedModel(responses=[call_skill()]), reader, stopped.is_set)
+        self.assertEqual([event.type for event in events], ['context_snapshot', 'tool_start', 'tool_end', 'error'])
+        self.assertEqual(events[2].details['status'], 'cancelled')
+        self.assertNotIn('unused output', repr(events))
+        recovered = self.run_model(ScriptedModel(responses=[call_skill(), AIMessage(content='已解释读取失败')]),
+                                   Mock(return_value={'error': '技能资源不可读'}))
+        self.assertEqual(recovered[2].details['status'], 'failed')
+        self.assertEqual(recovered[-1].type, 'done')
+
+    def test_trace_previews_are_bounded_redacted_and_do_not_change_model_input(self):
+        from python_backend.modules.execution.trace import trace_preview
+        data = {'api_key': 'PLACEHOLDER_SECRET', 'nested': {'password': 'PLACEHOLDER_PASSWORD'},
+                'text': 'Bearer PLACEHOLDER_BEARER http://127.0.0.1:9/test password=PLACEHOLDER_INLINE'}
+        preview, truncated = trace_preview(data, 12000)
+        self.assertFalse(truncated)
+        self.assertNotIn('PLACEHOLDER_', repr(preview))
+        self.assertNotIn('127.0.0.1', repr(preview))
+        self.assertNotIn('PLACEHOLDER_', repr(trace_preview('Authorization: Bearer PLACEHOLDER_BEARER', 12000)))
+        self.assertEqual(data['api_key'], 'PLACEHOLDER_SECRET')
+        self.assertTrue(trace_preview({'text': 'x' * 13000}, 12000)[1])
+        model = ScriptedModel(responses=[call_skill(), AIMessage(content='done')])
+        events = self.run_model(model, Mock(return_value={'text': 'password=PLACEHOLDER_INLINE ' + 'x' * 13000}))
+        self.assertTrue(events[2].details['outputTruncated'])
+        self.assertLessEqual(len(events[2].details['output']), 12001)
+        self.assertNotIn('PLACEHOLDER_INLINE', repr(events))
+        self.assertNotIn('PLACEHOLDER_INLINE', repr(model.requests[1]))
 
     def test_model_factory_maps_configuration_without_network(self):
         from python_backend.llm import build_chat_model
@@ -196,6 +290,14 @@ class AgentToolTests(unittest.TestCase):
         events = self.run_model(UnsupportedModel(responses=[]), Mock())
         self.assertEqual(events[-1].type, 'error')
         self.assertNotIn('FAKE_PROVIDER_DETAIL', repr(events))
+
+    def test_failed_model_attempt_keeps_prepared_context(self):
+        events = self.run_model(ScriptedModel(responses=[]), Mock())
+        self.assertEqual([event.type for event in events], ['context_snapshot', 'error'])
+        snapshot = events[0].details['snapshot']
+        self.assertEqual(snapshot['stage'], 'skill-model')
+        self.assertEqual(snapshot['messages'][-1]['content'], '当前问题')
+        self.assertEqual(snapshot['sources']['modelCall'], 1)
 
     def test_missing_tool_call_id_is_protocol_error(self):
         model = ScriptedModel(responses=[AIMessage(content='', tool_calls=[{
@@ -235,8 +337,8 @@ class AgentIntegrationTests(unittest.TestCase):
         self.skills.prompt_block.assert_not_called()
         self.assertEqual([message.type for message in model.requests[0]], ['system', 'human'])
         self.assertEqual(model.requests[0][-1].content, '本次问题')
-        self.assertEqual([event['type'] for event in events], ['thinking', 'text', 'recommend', 'complete'])
-        self.assertEqual(events[1]['content'], '技能回答')
+        self.assertEqual([event['type'] for event in events if event['type'] != 'step'], ['thinking', 'context_snapshot', 'text', 'recommend', 'complete'])
+        self.assertEqual(next(event['content'] for event in events if event['type'] == 'text'), '技能回答')
         self.storage.update_answer.assert_called_once()
         self.tasks.remove.assert_called_once_with('conversation-id')
 
@@ -247,6 +349,49 @@ class AgentIntegrationTests(unittest.TestCase):
         self.assertEqual(events[-1]['type'], 'error')
         self.assertNotIn('complete', [event['type'] for event in events])
         self.storage.update_answer.assert_not_called()
+
+    def test_worker_persists_real_tool_trace_and_replays_it_over_sse(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from python_backend.api.routers.execution import create_execution_router
+        from python_backend.application.execution_service import ExecutionApplicationService
+        from python_backend.modules.execution.store import ExecutionStore
+        from python_backend.runtime import AgentEngineRuntime
+        from python_backend.workers.execution_worker import ExecutionWorker
+
+        self.session.read_skill.return_value = {'text': 'TOOL_RESULT_SENTINEL'}
+        model = ScriptedModel(responses=[call_skill(), AIMessage(content='最终答案')])
+        with tempfile.TemporaryDirectory() as directory:
+            store = ExecutionStore(Path(directory) / 'execution.db')
+            run = store.enqueue('conversation-worker', 'skills', 'test', None)
+            worker = ExecutionWorker(store, AgentEngineRuntime(self.engine), self.tasks, Mock())
+            with patch('python_backend.agents.build_chat_model', return_value=model):
+                self.assertTrue(worker.run_once())
+            self.assertEqual(store.get_status(run['run_id']), 'completed')
+            saved = store.get_events(run['run_id'])
+            self.assertEqual([item['event']['type'] for item in saved if item['event']['type'] != 'step'],
+                             ['thinking', 'context_snapshot', 'tool_start', 'tool_end', 'context_snapshot', 'text', 'recommend', 'complete'])
+            start_record = next(item for item in saved if item['event']['type'] == 'tool_start')
+            start = start_record['event']
+            end = next(item['event'] for item in saved if item['event']['type'] == 'tool_end')
+            self.assertEqual(start['toolCallId'], end['toolCallId'])
+            self.assertEqual(start['arguments']['skill_id'], 'demo-id')
+            self.assertEqual(end['output']['text'], 'TOOL_RESULT_SENTINEL')
+            self.assertEqual(end['status'], 'completed')
+            app = FastAPI()
+            app.include_router(create_execution_router(ExecutionApplicationService(store), lambda _: True))
+            client = TestClient(app)
+            response = client.get(f"/execution/runs/{run['run_id']}/stream?after={start_record['event_id']}")
+            self.assertEqual(response.status_code, 200)
+            self.assertNotIn('"type": "tool_start"', response.text)
+            self.assertIn('"type": "tool_end"', response.text)
+            self.assertIn('TOOL_RESULT_SENTINEL', response.text)
+            self.assertIn('event: done', response.text)
+            self.assertEqual(client.get(f"/execution/runs/{run['run_id']}/events").json()['items'], saved)
+            contexts = client.get(f"/execution/runs/{run['run_id']}/context").json()['items']
+            self.assertEqual(len(contexts), 2)
+            self.assertNotIn('TOOL_RESULT_SENTINEL', repr(contexts[0]))
+            self.assertIn('TOOL_RESULT_SENTINEL', repr(contexts[1]))
 
     def test_current_question_only_on_each_request(self):
         for query in ('第一轮问题', '第二轮问题'):
@@ -271,8 +416,12 @@ class AgentIntegrationTests(unittest.TestCase):
         self.storage.session_messages.return_value = []
         self.storage.conversation_file_id.side_effect = None
         self.storage.conversation_file_id.return_value = None
+        def legacy_answer(*args, **kwargs):
+            yield from ()
+            return '旧模式回答', [], False
+
         for mode in ('chat', 'file', 'deep', 'ppt'):
-            with self.subTest(mode=mode), patch.object(self.engine, '_fallback', return_value=('旧模式回答', [])) as legacy:
+            with self.subTest(mode=mode), patch.object(self.engine, '_fallback', side_effect=legacy_answer) as legacy:
                 events = list(self.engine.stream(mode, 'conversation-id', '问题'))
                 legacy.assert_called_once()
                 self.assertEqual(events[-1]['type'], 'complete')

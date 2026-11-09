@@ -11,10 +11,12 @@
 - 根目录 `README.md` 是仓库唯一项目说明文件；不要在子目录新增 README。模块说明、迁移边界和当前状态统一写入根 README 或本文件。
 - 根目录 `DESIGN.md` 是前端视觉唯一事实源；不要在 `frontend/` 或模块目录维护第二份设计锚。
 - `python_backend/modules/` 与 `frontend/src/modules/` 是能力边界目录。新增模块先建立接口与验证，再迁移旧实现；模块之间不得直接读取彼此的数据库细节。
-- 模块命名保持前后端对应：`memory`、`retrieval`、`storage`、`context_engineering`、`skills`、`mcp`、`execution`、`workspaces`、`artifacts`；`execution` 统一承载脚本、EXE 和后台任务执行能力。
+- 模块命名保持前后端对应：`memory`、`retrieval`、`storage`、`context_engineering`、`skills`、`mcp`、`execution`、`workspaces`、`artifacts`、`intent`；`execution` 统一承载脚本、EXE 和后台任务执行能力；`intent` 统一承载意图目录与意图分类（关键词粗筛 → embedding 向量召回 → 大模型判定的三级级联，含置信度分级）；配置决策模型后该层改走 System One 协议（`modules/intent/decision.py`，阿里云百炼 decision-model-preview，与 TypeSafe Jev 同接口），一次前向同时给出意图与诉求歧义度，门闸按歧义度判断是否澄清；置信度不足时由门闸转成需求澄清，用户作答后作为新一轮对话重新进入级联。
 - 运行数据及生成文件统一保存在被 Git 忽略的 `data/` 目录；真实配置遵循下方私密信息规则。
 - 不擅自创建嵌套 Git 仓库或子模块。历史嵌套仓库 `projects/ai/dodo-agent` 已并入本仓库，其提交历史备份在 `data/dodo-agent-history.bundle`（Git 忽略，仅供恢复参考）。
 - 交付前执行验证命令：`python -m compileall python_backend`、`python skill-center/test_center.py`、`npm --prefix frontend run build`（改动前端时）。文档修改仅核对与现有目录和命令的一致性。未经明确要求，不移动或重构现有目录结构。
+- 本机没有可用的 MySQL，`import python_backend.fastapi_app` 会在 `PgVectorStore` 连接处抛 `Access denied`，所以整包导入失败不代表代码有问题。要验证路由与接口，用临时目录里的 store 单独装配 `api/routers/*` 的工厂函数（`create_*_router`）再打请求；测试用 `F:\Hotline\.venv\Scripts\python.exe` 运行。
+- 本机 8888 后端由两个进程组成：网关 `python -m uvicorn main:app --host 127.0.0.1 --port 8888` 与执行 Worker `python -m python_backend.modules.execution.worker`。只起网关时 `/agent/*/stream` 返回 503（Worker 未运行），`/health/ready` 会显示 `executionWorker: unavailable`。
 
 ## 禁止外传的内容
 
