@@ -16,19 +16,25 @@ from uuid import uuid4
 from .agents import AgentEngine, TaskManager
 from .config import settings
 from .models import FileInfo, now_iso
+from .modules.artifacts.store import ArtifactStore, register_legacy_artifact
 from .object_store import ObjectStorage
+from .infrastructure.persona import load_persona
 from .parser import parse_file
 from .ppt import generate_ppt
 from .storage import Storage
 from .vector_store import PgVectorStore
 
 
+PPT_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
 settings.ensure_dirs()
 storage = Storage(settings)
 object_store = ObjectStorage(settings)
 tasks = TaskManager(settings)
 vector_store = PgVectorStore(settings)
-engine = AgentEngine(settings, storage, tasks, vector_store)
+engine = AgentEngine(settings, storage, tasks, vector_store,
+                     persona_reader=lambda conversation_id: load_persona(settings.data_dir, conversation_id))
+artifacts = ArtifactStore(settings.data_dir / "artifacts.db")
 
 
 def result(data=None, message="操作成功", code=200):
@@ -139,6 +145,8 @@ class Handler(BaseHTTPRequestHandler):
             conversation_id = unquote(path.rsplit("/", 1)[-1])
             existed = bool(storage.session_messages(conversation_id))
             deleted = storage.delete_session(conversation_id)
+            if engine.context:
+                engine.context.forget(conversation_id)
             return self._json(result("会话删除成功" if deleted else None,
                                      "会话删除成功" if deleted else "会话不存在", 200 if existed else 404),
                               HTTPStatus.OK if existed else HTTPStatus.NOT_FOUND)
@@ -225,10 +233,16 @@ class Handler(BaseHTTPRequestHandler):
             ppt_url = object_store.upload_bytes(
                 output.read_bytes(),
                 f"ppt/{conversation_id}/{output.name}",
-                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                PPT_CONTENT_TYPE,
             )
             download_url = ppt_url if settings.file_storage_backend == "minio" else f"/generated/{output.name}"
             events.insert(-1, engine.event("text", f"\n下载文件: {download_url}"))
+            # 旧入口没有 runId：用会话标识占位，登记失败也不影响文件本身返回。
+            _record, failure = register_legacy_artifact(
+                artifacts, output, conversation_id=conversation_id,
+                storage_backend=object_store.backend, content_type=PPT_CONTENT_TYPE)
+            if failure:
+                events.insert(-1, engine.event("text", f"\n产物登记失败（{failure}），文件仍可下载"))
             if settings.file_storage_backend == "minio":
                 output.unlink(missing_ok=True)
         else:
@@ -274,6 +288,8 @@ class Handler(BaseHTTPRequestHandler):
 
 def run() -> None:
     server = ThreadingHTTPServer((settings.host, settings.port), Handler)
+    if engine.context:
+        engine.context.start()
     print(f"Hotline Agent Python backend listening on http://{settings.host}:{settings.port}")
     try:
         server.serve_forever()
@@ -281,6 +297,8 @@ def run() -> None:
         pass
     finally:
         server.server_close()
+        if engine.context:
+            engine.context.close()
 
 
 if __name__ == "__main__":

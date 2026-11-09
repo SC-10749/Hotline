@@ -21,10 +21,14 @@ import {
   Home, Workflow, Bell, PanelLeft, FileCode2, GitCompare, CircleDot,
   Sparkles, Square, Trash2, ToggleLeft, ToggleRight, X, Copy, ExternalLink, Download, Bot, Archive,
   UserRound, KeyRound, Palette, Smile, Headset, CircleUserRound, CalendarClock,
-  LibraryBig, GitBranch, History, MessagesSquare, ShieldCheck, Upload,
+  LibraryBig, GitBranch, History, MessagesSquare, ShieldCheck, Upload, Map as MapIcon,
 } from 'lucide-vue-next'
-import { apiUrl, compensateDocuments, getAllSessions, getDocumentPreview, getDocumentVersions, getDocuments, getSessions, getSession, getSkills, removeDocument, removeSession, removeSkill, setSkillEnabled, stopAgent, streamUrl, testBackend, uploadDocument, uploadFile, uploadSkill, vectorizeDocument } from './api'
+import { apiUrl, bindBotSession, compensateDocuments, createBot, createSchedule, deleteBot, deleteCredential, deleteSchedule, getAllSessions, getBots, getCredential, getDocumentPreview, getDocumentVersions, getDocuments, getProfile, getSchedules, getSession, getSessions, getSkills, removeDocument, removeSession, removeSkill, runSchedule, saveCredential, saveProfile, setSkillEnabled, stopAgent, streamUrl, testBackend, testCredential, updateBot, updateSchedule, uploadDocument, uploadFile, uploadSkill, vectorizeDocument } from './api'
 import HarnessApp from './HarnessApp.vue'
+import CodeMapPage from './modules/artifacts/CodeMapPage.vue'
+import { getHarnessWorkspaces, getWorkspaceFiles, importWorkspace, updateHarnessWorkspace } from './api'
+import { workspacePathAllowed } from './modules/workspaces/paths'
+import { appendProgressEvent, finishProgress, progressEntryLabel, progressLabel } from './modules/execution/progress'
 
 marked.setOptions({ breaks: true, gfm: true })
 Object.entries({ bash, css, java, javascript, json, markdown, python, sql, typescript, xml }).forEach(([name, language]) => hljs.registerLanguage(name, language))
@@ -68,7 +72,6 @@ const connectionState = ref('checking')
 const connectionMessage = ref('')
 const toast = ref('')
 const showSettings = ref(false)
-const showDeleteConfirm = ref(false)
 const permissionRequest = ref(null)
 const showProjectNameDialog = ref(false)
 const projectNameDraft = ref('')
@@ -79,6 +82,7 @@ const sidebarCollapsed = ref(false)
 const showWorkspacePanel = ref(false)
 const workspacePanelTab = ref('files')
 const selectedProjectName = ref('')
+const selectedProjectId = ref('')
 const projectFiles = ref([])
 const projectUploadBusy = ref(false)
 const pendingWorkspaceImport = ref(false)
@@ -91,12 +95,36 @@ const folderImportProgress = ref({ done: 0, total: 0, current: '' })
 const fileInput = ref(null)
 const projectFolderInput = ref(null)
 const messageList = ref(null)
+// 用户主动上滑后不再强制回到底部，回到底部时自动恢复跟随
+const autoScroll = ref(true)
 const composer = ref(null)
 const searchText = ref('')
 const searchOpen = ref(false)
 const busySettings = ref(false)
 const showSkills = ref(false)
 const skills = ref([])
+const petOptions = [
+  { id: 'smile', label: '微笑伙伴', icon: Smile },
+  { id: 'bot', label: '机器人伙伴', icon: Bot },
+  { id: 'sparkle', label: '闪耀伙伴', icon: Sparkles },
+]
+const schedules = ref([])
+const scheduleBusy = ref(false)
+const showScheduleForm = ref(false)
+const scheduleDraft = ref({ name: '', prompt: '', agent: 'chat', intervalMinutes: 60 })
+const bots = ref([])
+const botBusy = ref(false)
+const showBotForm = ref(false)
+const botDraft = ref({ botId: '', name: '', instruction: '', skills: [], enabled: true })
+const profileDraft = ref({ nickname: '', bio: '', answerStyle: 'default', theme: 'system' })
+const profileBusy = ref(false)
+const credentialDraft = ref({ provider: '', baseUrl: '', model: '', apiKey: '' })
+const credentialBusy = ref(false)
+const credentialMask = ref('')
+const petEnabled = ref(localStorage.getItem('hotline-pet-enabled') === '1')
+const petChoice = ref(localStorage.getItem('hotline-pet') || 'smile')
+const petIcon = computed(() => petOptions.find(item => item.id === petChoice.value)?.icon || Smile)
+const petLabel = computed(() => petOptions.find(item => item.id === petChoice.value)?.label || '虚拟伙伴')
 const skillBusy = ref(false)
 const skillMessage = ref(null)
 const skillEntries = ref([])
@@ -125,15 +153,32 @@ let docPollTimer
 
 const currentSession = computed(() => sessions.value.find((session) => session.id === activeId.value) || null)
 const isWelcome = computed(() => activePage.value === 'home' && currentSession.value?.messages.length === 0 && !loadingHistory.value)
-const workspaceDialogSelector = computed(() => folderImportOpen.value ? '.folder-import-dialog' : permissionRequest.value ? '.permission-dialog' : showProjectNameDialog.value ? '.project-name-dialog' : '')
-let workspaceDialogReturnFocus
-watch(workspaceDialogSelector, async (selector, previousSelector) => {
-  if (selector) {
-    if (!previousSelector) workspaceDialogReturnFocus = document.activeElement
+// 弹窗统一按 DOM 定位：App 的遮罩挂在 body 上，不会误伤 Harness 内嵌弹窗
+const appDialogCount = computed(() => [
+  showSettings.value, showSkills.value, showDocs.value, showDocPreview.value,
+  folderImportOpen.value, permissionRequest.value, showProjectNameDialog.value,
+].filter(Boolean).length)
+let appDialogReturnFocus
+function appDialogBackdrops() {
+  return Array.from(document.body.children).filter(element => element.classList.contains('modal-backdrop'))
+}
+function appTopDialog() {
+  const backdrops = appDialogBackdrops()
+  return backdrops[backdrops.length - 1]?.querySelector('[role="dialog"], [role="alertdialog"]') || null
+}
+function appDialogControls(dialog) {
+  return Array.from(dialog?.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], summary, [tabindex="0"]') || []).filter(element => element.getClientRects().length)
+}
+watch(appDialogCount, async (count, previousCount) => {
+  if (count > 0) {
+    if (previousCount === 0) appDialogReturnFocus = document.activeElement
     await nextTick()
-    document.querySelector(selector)?.querySelector('input, .secondary-button')?.focus()
-  } else if (workspaceDialogReturnFocus?.isConnected) {
-    workspaceDialogReturnFocus.focus()
+    // 模板里的 autofocus 优先，保留各弹窗原本的落点意图
+    const controls = appDialogControls(appTopDialog())
+    ;(controls.find(element => element.hasAttribute('autofocus')) || controls[0])?.focus()
+  } else if (previousCount > 0) {
+    if (appDialogReturnFocus?.isConnected) appDialogReturnFocus.focus()
+    appDialogReturnFocus = null
   }
 })
 const visibleSessions = computed(() => sessions.value.filter((session) => !session.isDraft && session.title.toLowerCase().includes(searchText.value.toLowerCase())))
@@ -176,18 +221,22 @@ const modeBadges = {
   deep: { label: '深度研究', cls: 'b-deep' },
   skills: { label: '技能助手', cls: 'b-skill' },
 }
+
 function badgeInfo(agentType) {
   return modeBadges[agentType] || modeBadges.chat
 }
+
 function fmtElapsed(ms) {
   const total = Math.max(0, Math.round(ms / 1000))
   if (total < 60) return `${total}s`
   return `${Math.floor(total / 60)}m${String(total % 60).padStart(2, '0')}s`
 }
+
 function fmtStep(ms) {
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`
   return fmtElapsed(ms)
 }
+
 function fmtRelTime(value) {
   if (!value) return ''
   const time = typeof value === 'number' ? value : Date.parse(value)
@@ -199,20 +248,24 @@ function fmtRelTime(value) {
   if (diff < 172_800_000) return '昨天'
   return new Date(time).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })
 }
+
 function startTick() {
   if (!tickTimer) tickTimer = setInterval(() => { nowTick.value = Date.now() }, 1000)
 }
+
 function stopTick() {
   if (tickTimer) { clearInterval(tickTimer); tickTimer = null }
 }
-function closeLastEntry(message) {
-  const previous = message.timeline.at(-1)
-  if (previous && !previous.endedAt) previous.endedAt = Date.now()
-}
+
 function timelineSummary(message) {
   const count = message.timeline.length
   const duration = message.t0 && message.t1 ? fmtElapsed(message.t1 - message.t0) : ''
   return duration ? `${count} 步 · ${duration}` : `${count} 步`
+}
+
+function messageIsStreaming(message) {
+  const active = sending.value && message === currentSession.value?.messages.at(-1)
+  return !message.done && (active || !!message.pendingText) && !message.timeline?.some(entry => entry.type === 'error')
 }
 
 function showToast(message) {
@@ -264,25 +317,28 @@ function openHome() {
   showWorkspacePanel.value = false
   mobileSidebarOpen.value = false
   if (!currentSession.value) newSession()
-  nextTick(() => composer.value?.focus())
+  nextTick(() => composer.value?.focus({ preventScroll: true }))
 }
 
 function openAutomation() {
   activePage.value = 'automation'
   showWorkspacePanel.value = false
   mobileSidebarOpen.value = false
+  refreshSchedules()
 }
 
 function openPlugins() {
   activePage.value = 'plugins'
   showWorkspacePanel.value = false
   mobileSidebarOpen.value = false
+  refreshSkills()
 }
 
 function openBotPage() {
   activePage.value = 'bot'
   showWorkspacePanel.value = false
   mobileSidebarOpen.value = false
+  refreshBots()
 }
 
 function openDocsPage() {
@@ -293,6 +349,12 @@ function openDocsPage() {
 
 function openHarnessPage() {
   activePage.value = 'harness'
+  showWorkspacePanel.value = false
+  mobileSidebarOpen.value = false
+}
+
+function openCodeMapPage() {
+  activePage.value = 'code-map'
   showWorkspacePanel.value = false
   mobileSidebarOpen.value = false
 }
@@ -342,11 +404,33 @@ async function exportChatHistory() {
   }
 }
 
-function openProjectView() {
+async function openProjectView() {
   activePage.value = 'home'
   showWorkspacePanel.value = true
   workspacePanelTab.value = 'files'
   mobileSidebarOpen.value = false
+  const workspaceId = selectedProjectId.value
+  projectFiles.value = []
+  if (!workspaceId) return
+  try {
+    const result = await getWorkspaceFiles(backendUrl.value, workspaceId)
+    if (selectedProjectId.value === workspaceId) projectFiles.value = result.files || []
+    if (result.truncated) showToast('工作区较大，文件面板展示前 5000 项')
+  } catch (error) {
+    showToast(error.message || '工作区文件读取失败')
+  }
+}
+
+async function refreshWorkspaces() {
+  try {
+    const result = await getHarnessWorkspaces(backendUrl.value)
+    projectGroups.value = (result.items || []).map(workspace => ({ ...workspace,
+      id: workspace.workspace_id, child: '', tasks: projectGroups.value.find(item => item.id === workspace.workspace_id)?.tasks || [],
+    }))
+    selectedProjectName.value = projectGroups.value.find(item => item.id === selectedProjectId.value)?.name || ''
+  } catch (error) {
+    showToast(error.message || '工作区读取失败')
+  }
 }
 
 function requestPermission(request) {
@@ -383,6 +467,7 @@ async function pickWorkspaceDirectory() {
 
 async function collectDirectoryEntries(handle, prefix, output) {
   for await (const entry of handle.values()) {
+    if (!workspacePathAllowed(`${prefix}/${entry.name}`)) continue
     if (entry.kind === 'file') {
       const file = await entry.getFile()
       output.push({ file, name: entry.name, path: `${prefix}/${entry.name}`, size: file.size })
@@ -393,9 +478,9 @@ async function collectDirectoryEntries(handle, prefix, output) {
 }
 
 function prepareWorkspaceImport(entries, folderName) {
-  const supported = entries.filter((entry) => entry.size <= 50 * 1024 * 1024)
+  const supported = entries.filter((entry) => workspacePathAllowed(entry.path) && entry.size <= 50 * 1024 * 1024)
   const skipped = entries.length - supported.length
-  if (skipped) showToast(`已跳过 ${skipped} 个超过 50 MB 的文件`)
+  if (skipped) showToast(`已跳过 ${skipped} 个私密、依赖或超过 50 MB 的文件`)
   if (!supported.length) {
     resetWorkspaceImport()
     showToast('没有可上传的文件')
@@ -471,26 +556,21 @@ async function startFolderUpload() {
     cancelFolderImport()
     return
   }
-  if (!projectGroups.value.some((project) => project.name === folderName)) {
-    projectGroups.value.push({ name: folderName, child: '', tasks: [] })
-  }
-  selectedProjectName.value = folderName
-  projectFiles.value = entries.map((entry) => ({ name: entry.path, size: entry.size }))
   projectUploadBusy.value = true
   folderImportProgress.value = { done: 0, total: entries.length, current: '' }
   try {
-    let uploaded = 0
-    for (const entry of entries) {
-      folderImportProgress.value = { done: uploaded, total: entries.length, current: entry.path }
-      await uploadFile(backendUrl.value, entry.file, entry.name)
-      uploaded += 1
-      folderImportProgress.value = { done: uploaded, total: entries.length, current: entry.path }
-    }
+    const result = await importWorkspace(backendUrl.value, folderName, entries)
+    const workspace = result.workspace
+    projectGroups.value.push({ ...workspace, id: workspace.workspace_id, child: '', tasks: [] })
+    selectedProjectName.value = workspace.name
+    selectedProjectId.value = workspace.workspace_id
+    projectFiles.value = entries.map((entry) => ({ name: entry.path, size: entry.size }))
+    folderImportProgress.value = { done: entries.length, total: entries.length, current: '' }
     folderImportOpen.value = false
     resetWorkspaceImport()
     showWorkspacePanel.value = true
     workspacePanelTab.value = 'files'
-    showToast(`已上传文件夹「${selectedProjectName.value}」中的 ${uploaded} 个文件`)
+    showToast(`已导入工作区「${workspace.name}」中的 ${result.files} 个文件`)
     openProjectNameDialog(selectedProjectName.value)
   } catch (error) {
     showToast(error.message || '文件夹上传失败，请检查文件服务')
@@ -501,6 +581,7 @@ async function startFolderUpload() {
 
 function addWorkspaceTask(project) {
   selectedProjectName.value = project.name
+  selectedProjectId.value = project.id
   if (!project.tasks) project.tasks = []
   project.tasks.unshift({ id: makeId(), title: '新任务' })
   newSession()
@@ -513,9 +594,20 @@ function openProjectNameDialog(name) {
   showProjectNameDialog.value = true
 }
 
-function saveProjectName() {
+async function saveProjectName() {
   const name = projectNameDraft.value.trim() || projectNameOriginal.value || '新工作区'
-  const project = projectGroups.value.find((item) => item.name === projectNameOriginal.value)
+  const project = projectGroups.value.find((item) => item.id === selectedProjectId.value)
+  if (project?.id) {
+    try {
+      const result = await updateHarnessWorkspace(backendUrl.value, project.id, {
+        name, repository: project.repository, branch: project.branch || 'main', revision: project.revision,
+      })
+      Object.assign(project, result.workspace)
+    } catch (error) {
+      showToast(error.message || '工作区重命名失败')
+      return
+    }
+  }
   if (project) project.name = name
   if (selectedProjectName.value === projectNameOriginal.value) selectedProjectName.value = name
   showProjectNameDialog.value = false
@@ -531,6 +623,8 @@ function openMore() {
   profileSection.value = 'basics'
   showWorkspacePanel.value = false
   mobileSidebarOpen.value = false
+  refreshProfile()
+  refreshCredential()
 }
 
 async function onProjectFolderPicked(event) {
@@ -573,6 +667,7 @@ async function refreshSessions() {
         title: previous.get(item.conversationId)?.title || titleFor(item.question || ''),
         agentType: item.agentType,
         fileId: item.fileid,
+        workspaceId: previous.get(item.conversationId)?.workspaceId || item.workspaceId || '',
         updatedAt: item.createTime ? new Date(item.createTime).getTime() : 0,
         messages: previous.get(item.conversationId)?.messages || [],
         loaded: previous.get(item.conversationId)?.loaded || false,
@@ -614,6 +709,8 @@ async function selectSession(id) {
   activeId.value = id
   mobileSidebarOpen.value = false
   const session = sessions.value.find((item) => item.id === id)
+  selectedProjectId.value = session?.workspaceId || ''
+  selectedProjectName.value = projectGroups.value.find(item => item.id === session?.workspaceId)?.name || ''
   if (!session || session.isDraft || session.loaded) {
     await scrollToBottom()
     return
@@ -626,7 +723,7 @@ async function selectSession(id) {
       if (row.question) history.push({ id: `user-${row.id}`, role: 'user', content: row.question, fileName: row.fileid ? '已上传文件' : '', createdAt: row.createTime })
       if (row.answer || row.thinking) {
         history.push({
-          id: `assistant-${row.id}`, role: 'assistant', content: normalizeBrandText(row.answer),
+          id: `assistant-${row.id}`, role: 'assistant', content: normalizeBrandText(row.answer), done: true,
           timeline: row.thinking ? [{ type: 'thinking', content: normalizeBrandText(row.thinking) }] : [],
           references: normalizeReferences(row.reference), recommend: parseArray(row.recommend),
           showTimeline: false, showReferences: false, createdAt: row.createTime,
@@ -634,6 +731,9 @@ async function selectSession(id) {
       }
     }
     session.messages = history
+    session.workspaceId = detail.workspaceId || session.workspaceId || ''
+    selectedProjectId.value = session.workspaceId
+    selectedProjectName.value = projectGroups.value.find(item => item.id === session.workspaceId)?.name || ''
     session.loaded = true
     session.agentType = detail.agentType || session.agentType
     activeMode.value = ['chat', 'file', 'ppt', 'deep', 'skills'].includes(session.agentType) ? session.agentType : 'chat'
@@ -645,15 +745,9 @@ async function selectSession(id) {
   }
 }
 
-function askDelete(id) {
+async function deleteConversation(id) {
+  if (!id || deletingId.value) return
   deletingId.value = id
-  showDeleteConfirm.value = true
-}
-
-async function confirmDelete() {
-  const id = deletingId.value
-  showDeleteConfirm.value = false
-  if (!id) return
   try {
     await removeSession(backendUrl.value, id)
     sessions.value = sessions.value.filter((session) => session.id !== id)
@@ -733,45 +827,92 @@ function askFromDoc(doc) {
   showDocs.value = false
 }
 
+const STREAM_TICK_MS = 33
+// 短回答放慢像真人在打字，长回答加快，避免等待过久
+function streamChunkSize(pending) {
+  if (pending.length > 400) return 6
+  if (pending.length > 160) return 4
+  return 2
+}
+
+// 上游可能极快地把整段答案推来，这里按字符节奏逐段显示，保证阅读时是逐步输出
+function queueStreamText(message, text) {
+  if (!text) return
+  message.pendingText = (message.pendingText || '') + text
+  if (message.typTimer) return
+  let ticks = 0
+  message.typTimer = setInterval(() => {
+    const pending = message.pendingText || ''
+    const size = streamChunkSize(pending)
+    const take = pending.slice(0, size)
+    message.pendingText = pending.slice(size)
+    if (take) {
+      message.content += take
+      ticks += 1
+      // 每三帧滚一次，避免频繁读取 scrollHeight 造成卡顿
+      if (ticks % 3 === 0) scrollToBottom()
+    }
+    if (message.pendingText) return
+    clearInterval(message.typTimer)
+    message.typTimer = null
+    completeStreamMessage(message)
+  }, STREAM_TICK_MS)
+}
+
+function completeStreamMessage(message) {
+  if (!message.streamEnded || message.pendingText) return
+  if (message.timeline.some((entry) => entry.type === 'error')) return
+  if (!message.done) {
+    message.done = true
+    message.showTimeline = false
+  }
+  scrollToBottom()
+}
+
+function finishStreamText(message) {
+  message.streamEnded = true
+  completeStreamMessage(message)
+}
+
 function appendStreamEvent(data, message) {
   if (!data || typeof data !== 'object') return
+  if (appendProgressEvent(message, data)) return
   const content = data.content
   if (data.type === 'text' && content) {
-    const chunk = normalizeBrandText(content)
-    message.content += chunk
-    const pptLink = chunk.match(/(?:下载文件|Download):\s*(https?:\/\/\S+|\/generated\/\S+)/i)
+    // 品牌词替换放在渲染层做，逐块替换会被流式切分打断
+    const chunk = String(content)
+    queueStreamText(message, chunk)
+    const pptLink = chunk.match(/(?:下载文件|Download):\s*(https?:\/\/\S+|\/generated\/\S+|\/harness\/artifacts\/[^\s/]+\/download)/i)
     if (pptLink) message.pptFile = pptLink[1].replace(/[)\]，。]+$/, '')
-  } else if (data.type === 'thinking' && content) {
-    const previous = message.timeline.at(-1)
-    if (previous?.type === 'thinking') previous.content += String(content)
-    else {
-      closeLastEntry(message)
-      message.timeline.push({ type: 'thinking', content: String(content), t0: Date.now() })
-    }
-  } else if (data.type === 'tool_start') {
-    closeLastEntry(message)
-    message.timeline.push({ type: 'tool', toolName: data.toolName || '工具', toolCallId: data.toolCallId || '', status: 'running', t0: Date.now() })
-  } else if (data.type === 'tool_end') {
-    const running = message.timeline.find((entry) => entry.type === 'tool' && entry.status === 'running' && entry.toolCallId === (data.toolCallId || ''))
-    if (running) { running.status = 'completed'; running.endedAt = Date.now() }
-    else { closeLastEntry(message); message.timeline.push({ type: 'tool', toolName: data.toolName || '工具', toolCallId: data.toolCallId || '', status: 'completed', t0: Date.now(), endedAt: Date.now() }) }
   } else if (data.type === 'reference') {
     let references = content
     if (typeof references === 'string') {
       try { references = JSON.parse(references) } catch { references = [] }
     }
     message.references = normalizeReferences(references)
-    message.showReferences = message.references.length > 0
   } else if (data.type === 'recommend') {
     message.recommend = parseArray(content)
+  } else if (data.type === 'clarify') {
+    const payload = content && typeof content === 'object' ? content : {}
+    const options = Array.isArray(payload.options) ? payload.options : []
+    message.clarify = {
+      question: String(payload.question || ''),
+      options: options.map((item) => ({
+        intent: String(item?.intent || ''),
+        label: String(item?.label || ''),
+        hint: String(item?.hint || ''),
+      })),
+      sent: false,
+    }
+    message.clarifyText = ''
   } else if (data.type === 'error') {
-    closeLastEntry(message)
+    finishProgress(message, 'failed')
     message.timeline.push({ type: 'error', message: data.message || (typeof content === 'string' ? content : '任务执行失败'), detail: data.detail || '', t0: Date.now(), endedAt: Date.now() })
     message.showTimeline = true
   } else if (data.type === 'complete') {
-    closeLastEntry(message)
-    message.done = true
-    message.showTimeline = message.timeline.some((entry) => entry.type === 'error')
+    finishProgress(message)
+    finishStreamText(message)
+    if (message.timeline.some((entry) => entry.type === 'error')) message.showTimeline = true
   }
 }
 
@@ -781,28 +922,39 @@ async function sendMessage() {
     showToast('Python 服务未连接，请先检查服务地址')
     return
   }
-  const session = currentSession.value
   const text = input.value.trim() || (uploadedFileId.value ? '请分析这个文件' : (docSource.value ? `请基于《${docSource.value.fileName}》回答` : ''))
   const fileId = uploadedFileId.value || docSource.value?.fileId || null
   const fileName = selectedFile.value?.name || docSource.value?.fileName || ''
+  let session = currentSession.value
+  const workspaceId = selectedProjectId.value
+  const mode = activeMode.value
+  if (session.messages.length && (session.workspaceId || '') !== workspaceId) {
+    newSession()
+    session = currentSession.value
+    activeMode.value = mode
+  }
+  session.workspaceId = workspaceId
   session.isDraft = false
   session.loaded = true
-  session.agentType = fileId ? 'file' : activeMode.value
+  session.agentType = activeMode.value === 'skills' ? 'skills' : (fileId ? 'file' : activeMode.value)
   session.messages.push({ id: makeId(), role: 'user', content: text, fileName, createdAt: new Date().toISOString() })
   if (session.messages.filter((message) => message.role === 'user').length === 1) session.title = titleFor(text)
-  const assistant = { id: makeId(), role: 'assistant', content: '', timeline: [], references: [], recommend: [], showTimeline: true, showReferences: false, done: false, t0: Date.now() }
-  session.messages.push(assistant)
+  session.messages.push({ id: makeId(), role: 'assistant', content: '', timeline: [], references: [], recommend: [], showTimeline: false, showReferences: false, done: false, t0: Date.now(), pendingText: '', typTimer: null, streamEnded: false, clarify: null, clarifyText: '' })
+  // 取回响应式代理：直接写原始对象不会触发重渲染，流式增量就看不到
+  const assistant = session.messages[session.messages.length - 1]
+  appendProgressEvent(assistant, { type: 'step', stage: 'understanding', content: '正在理解问题', status: 'running' })
   input.value = ''
   removeSelectedFile()
   sending.value = true
   runStartedAt.value = Date.now()
   nowTick.value = Date.now()
   startTick()
+  autoScroll.value = true
   await scrollToBottom()
 
   try {
     readerController = new AbortController()
-    const response = await fetch(streamUrl(backendUrl.value, activeMode.value, text, session.id, fileId), {
+    const response = await fetch(streamUrl(backendUrl.value, activeMode.value, text, session.id, fileId, session.workspaceId), {
       headers: { Accept: 'text/event-stream', 'Cache-Control': 'no-cache' },
       signal: readerController.signal,
     })
@@ -835,24 +987,21 @@ async function sendMessage() {
         try { appendStreamEvent(JSON.parse(data), assistant) } catch {}
       }
     }
-    if (!assistant.done && !assistant.timeline.some((entry) => entry.type === 'error')) {
-      assistant.done = true
-      assistant.showTimeline = false
-    }
     session.updatedAt = Date.now()
     await refreshSessions()
   } catch (error) {
     if (error.name !== 'AbortError') {
-      closeLastEntry(assistant)
+      finishProgress(assistant, 'failed')
       assistant.timeline.push({ type: 'error', message: error.message || '请求失败', detail: '请检查 Python 后端、跨域设置及所选模式依赖。', t0: Date.now(), endedAt: Date.now() })
       assistant.showTimeline = true
     }
   } finally {
+    finishStreamText(assistant)
     sending.value = false
     readerController = null
     stopTick()
     runStartedAt.value = 0
-    closeLastEntry(assistant)
+    finishProgress(assistant)
     if (!assistant.t1) assistant.t1 = Date.now()
     await scrollToBottom()
   }
@@ -892,6 +1041,25 @@ const vHighlight = { mounted: highlightCode, updated: highlightCode }
 function sendRecommendation(question) {
   input.value = question
   sendMessage()
+}
+
+// 澄清作答：把选中的方向或补充说明作为新一轮提问带上原问题上下文。
+function answerClarify(message, option) {
+  const clarify = message?.clarify
+  if (!clarify || clarify.sent || sending.value) return
+  const lines = [`原问题：${clarify.question}`]
+  if (option) lines.push(`我想要的是：${option.label}${option.hint ? `（${option.hint}）` : ''}`)
+  const extra = (message.clarifyText || '').trim()
+  if (extra) lines.push(`补充说明：${extra}`)
+  clarify.sent = true
+  input.value = lines.join('\n')
+  sendMessage()
+}
+
+function clarifyKeydown(message, event) {
+  if (event.key !== 'Enter' || event.shiftKey) return
+  event.preventDefault()
+  answerClarify(message, null)
 }
 
 async function copyText(text) {
@@ -951,6 +1119,310 @@ function clearSkillEntry() {
   skillEntries.value = []
   skillEntryChoice.value = ''
   pendingSkillFile = null
+}
+
+async function refreshSchedules() {
+  try {
+    schedules.value = (await getSchedules(backendUrl.value))?.items || []
+  } catch (error) {
+    schedules.value = []
+  }
+}
+
+function openScheduleForm() {
+  scheduleDraft.value = { name: '', prompt: '', agent: 'chat', intervalMinutes: 60 }
+  showScheduleForm.value = true
+}
+
+async function submitSchedule() {
+  if (scheduleBusy.value) return
+  if (!scheduleDraft.value.name.trim() || !scheduleDraft.value.prompt.trim()) {
+    showToast('请填写任务名称和任务内容')
+    return
+  }
+  scheduleBusy.value = true
+  try {
+    await createSchedule(backendUrl.value, {
+      name: scheduleDraft.value.name.trim(),
+      prompt: scheduleDraft.value.prompt.trim(),
+      agent: scheduleDraft.value.agent,
+      intervalMinutes: Number(scheduleDraft.value.intervalMinutes) || 60,
+    })
+    showScheduleForm.value = false
+    await refreshSchedules()
+    showToast('定时任务已创建')
+  } catch (error) {
+    showToast(`创建失败：${error.message || '定时任务服务不可用'}`)
+  } finally {
+    scheduleBusy.value = false
+  }
+}
+
+async function toggleSchedule(task) {
+  if (scheduleBusy.value) return
+  scheduleBusy.value = true
+  try {
+    await updateSchedule(backendUrl.value, task.task_id, { enabled: !task.enabled })
+    await refreshSchedules()
+  } catch (error) {
+    showToast(`更新失败：${error.message || '定时任务服务不可用'}`)
+  } finally {
+    scheduleBusy.value = false
+  }
+}
+
+async function runScheduleNow(task) {
+  if (scheduleBusy.value) return
+  scheduleBusy.value = true
+  try {
+    const result = await runSchedule(backendUrl.value, task.task_id)
+    await refreshSchedules()
+    showToast(result?.run?.run_id ? `已提交运行 ${result.run.run_id}` : '已提交执行')
+  } catch (error) {
+    showToast(`执行失败：${error.message || '执行服务不可用'}`)
+  } finally {
+    scheduleBusy.value = false
+  }
+}
+
+async function removeSchedule(task) {
+  if (!window.confirm(`删除定时任务 ${task.name}？`)) return
+  try {
+    await deleteSchedule(backendUrl.value, task.task_id)
+    await refreshSchedules()
+    showToast(`已删除 ${task.name}`)
+  } catch (error) {
+    showToast(`删除失败：${error.message || '定时任务服务不可用'}`)
+  }
+}
+
+async function refreshBots() {
+  try {
+    bots.value = await getBots(backendUrl.value)
+  } catch (error) {
+    bots.value = []
+  }
+}
+
+function openBotForm(bot) {
+  botDraft.value = bot
+    ? { botId: bot.bot_id, name: bot.name, instruction: bot.instruction || '', skills: [...(bot.skills || [])], enabled: bot.enabled }
+    : { botId: '', name: '', instruction: '', skills: [], enabled: true }
+  showBotForm.value = true
+}
+
+async function submitBot() {
+  if (botBusy.value) return
+  if (!botDraft.value.name.trim()) {
+    showToast('请填写机器人名称')
+    return
+  }
+  botBusy.value = true
+  const payload = {
+    name: botDraft.value.name.trim(),
+    instruction: botDraft.value.instruction.trim(),
+    skills: botDraft.value.skills,
+    enabled: botDraft.value.enabled,
+  }
+  try {
+    if (botDraft.value.botId) await updateBot(backendUrl.value, botDraft.value.botId, payload)
+    else await createBot(backendUrl.value, payload)
+    showBotForm.value = false
+    await refreshBots()
+    showToast('机器人已保存')
+  } catch (error) {
+    showToast(`保存失败：${error.message || '机器人服务不可用'}`)
+  } finally {
+    botBusy.value = false
+  }
+}
+
+async function toggleBot(bot) {
+  if (botBusy.value) return
+  botBusy.value = true
+  try {
+    await updateBot(backendUrl.value, bot.bot_id, {
+      name: bot.name,
+      instruction: bot.instruction || '',
+      skills: bot.skills || [],
+      enabled: !bot.enabled,
+    })
+    await refreshBots()
+  } catch (error) {
+    showToast(`更新失败：${error.message || '机器人服务不可用'}`)
+  } finally {
+    botBusy.value = false
+  }
+}
+
+async function removeBot(bot) {
+  if (!window.confirm(`删除机器人 ${bot.name}？`)) return
+  try {
+    await deleteBot(backendUrl.value, bot.bot_id)
+    await refreshBots()
+    showToast(`已删除 ${bot.name}`)
+  } catch (error) {
+    showToast(`删除失败：${error.message || '机器人服务不可用'}`)
+  }
+}
+
+async function bindBot(bot, conversationId) {
+  if (!conversationId) return
+  try {
+    await bindBotSession(backendUrl.value, bot.bot_id, conversationId)
+    showToast('已绑定会话，该会话的回答会使用这个人设')
+  } catch (error) {
+    showToast(`绑定失败：${error.message || '机器人服务不可用'}`)
+  }
+}
+
+function applyTheme(theme) {
+  const root = document.documentElement
+  if (theme === 'light' || theme === 'dark') root.setAttribute('data-theme', theme)
+  else root.removeAttribute('data-theme')
+}
+
+async function refreshProfile() {
+  try {
+    const profile = await getProfile(backendUrl.value)
+    profileDraft.value = {
+      nickname: profile.nickname || '',
+      bio: profile.bio || '',
+      answerStyle: profile.answerStyle || 'default',
+      theme: profile.theme || 'system',
+    }
+    applyTheme(profileDraft.value.theme)
+  } catch (error) {
+    // 后端不可用时保持当前界面，不写入假的默认值。
+  }
+}
+
+async function saveProfileBasics() {
+  if (profileBusy.value) return
+  profileBusy.value = true
+  try {
+    await saveProfile(backendUrl.value, {
+      nickname: profileDraft.value.nickname.trim(),
+      bio: profileDraft.value.bio.trim(),
+    })
+    showToast('个人资料已保存')
+  } catch (error) {
+    showToast(`保存失败：${error.message || '个人设置服务不可用'}`)
+  } finally {
+    profileBusy.value = false
+  }
+}
+
+async function savePreferences() {
+  if (profileBusy.value) return
+  profileBusy.value = true
+  try {
+    await saveProfile(backendUrl.value, {
+      answerStyle: profileDraft.value.answerStyle,
+      theme: profileDraft.value.theme,
+    })
+    applyTheme(profileDraft.value.theme)
+    showToast('偏好已保存')
+  } catch (error) {
+    showToast(`保存失败：${error.message || '个人设置服务不可用'}`)
+  } finally {
+    profileBusy.value = false
+  }
+}
+
+async function refreshCredential() {
+  try {
+    const credential = await getCredential(backendUrl.value)
+    credentialDraft.value = {
+      provider: credential?.provider || '',
+      baseUrl: credential?.base_url || '',
+      model: credential?.model || '',
+      apiKey: '',
+    }
+    credentialMask.value = credential?.apiKey || ''
+  } catch (error) {
+    credentialMask.value = ''
+  }
+}
+
+function credentialPayload() {
+  const payload = {
+    provider: credentialDraft.value.provider.trim(),
+    baseUrl: credentialDraft.value.baseUrl.trim(),
+    model: credentialDraft.value.model.trim(),
+  }
+  if (credentialDraft.value.apiKey.trim()) payload.apiKey = credentialDraft.value.apiKey.trim()
+  return payload
+}
+
+async function saveCredentialForm() {
+  if (credentialBusy.value) return
+  credentialBusy.value = true
+  try {
+    await saveCredential(backendUrl.value, credentialPayload())
+    credentialDraft.value.apiKey = ''
+    await refreshCredential()
+    showToast('模型凭证已保存')
+  } catch (error) {
+    showToast(`保存失败：${error.message || '凭证服务不可用'}`)
+  } finally {
+    credentialBusy.value = false
+  }
+}
+
+async function testCredentialForm() {
+  if (credentialBusy.value) return
+  credentialBusy.value = true
+  try {
+    const result = await testCredential(backendUrl.value, credentialPayload())
+    showToast(result?.ok ? '模型连接正常' : (result?.message || '模型连接失败'))
+  } catch (error) {
+    showToast(`测试失败：${error.message || '凭证服务不可用'}`)
+  } finally {
+    credentialBusy.value = false
+  }
+}
+
+async function removeCredential() {
+  if (!window.confirm('删除已保存的模型凭证？')) return
+  try {
+    await deleteCredential(backendUrl.value)
+    await refreshCredential()
+    showToast('已删除模型凭证')
+  } catch (error) {
+    showToast(`删除失败：${error.message || '凭证服务不可用'}`)
+  }
+}
+
+async function togglePlugin(skill) {
+  try {
+    await setSkillEnabled(backendUrl.value, skill.id, !skill.enabled)
+    await refreshSkills()
+    showToast(skill.enabled ? `已停用 ${skill.name}` : `已启用 ${skill.name}`)
+  } catch (error) {
+    showToast(`操作失败：${error.message || '技能服务不可用'}`)
+  }
+}
+
+async function removePlugin(skill) {
+  if (!window.confirm(`删除技能包 ${skill.name}？`)) return
+  try {
+    await removeSkill(backendUrl.value, skill.id)
+    await refreshSkills()
+    showToast(`已删除 ${skill.name}`)
+  } catch (error) {
+    showToast(`删除失败：${error.message || '技能服务不可用'}`)
+  }
+}
+
+function togglePet() {
+  petEnabled.value = !petEnabled.value
+  localStorage.setItem('hotline-pet-enabled', petEnabled.value ? '1' : '0')
+}
+
+function choosePet(id) {
+  petChoice.value = id
+  localStorage.setItem('hotline-pet', id)
 }
 
 function openSkills() {
@@ -1184,7 +1656,15 @@ async function confirmRemoveDoc(doc) {
 
 async function scrollToBottom() {
   await nextTick()
-  if (messageList.value) messageList.value.scrollTop = messageList.value.scrollHeight
+  const list = messageList.value
+  if (!list || !autoScroll.value) return
+  list.scrollTop = list.scrollHeight
+}
+
+function onUserScroll() {
+  const list = messageList.value
+  if (!list) return
+  autoScroll.value = list.scrollHeight - list.scrollTop - list.clientHeight < 48
 }
 
 function toggleSearch() {
@@ -1193,7 +1673,7 @@ function toggleSearch() {
 }
 
 watch(() => currentSession.value?.messages.length, () => scrollToBottom())
-watch(input, async () => {
+watch([input, composer], async () => {
   await nextTick()
   if (composer.value) {
     composer.value.style.height = 'auto'
@@ -1203,14 +1683,13 @@ watch(input, async () => {
 
 onMounted(() => {
   keydownHandler = (event) => {
-    if (workspaceDialogSelector.value) {
+    if (appTopDialog()) {
       if (event.key === 'Escape') {
         event.preventDefault()
-        if (folderImportOpen.value) cancelFolderImport()
-        else if (permissionRequest.value) cancelPermission()
-        else showProjectNameDialog.value = false
+        // 点遮罩复用各弹窗自己的关闭逻辑，保存或上传进行中不会被误关
+        appDialogBackdrops().pop()?.click()
       } else if (event.key === 'Tab') {
-        const controls = Array.from(document.querySelector(workspaceDialogSelector.value)?.querySelectorAll('button:not(:disabled), input:not(:disabled), [href], [tabindex="0"]') || []).filter(element => element.getClientRects().length)
+        const controls = appDialogControls(appTopDialog())
         const first = controls[0]
         const last = controls[controls.length - 1]
         if (!first) event.preventDefault()
@@ -1231,7 +1710,9 @@ onMounted(() => {
   window.addEventListener('keydown', keydownHandler)
   newSession()
   refreshSessions()
+  refreshWorkspaces()
   getSkills(backendUrl.value).then((list) => { skills.value = list }).catch(() => {})
+  refreshProfile()
 })
 
 onUnmounted(() => {
@@ -1250,6 +1731,7 @@ onUnmounted(() => {
       <button class="rail-button" :class="{ active: activePage === 'bot' }" type="button" aria-label="轻量机器人" title="轻量机器人" @click="openBotPage"><Bot :size="20" /></button>
       <button class="rail-button" :class="{ active: activePage === 'docs' }" type="button" aria-label="文档库" title="文档库" @click="openDocsPage"><LibraryBig :size="20" /></button>
       <button class="rail-button" :class="{ active: activePage === 'harness' }" type="button" aria-label="Harness 工程" title="Harness 工程" @click="openHarnessPage"><Workflow :size="20" /></button>
+      <button class="rail-button" :class="{ active: activePage === 'code-map' }" type="button" aria-label="代码地图" title="代码地图" @click="openCodeMapPage"><MapIcon :size="20" /></button>
       <button class="rail-button" :class="{ active: activePage === 'export' }" type="button" aria-label="导出历史聊天" title="导出历史聊天" @click="openExportPage"><History :size="20" /></button>
       <button class="rail-profile" type="button" aria-label="用户设置" title="用户设置" @click="openMore"><CircleUserRound :size="19" :stroke-width="1.9" /></button>
     </aside>
@@ -1271,13 +1753,13 @@ onUnmounted(() => {
 
         <section class="project-nav" aria-label="工作区">
           <h2 class="project-nav-heading"><span>工作区</span><button class="icon-button workspace-add" type="button" :disabled="projectUploadBusy" aria-label="添加工作区" title="添加工作区" @click="addWorkspace"><Plus :size="16" /></button></h2>
-          <div v-for="project in projectGroups" :key="project.name" class="project-entry" :class="{ selected: selectedProjectName === project.name }">
+          <div v-for="project in projectGroups" :key="project.id" class="project-entry" :class="{ selected: selectedProjectId === project.id }">
             <div class="project-line">
-              <button type="button" class="project-open" :aria-label="`打开工作区：${project.name}`" @click="selectedProjectName = project.name; openProjectView()"><FolderOpen :size="18" /><span>{{ project.name }}</span></button>
+              <button type="button" class="project-open" :aria-label="`打开工作区：${project.name}`" @click="selectedProjectName = project.name; selectedProjectId = project.id; openProjectView()"><FolderOpen :size="18" /><span>{{ project.name }}</span></button>
               <button class="project-add-task icon-button" type="button" :disabled="projectUploadBusy" :aria-label="`在工作区添加任务：${project.name}`" :title="`添加任务到 ${project.name}`" @click="addWorkspaceTask(project)"><Plus :size="15" /></button>
             </div>
             <div v-if="project.child" class="project-child">{{ project.child }}</div>
-            <button v-for="task in project.tasks || []" :key="task.id" type="button" class="project-task" @click="selectedProjectName = project.name; openHome()"><CircleDot :size="11" /><span>{{ task.title }}</span></button>
+            <button v-for="task in project.tasks || []" :key="task.id" type="button" class="project-task" @click="selectedProjectName = project.name; selectedProjectId = project.id; openHome()"><CircleDot :size="11" /><span>{{ task.title }}</span></button>
           </div>
           <p v-if="!projectGroups.length" class="workspace-empty">暂无工作区，点击 + 添加文件夹</p>
         </section>
@@ -1308,14 +1790,14 @@ onUnmounted(() => {
               <span class="session-meta"><span class="badge" :class="badgeInfo(session.agentType).cls">{{ badgeInfo(session.agentType).label }}</span><span class="meta-note">{{ fmtRelTime(session.createTime || session.updatedAt) }}</span></span>
             </span>
           </button>
-          <button v-if="!session.isDraft" class="session-delete icon-button" type="button" :aria-label="`删除会话：${session.title}`" @click.stop="askDelete(session.id)"><Trash2 :size="15" /></button>
+          <button v-if="!session.isDraft" class="session-delete icon-button" type="button" :disabled="!!deletingId" :aria-label="`删除会话：${session.title}`" @click.stop="deleteConversation(session.id)"><Trash2 :size="15" /></button>
         </div>
         <div v-if="recentList.length === 0" class="session-empty">{{ searchText ? '没有匹配的会话' : '还没有历史会话' }}</div>
       </nav>
 
     </aside>
 
-    <main class="workspace" :class="{ 'workspace-panel-open': showWorkspacePanel, 'workspace-welcome': isWelcome }">
+    <main class="workspace" :class="{ 'workspace-panel-open': showWorkspacePanel, 'workspace-welcome': isWelcome, 'workspace-code-map': activePage === 'code-map' }">
       <template v-if="activePage === 'home'">
       <header class="topbar">
         <div class="topbar-left">
@@ -1325,41 +1807,56 @@ onUnmounted(() => {
         </div>
       </header>
 
-      <section ref="messageList" class="message-list" aria-label="对话内容">
+      <section ref="messageList" class="message-list" aria-label="对话内容" @scroll="onUserScroll">
         <div v-if="loadingHistory" class="history-loading"><LoaderCircle :size="18" class="spin" /> 正在加载会话记录</div>
 
         <div v-if="isWelcome" class="welcome-state">
           <div class="welcome-mark"><Headset :size="24" :stroke-width="1.6" /></div>
           <h1>你好，我是 Hotline</h1>
-          <p>从一个入口，完成问答、文件和技能任务</p>
+
         </div>
 
         <div v-for="message in currentSession?.messages || []" :key="message.id" class="message-row" :class="`message-${message.role}`">
           <div v-if="message.role === 'assistant'" class="assistant-avatar"><MessagesSquare :size="15" /></div>
           <div class="message-body">
-            <div class="message-meta"><strong>{{ message.role === 'user' ? '你' : 'Hotline' }}</strong><time v-if="message.createdAt">{{ new Date(message.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</time><span v-if="message.role === 'assistant' && sending && !message.done" class="stream-status"><span class="status-dot"></span>正在思考</span></div>
+            <div class="message-meta"><strong>{{ message.role === 'user' ? '你' : 'Hotline' }}</strong><time v-if="message.createdAt">{{ new Date(message.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</time><span v-if="message.role === 'assistant' && message.showTimeline && messageIsStreaming(message)" class="stream-status" role="status" aria-live="polite"><span class="status-dot"></span>{{ progressLabel(message) }}</span></div>
             <div v-if="message.fileName" class="message-attachment"><File :size="15" /><span>{{ message.fileName }}</span></div>
 
             <section v-if="message.role === 'assistant' && message.timeline?.length" class="timeline-block">
               <button class="disclosure-button" type="button" :aria-expanded="message.showTimeline" @click="message.showTimeline = !message.showTimeline">
-                <span class="tl-dot" :class="{ run: sending && !message.done, err: message.timeline.some((entry) => entry.type === 'error'), ok: message.done && !message.timeline.some((entry) => entry.type === 'error') }"></span>
-                <span>{{ message.timeline.some((entry) => entry.type === 'error') ? '执行记录 · 有异常' : (message.done ? '执行过程' : '正在执行') }}</span>
+                <span class="tl-dot" :class="{ run: messageIsStreaming(message), err: message.timeline.some((entry) => entry.type === 'error'), ok: message.done && !message.timeline.some((entry) => entry.type === 'error') }"></span>
+                <span>{{ message.timeline.some((entry) => entry.type === 'error') ? '执行记录 · 有异常' : (message.done ? '处理过程' : '处理进度') }}</span>
                 <span class="timeline-count mono-time">{{ timelineSummary(message) }}</span>
                 <component :is="message.showTimeline ? ChevronDown : ChevronRight" :size="15" class="disclosure-chevron" />
               </button>
               <div v-if="message.showTimeline" class="timeline-content">
                 <div v-for="(entry, index) in message.timeline" :key="index" class="timeline-entry" :class="`entry-${entry.type}`">
-                  <span class="timeline-marker"><Check v-if="entry.type === 'tool' && entry.status === 'completed'" :size="11" /><LoaderCircle v-else-if="entry.type === 'tool' && entry.status === 'running'" :size="11" class="spin" /><AlertCircle v-else-if="entry.type === 'error'" :size="12" /><span v-else-if="entry.type === 'thinking' && sending && !message.done && index === message.timeline.length - 1" class="dot run" style="width:7px;height:7px"></span><span v-else></span></span>
-                  <div v-if="entry.type === 'thinking'" class="timeline-thinking">{{ entry.content }}</div>
+                  <span class="timeline-marker" :class="{ 'is-error': entry.type === 'error' || ['failed', 'cancelled'].includes(entry.status) }"><AlertCircle v-if="entry.type === 'error' || ['failed', 'cancelled'].includes(entry.status)" :size="12" /><LoaderCircle v-else-if="entry.status === 'running' && entry.endedAt == null" :size="12" class="spin" /><Check v-else-if="entry.endedAt != null" :size="12" /><span v-else></span></span>
+                  <div v-if="entry.type === 'thinking' || entry.type === 'step'" class="timeline-thinking"><span>{{ progressEntryLabel(entry) }}</span><ul v-if="entry.sources?.length" class="progress-sources"><li v-for="(source, sourceIndex) in entry.sources" :key="sourceIndex">{{ source }}</li></ul></div>
                   <div v-else-if="entry.type === 'error'" class="timeline-error"><strong>{{ entry.message }}</strong><span v-if="entry.detail">{{ entry.detail }}</span></div>
-                  <div v-else class="timeline-tool">{{ entry.toolName }}<span>{{ entry.status === 'running' ? '运行中' : '已完成' }}</span></div>
+                  <div v-else class="timeline-tool"><span class="progress-entry-label">{{ progressEntryLabel(entry) }}</span><span>{{ ({ running: '运行中', completed: '已完成', failed: '调用失败', cancelled: '已停止' })[entry.status] || entry.status }}</span></div>
                   <span v-if="entry.endedAt && entry.t0" class="entry-duration">{{ fmtStep(entry.endedAt - entry.t0) }}</span>
                 </div>
               </div>
             </section>
 
-            <div v-if="message.content" v-highlight class="markdown-content" v-html="renderMarkdown(message.content)"></div>
-            <div v-else-if="message.role === 'assistant' && sending && !message.done" class="thinking-placeholder"><span></span><span></span><span></span></div>
+            <div v-if="message.content" v-highlight class="markdown-content" v-html="renderMarkdown(normalizeBrandText(message.content))"></div>
+            <div v-else-if="message.role === 'assistant' && messageIsStreaming(message) && !message.timeline?.length" class="thinking-placeholder"><span></span><span></span><span></span></div>
+
+            <section v-if="message.role === 'assistant' && message.clarify" class="clarify-card" aria-label="需求澄清">
+              <div class="clarify-head"><MessageCircle :size="15" /><strong>需要先确认一下</strong><span>不确定你想要哪种结果，选一个方向，或在下面直接补充说明</span></div>
+              <div class="clarify-options">
+                <button v-for="option in message.clarify.options" :key="option.intent" type="button" class="clarify-option" :disabled="message.clarify.sent || sending" @click="answerClarify(message, option)">
+                  <span class="clarify-option-label">{{ option.label }}</span>
+                  <span class="clarify-option-hint">{{ option.hint }}</span>
+                </button>
+              </div>
+              <div v-if="!message.clarify.sent" class="clarify-free">
+                <textarea v-model="message.clarifyText" rows="2" placeholder="也可以直接写下你的想法…" aria-label="补充说明" @keydown="clarifyKeydown(message, $event)"></textarea>
+                <button type="button" class="clarify-send" :disabled="sending || !message.clarifyText.trim()" @click="answerClarify(message, null)">按我的说明继续</button>
+              </div>
+              <p v-else class="clarify-note">已按你的选择继续提问。</p>
+            </section>
 
             <section v-if="message.references?.length" class="references-block">
               <button class="disclosure-button" type="button" :aria-expanded="message.showReferences" @click="message.showReferences = !message.showReferences"><Link2 :size="15" /><span>参考来源</span><span class="timeline-count">{{ message.references.length }}</span><component :is="message.showReferences ? ChevronDown : ChevronRight" :size="15" class="disclosure-chevron" /></button>
@@ -1370,7 +1867,7 @@ onUnmounted(() => {
 
             <a v-if="message.pptFile" class="download-link" :href="downloadHref(message.pptFile)" download><Download :size="16" /> 下载生成的 PPT</a>
             <div v-if="message.role === 'assistant' && message.recommend?.length" class="recommendations"><span class="recommend-label">接下来可以</span><button v-for="(question, index) in message.recommend" :key="index" type="button" @click="sendRecommendation(question)">{{ question }}<ArrowUp :size="13" /></button></div>
-            <button v-if="message.role === 'assistant' && message.content" class="copy-message icon-button" type="button" aria-label="复制回答" title="复制回答" @click="copyText(message.content)"><Copy :size="14" /></button>
+            <button v-if="message.role === 'assistant' && message.content" class="copy-message icon-button" type="button" aria-label="复制回答" title="复制回答" @click="copyText(normalizeBrandText(message.content))"><Copy :size="14" /></button>
           </div>
           <div v-if="message.role === 'user'" class="user-avatar">你</div>
         </div>
@@ -1392,7 +1889,7 @@ onUnmounted(() => {
               <div class="composer-tools">
                 <input ref="fileInput" class="visually-hidden" type="file" accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg" @change="onFilePicked" />
                 <button class="attach-button icon-button" type="button" :disabled="uploadBusy || sending" aria-label="上传文件" title="上传文件" @click="openFilePicker"><Paperclip :size="17" /></button>
-                <span class="composer-hint"><span v-if="activeMode === 'skills'">技能助手接口</span><span v-else>{{ activeModeInfo.description }}</span><span class="hint-divider"></span><kbd>Enter</kbd> 发送 <span class="hint-divider"></span><kbd>Shift Enter</kbd> 换行</span>
+                <span class="composer-hint"><kbd>Enter</kbd> 发送 <span class="hint-divider"></span><kbd>Shift Enter</kbd> 换行</span>
               </div>
               <div class="send-actions">
                 <span v-if="input.length" class="char-count">{{ input.length }}</span>
@@ -1443,6 +1940,7 @@ onUnmounted(() => {
       </aside>
       </template>
 
+      <CodeMapPage v-else-if="activePage === 'code-map'" :api-base="backendUrl" @home="openHome" />
       <section v-else class="standalone-page" :aria-labelledby="`${activePage}-page-title`">
         <aside class="page-sidebar">
           <header class="page-sidebar-header">
@@ -1457,59 +1955,117 @@ onUnmounted(() => {
           </nav>
           <button v-else-if="activePage === 'automation'" class="page-create" type="button" disabled><Plus :size="18" />新建任务</button>
           <button v-else-if="activePage === 'plugins'" class="page-subitem active" type="button" @click="openSkills"><Puzzle :size="16" />技能<span>{{ skills.length }}</span></button>
-          <button v-else-if="activePage === 'bot'" class="page-subitem active" type="button" disabled><Bot :size="16" />轻量机器人<span>规划中</span></button>
+          <button v-else-if="activePage === 'bot'" class="page-subitem active" type="button"><Bot :size="16" />轻量机器人<span>{{ bots.length }}</span></button>
           <button v-else-if="activePage === 'docs'" class="page-create" type="button" @click="openDocs"><Plus :size="18" />上传文档</button>
-          <button v-else-if="activePage === 'harness'" class="page-subitem active" type="button" disabled><Workflow :size="16" />Harness 控制面<span>演示</span></button>
+          <button v-else-if="activePage === 'harness'" class="page-subitem active" type="button" @click="openHarnessPage"><Workflow :size="16" />Harness 控制面<span>已接入</span></button>
           <button v-else class="page-create" type="button" :disabled="exportingHistory" @click="exportChatHistory"><LoaderCircle v-if="exportingHistory" :size="18" class="spin" /><Download v-else :size="18" />导出全部聊天</button>
-          <p v-if="activePage !== 'profile'" class="page-sidebar-empty">{{ activePage === 'automation' ? '暂无已安排的任务' : activePage === 'plugins' ? '插件功能集中在这里管理' : activePage === 'bot' ? '轻量机器人能力正在规划' : activePage === 'docs' ? '暂无已上传的文档' : activePage === 'harness' ? '统一管理 Agent 运行、工具与产物 · 演示数据' : `${sessions.filter((session) => !session.isDraft).length} 个会话可导出` }}</p>
+
         </aside>
 
         <div class="page-main">
           <header v-if="activePage !== 'harness'" class="standalone-header">
             <div>
-              <span class="standalone-kicker">Hotline 工作台</span>
               <h1 :id="`${activePage}-page-title`">{{ activePage === 'profile' ? ({ basics: '基础信息', api: 'API Key', personalization: '个性化', pet: '虚拟桌宠' })[profileSection] : ({ automation: '安排任务', plugins: '插件', bot: '轻量机器人', docs: '文档库', harness: 'Harness 工程', export: '导出历史聊天' })[activePage] }}</h1>
             </div>
             <button class="icon-button" type="button" aria-label="回到首页" title="回到首页" @click="openHome"><Home :size="18" /></button>
           </header>
           <section v-if="activePage === 'profile'" class="profile-settings-content" :aria-labelledby="`${activePage}-page-title`">
             <template v-if="profileSection === 'basics'">
-              <div class="profile-settings-intro"><div class="profile-settings-avatar"><UserRound :size="25" /></div><div><h2>个人资料</h2><p>管理你的昵称和个人简介。</p></div><span class="planned-tag">暂未启用</span></div>
-              <div class="profile-form"><label>昵称<input class="text-field" disabled placeholder="输入昵称" /></label><label>个人简介<textarea class="text-field" disabled rows="3" placeholder="介绍一下自己"></textarea></label><button class="primary-button" type="button" disabled>保存资料</button></div>
+              <div class="profile-settings-intro"><div class="profile-settings-avatar"><UserRound :size="25" /></div><div><h2>个人资料</h2></div></div>
+              <div class="profile-form"><label>昵称<input v-model="profileDraft.nickname" class="text-field" maxlength="60" placeholder="输入昵称" /></label><label>个人简介<textarea v-model="profileDraft.bio" class="text-field" rows="3" maxlength="500" placeholder="介绍一下自己"></textarea></label><button class="primary-button" type="button" :disabled="profileBusy" @click="saveProfileBasics">{{ profileBusy ? '保存中…' : '保存资料' }}</button></div>
             </template>
             <template v-else-if="profileSection === 'api'">
-              <div class="settings-section-copy"><KeyRound :size="22" /><div><h2>模型 API Key</h2><p>配置你自己的模型服务凭证。保存与调用功能尚未接入。</p></div></div>
-              <label class="api-key-field">API Key<input class="text-field" type="password" disabled placeholder="sk-••••••••••••••••" /></label>
-              <p class="settings-note">密钥安全存储能力完成前，此处不会读取或保存输入内容。</p>
-              <button class="primary-button" type="button" disabled>保存 API Key</button>
+              <div class="settings-section-copy"><KeyRound :size="22" /><div><h2>模型 API Key</h2></div></div>
+              <div class="profile-form">
+                <label>服务商<input v-model="credentialDraft.provider" class="text-field" placeholder="例如：openai-compatible" /></label>
+                <label>Base URL<input v-model="credentialDraft.baseUrl" class="text-field" placeholder="https://api.example.com/v1" /></label>
+                <label>模型名称<input v-model="credentialDraft.model" class="text-field" placeholder="模型 ID" /></label>
+                <label class="api-key-field">API Key<input v-model="credentialDraft.apiKey" class="text-field" type="password" placeholder="sk-••••••••••••••••" /></label>
+                <p v-if="credentialMask" class="settings-note">已保存密钥：{{ credentialMask }}（留空表示不修改）</p>
+                <div class="dialog-actions">
+                  <button class="secondary-button" type="button" :disabled="credentialBusy" @click="testCredentialForm">测试连接</button>
+                  <button class="primary-button" type="button" :disabled="credentialBusy" @click="saveCredentialForm">{{ credentialBusy ? '处理中…' : '保存凭证' }}</button>
+                  <button v-if="credentialMask" class="text-action danger" type="button" @click="removeCredential">删除凭证</button>
+                </div>
+              </div>
             </template>
             <template v-else-if="profileSection === 'personalization'">
-              <div class="settings-section-copy"><Palette :size="22" /><div><h2>个性化偏好</h2><p>定制助手的表达方式和界面体验。</p></div></div>
-              <div class="preference-row"><div><strong>回答风格</strong><small>选择助手的表达语气</small></div><select disabled><option>默认</option></select></div>
-              <div class="preference-row"><div><strong>界面主题</strong><small>浅色、深色或跟随系统</small></div><select disabled><option>跟随系统</option></select></div>
-              <span class="planned-tag">偏好设置暂未启用</span>
+              <div class="settings-section-copy"><Palette :size="22" /><div><h2>个性化偏好</h2></div></div>
+              <div class="preference-row"><div><strong>回答风格</strong></div><select v-model="profileDraft.answerStyle"><option value="default">默认</option><option value="concise">简洁</option><option value="detailed">详尽</option><option value="friendly">亲切</option></select></div>
+              <div class="preference-row"><div><strong>界面主题</strong></div><select v-model="profileDraft.theme"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></div>
+              <button class="primary-button" type="button" :disabled="profileBusy" @click="savePreferences">{{ profileBusy ? '保存中…' : '保存偏好' }}</button>
             </template>
             <template v-else>
-              <div class="pet-preview"><Smile :size="38" /><strong>你的桌面伙伴</strong><span>桌宠展示与互动功能正在准备中</span></div>
-              <div class="preference-row"><div><strong>桌宠状态</strong><small>开启后可在桌面边缘显示虚拟伙伴</small></div><span class="planned-tag">即将推出</span></div>
-              <button class="primary-button" type="button" disabled>选择桌宠</button>
+              <div class="pet-preview"><component :is="petIcon" :size="38" /><strong>{{ petLabel }}</strong></div>
+              <div class="preference-row"><div><strong>桌宠状态</strong><small>开启后可在页面右下角显示虚拟伙伴</small></div><label class="switch"><input type="checkbox" :checked="petEnabled" @change="togglePet" /></label></div>
+              <div class="pet-options"><button v-for="option in petOptions" :key="option.id" type="button" class="pet-option" :class="{ active: petChoice === option.id }" @click="choosePet(option.id)"><component :is="option.icon" :size="18" /><span>{{ option.label }}</span></button></div>
             </template>
           </section>
           <HarnessApp v-if="activePage === 'harness'" embedded :api-base="backendUrl" />
-          <div v-if="activePage !== 'harness'" class="page-empty-state">
-            <div class="page-empty-icon"><Workflow v-if="activePage === 'automation'" :size="44" /><Puzzle v-else-if="activePage === 'plugins'" :size="44" /><Bot v-else-if="activePage === 'bot'" :size="44" /><FileText v-else-if="activePage === 'docs'" :size="44" /><Archive v-else :size="44" /></div>
-            <h2>{{ activePage === 'automation' ? '安排任务' : activePage === 'plugins' ? '管理插件' : activePage === 'bot' ? '轻量级机器人' : activePage === 'docs' ? '管理文档' : '导出历史聊天' }}</h2>
-            <p>{{ activePage === 'automation' ? 'Hotline 可以帮你处理持续性任务，让你不必亲自自动手。' : activePage === 'plugins' ? '安装和管理技能，让 Hotline 拥有更适合你的工作能力。' : activePage === 'bot' ? '创建专注单一任务的轻量机器人，配置名称、角色指令和常用能力，并从独立入口快速开始对话。当前项目尚未接入机器人配置与运行服务。' : activePage === 'docs' ? '上传文档后，可以预览、提问并建立检索索引。' : '将历史会话及完整问答记录导出为 JSON 文件，便于备份和迁移。' }}</p>
-            <button v-if="activePage === 'plugins'" class="primary-button" type="button" @click="openSkills"><Puzzle :size="15" />打开技能</button>
-            <button v-else-if="activePage === 'bot'" class="primary-button" type="button" disabled>规划中</button>
-            <button v-else-if="activePage === 'docs'" class="primary-button" type="button" @click="openDocs"><Plus :size="15" />上传文档</button>
-            <button v-else-if="activePage === 'export'" class="primary-button" type="button" :disabled="exportingHistory" @click="exportChatHistory"><LoaderCircle v-if="exportingHistory" :size="15" class="spin" /><Download v-else :size="15" />{{ exportingHistory ? '正在导出' : '导出 JSON' }}</button>
-            <button v-else class="primary-button" type="button" disabled>新建任务</button>
+          <section v-if="activePage === 'automation'" class="plugins-page">
+            <div class="settings-section-copy"><CalendarClock :size="22" /><div><h2>安排任务</h2></div><button class="primary-button" type="button" @click="openScheduleForm"><Plus :size="15" />新建任务</button></div>
+            <form v-if="showScheduleForm" class="schedule-form" @submit.prevent="submitSchedule">
+              <label>任务名称<input v-model="scheduleDraft.name" placeholder="例如：每日服务巡检" /></label>
+              <label>任务内容<textarea v-model="scheduleDraft.prompt" rows="3" placeholder="每次触发时交给 Agent 的任务描述"></textarea></label>
+              <label>执行模式<select v-model="scheduleDraft.agent"><option value="chat">对话助手</option><option value="file">文件问答</option><option value="deep">深度研究</option></select></label>
+              <label>间隔（分钟）<input v-model.number="scheduleDraft.intervalMinutes" type="number" min="1" max="43200" /></label>
+              <div class="dialog-actions"><button class="secondary-button" type="button" @click="showScheduleForm = false">取消</button><button class="primary-button" type="submit" :disabled="scheduleBusy">{{ scheduleBusy ? '创建中…' : '创建任务' }}</button></div>
+            </form>
+            <div v-if="schedules.length" class="plugin-list">
+              <div v-for="task in schedules" :key="task.task_id" class="plugin-row">
+                <div><strong>{{ task.name }}</strong><small>{{ task.prompt }}</small><small>每 {{ task.interval_minutes }} 分钟 · 上次运行 {{ task.last_run_at || '尚未执行' }}{{ task.last_run_id ? ' · ' + task.last_run_id : '' }}</small></div>
+                <span class="plugin-state">{{ task.enabled ? '已启用' : '已停用' }}</span>
+                <button class="text-action" type="button" :disabled="scheduleBusy" @click="runScheduleNow(task)">立即执行</button>
+                <button class="text-action" type="button" :disabled="scheduleBusy" @click="toggleSchedule(task)">{{ task.enabled ? '停用' : '启用' }}</button>
+                <button class="text-action danger" type="button" @click="removeSchedule(task)">删除</button>
+              </div>
+            </div>
+            <div v-else class="page-empty-state"><div class="page-empty-icon"><CalendarClock :size="44" /></div><h2>安排任务</h2><p>暂无定时任务</p><button class="primary-button" type="button" @click="openScheduleForm"><Plus :size="15" />新建任务</button></div>
+          </section>
+          <section v-else-if="activePage === 'plugins'" class="plugins-page">
+            <div class="settings-section-copy"><Puzzle :size="22" /><div><h2>已安装技能</h2></div><button class="primary-button" type="button" @click="openSkills"><Upload :size="15" />上传技能包</button></div>
+            <div v-if="skills.length" class="plugin-list">
+              <div v-for="skill in skills" :key="skill.id" class="plugin-row">
+                <div><strong>{{ skill.name }}</strong><small>{{ skill.description || '暂无说明' }}</small><small>来源 {{ skill.sourceFile || '本地安装包' }} · 入口 {{ skill.entry || '—' }}</small></div>
+                <span class="plugin-state">{{ skill.enabled ? '已启用' : '已停用' }}</span>
+                <button class="text-action" type="button" @click="togglePlugin(skill)">{{ skill.enabled ? '停用' : '启用' }}</button>
+                <button class="text-action danger" type="button" @click="removePlugin(skill)">删除</button>
+              </div>
+            </div>
+            <div v-else class="page-empty-state"><div class="page-empty-icon"><Puzzle :size="44" /></div><h2>管理插件</h2><p>暂无已安装技能</p><button class="primary-button" type="button" @click="openSkills"><Plus :size="15" />上传技能包</button></div>
+          </section>
+          <section v-else-if="activePage === 'bot'" class="plugins-page">
+            <div class="settings-section-copy"><Bot :size="22" /><div><h2>轻量机器人</h2></div><button class="primary-button" type="button" @click="openBotForm()"><Plus :size="15" />新建机器人</button></div>
+            <form v-if="showBotForm" class="schedule-form" @submit.prevent="submitBot">
+              <label>机器人名称<input v-model="botDraft.name" placeholder="例如：值班客服" /></label>
+              <label>角色指令<textarea v-model="botDraft.instruction" rows="3" placeholder="你是一位只回答售后问题的客服，结论先行、语气克制"></textarea></label>
+              <label>绑定技能<select v-model="botDraft.skills" multiple size="4"><option v-for="skill in skills" :key="skill.id" :value="skill.id">{{ skill.name }}</option></select></label>
+              <div class="dialog-actions"><button class="secondary-button" type="button" @click="showBotForm = false">取消</button><button class="primary-button" type="submit" :disabled="botBusy">{{ botBusy ? '保存中…' : '保存机器人' }}</button></div>
+            </form>
+            <div v-if="bots.length" class="plugin-list">
+              <div v-for="bot in bots" :key="bot.bot_id" class="bot-row">
+                <div><strong>{{ bot.name }}</strong><small>{{ bot.instruction || '未设置角色指令' }}</small><small>技能：{{ bot.skills.length ? bot.skills.join('、') : '未绑定' }}</small></div>
+                <span class="plugin-state">{{ bot.enabled ? '已启用' : '已停用' }}</span>
+                <select class="bot-session-select" value="" @change="bindBot(bot, $event.target.value)"><option value="">绑定会话…</option><option v-for="session in visibleSessions" :key="session.id" :value="session.id">{{ session.title }}</option></select>
+                <button class="text-action" type="button" :disabled="botBusy" @click="toggleBot(bot)">{{ bot.enabled ? '停用' : '启用' }}</button>
+                <button class="text-action" type="button" :disabled="botBusy" @click="openBotForm(bot)">编辑</button>
+                <button class="text-action danger" type="button" @click="removeBot(bot)">删除</button>
+              </div>
+            </div>
+            <div v-else class="page-empty-state"><div class="page-empty-icon"><Bot :size="44" /></div><h2>轻量机器人</h2><p>暂无机器人</p><button class="primary-button" type="button" @click="openBotForm()"><Plus :size="15" />新建机器人</button></div>
+          </section>
+          <div v-else-if="activePage === 'docs' || activePage === 'export'" class="page-empty-state">
+            <div class="page-empty-icon"><FileText v-if="activePage === 'docs'" :size="44" /><Archive v-else :size="44" /></div>
+            <h2>{{ activePage === 'docs' ? '管理文档' : '导出历史聊天' }}</h2>
+            <p v-if="activePage === 'export'">导出为 JSON 文件</p>
+            <button v-if="activePage === 'docs'" class="primary-button" type="button" @click="openDocs"><Plus :size="15" />上传文档</button>
+            <button v-else class="primary-button" type="button" :disabled="exportingHistory" @click="exportChatHistory"><LoaderCircle v-if="exportingHistory" :size="15" class="spin" /><Download v-else :size="15" />{{ exportingHistory ? '正在导出' : '导出 JSON' }}</button>
           </div>
         </div>
       </section>
     </main>
 
+    <div v-if="petEnabled" class="page-pet" :title="petLabel"><component :is="petIcon" :size="22" /></div>
     <Transition name="toast"><div v-if="toast" class="toast-message" role="status"><CheckCircle2 :size="17" />{{ toast }}</div></Transition>
 
     <div v-if="connectionState === 'offline'" class="connection-banner" role="alert"><AlertCircle :size="17" /><span>{{ connectionMessage || 'Python 服务暂不可用' }}</span><button type="button" @click="retryConnection">重试</button><button class="icon-button" type="button" aria-label="设置服务地址" @click="settingsDraft = backendUrl; showSettings = true"><Settings2 :size="16" /></button></div>
@@ -1546,17 +2102,17 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <div class="folder-import-files" aria-label="待上传文件预览">
-              <div class="folder-import-files-heading"><span>文件预览</span><span>{{ pendingWorkspaceEntries.length }} 个文件</span></div>
+            <details class="folder-import-files" aria-label="待上传文件预览">
+              <summary class="folder-import-files-heading"><span>文件预览</span><span>{{ pendingWorkspaceEntries.length }} 个文件</span><ChevronRight :size="14" /></summary>
               <ul>
                 <li v-for="entry in pendingWorkspaceEntries.slice(0, 6)" :key="entry.path">
                   <File :size="15" /><span>{{ entry.path }}</span><small>{{ formatBytes(entry.size) }}</small>
                 </li>
               </ul>
               <p v-if="pendingWorkspaceEntries.length > 6" class="folder-import-more">还有 {{ pendingWorkspaceEntries.length - 6 }} 个文件</p>
-            </div>
+            </details>
 
-            <p v-if="folderImportSkipped" class="folder-import-warning"><AlertCircle :size="14" /> 已跳过 {{ folderImportSkipped }} 个超过 50 MB 的文件</p>
+            <p v-if="folderImportSkipped" class="folder-import-warning"><AlertCircle :size="14" /> 已跳过 {{ folderImportSkipped }} 个私密、依赖或超过 50 MB 的文件</p>
 
             <div v-if="projectUploadBusy" class="folder-import-progress">
               <div class="folder-import-progress-head"><span>正在上传 {{ folderImportProgress.done }} / {{ folderImportProgress.total }}</span><strong>{{ folderImportPercent }}%</strong></div>
@@ -1582,7 +2138,7 @@ onUnmounted(() => {
           <section class="dialog project-name-dialog" role="dialog" aria-modal="true" aria-labelledby="project-name-title" aria-describedby="project-name-copy">
             <div class="dialog-heading"><div class="dialog-symbol permission-symbol"><FolderOpen :size="19" /></div><button class="icon-button" type="button" aria-label="关闭项目命名框" @click="showProjectNameDialog = false"><X :size="18" /></button></div>
             <h2 id="project-name-title">给这个项目起个名字</h2>
-            <p id="project-name-copy">文件夹已经上传到工作区。设置一个容易识别的名字，之后可以从项目旁边的 + 开始新的对话。</p>
+            <p id="project-name-copy">文件夹已上传，可为项目命名。</p>
             <label class="project-name-field"><span>项目名称</span><input v-model="projectNameDraft" class="text-field" autofocus maxlength="80" @keydown.enter.prevent="saveProjectName" /></label>
             <div class="dialog-actions"><button class="secondary-button" type="button" @click="showProjectNameDialog = false">稍后再命名</button><button class="primary-button" type="button" @click="saveProjectName">保存项目名称</button></div>
           </section>
@@ -1593,7 +2149,7 @@ onUnmounted(() => {
           <section class="dialog skills-dialog" role="dialog" aria-modal="true" aria-labelledby="skills-title">
             <div class="dialog-heading"><div class="dialog-symbol"><Puzzle :size="19" /></div><button class="icon-button" type="button" aria-label="关闭技能管理" @click="closeSkills"><X :size="18" /></button></div>
             <h2 id="skills-title">技能管理</h2>
-            <p>上传含 SKILL.md 的技能包（.zip）。系统会在前 3 层目录内自动查找，找不到时可手动指定。</p>
+            <p>支持包含 SKILL.md 的 .zip 技能包。</p>
             <div class="skill-toolbar">
               <button class="primary-button" type="button" :disabled="skillBusy" @click="skillInput.click()"><LoaderCircle v-if="skillBusy" :size="15" class="spin" /><Plus v-else :size="15" />上传技能包</button>
               <input ref="skillInput" class="skill-file-input" type="file" accept=".zip" @change="chooseSkillZip" />
@@ -1631,7 +2187,7 @@ onUnmounted(() => {
           <section class="dialog skills-dialog docs-dialog" role="dialog" aria-modal="true" aria-labelledby="docs-title">
             <div class="dialog-heading"><div class="dialog-symbol"><FileText :size="19" /></div><button class="icon-button" type="button" aria-label="关闭文档库" @click="closeDocs"><X :size="18" /></button></div>
             <h2 id="docs-title">文档库</h2>
-            <p>Markdown 直接入库；PDF / Word 交给 MinerU 解析成 Markdown，抽出的图片托管到对象存储并改写正文地址，再由多模态模型逐张生成图注。</p>
+            <p>支持 Markdown、PDF 和 Word。</p>
             <div class="skill-toolbar">
               <button class="primary-button" type="button" :disabled="docBusy" @click="docInput.click()"><LoaderCircle v-if="docBusy" :size="15" class="spin" /><Plus v-else :size="15" />{{ docBusy ? '处理中' : '上传文档' }}</button>
               <input ref="docInput" class="skill-file-input" type="file" accept=".md,.markdown,.pdf,.docx,.doc" @change="chooseDocFile" />
@@ -1671,7 +2227,7 @@ onUnmounted(() => {
           <section class="dialog doc-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="doc-preview-title">
             <div class="dialog-heading"><div class="dialog-symbol"><Eye :size="19" /></div><button class="icon-button" type="button" aria-label="关闭文档预览" @click="closeDocPreview"><X :size="18" /></button></div>
             <h2 id="doc-preview-title">分段预览</h2>
-            <p>{{ previewDoc?.fileName }} · 这里展示当前配置实际会生成的父子分段和图片描述。</p>
+            <p>{{ previewDoc?.fileName }}</p>
 
             <div v-if="docPreviewBusy" class="preview-loading"><LoaderCircle :size="20" class="spin" /><span>正在分析 Markdown 分段…</span></div>
             <div v-else-if="docPreviewError" class="skill-feedback error"><AlertCircle :size="15" /><span>{{ docPreviewError }}</span></div>
@@ -1727,15 +2283,6 @@ onUnmounted(() => {
               <button class="secondary-button" type="button" @click="cancelPermission">取消</button>
               <button class="primary-button permission-confirm" type="button" @click="confirmPermission">{{ permissionRequest.confirmLabel }}</button>
             </div>
-          </section>
-        </div>
-      </Transition>
-      <Transition name="modal">
-        <div v-if="showDeleteConfirm" class="modal-backdrop" @click.self="showDeleteConfirm = false">
-          <section class="dialog confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-title" aria-describedby="delete-copy">
-            <div class="dialog-heading"><div class="dialog-symbol danger-symbol"><Trash2 :size="19" /></div><button class="icon-button" type="button" aria-label="关闭确认框" @click="showDeleteConfirm = false"><X :size="18" /></button></div>
-            <h2 id="delete-title">删除这段会话？</h2><p id="delete-copy">删除后，对话记录将无法恢复。</p>
-            <div class="dialog-actions"><button class="secondary-button" type="button" @click="showDeleteConfirm = false">保留会话</button><button class="danger-button" type="button" @click="confirmDelete"><Trash2 :size="15" />确认删除</button></div>
           </section>
         </div>
       </Transition>
