@@ -98,7 +98,27 @@ class PgVectorStore:
             raise ValueError("Invalid parent table name")
         return table
 
+    def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Embed several texts in one request; the embedding API accepts a list input."""
+        from .modules.context_engineering.privacy import sanitize_text
+        cleaned = [sanitize_text(text) for text in (texts or []) if text]
+        if not cleaned or not self.settings.embedding_api_key:
+            return []
+        endpoint = self.settings.embedding_base_url.rstrip("/") + "/embeddings"
+        request = urllib.request.Request(
+            endpoint,
+            data=json.dumps({"model": self.settings.embedding_model, "input": cleaned}).encode(),
+            headers={"Content-Type": "application/json",
+                     "Authorization": f"Bearer {self.settings.embedding_api_key}"},
+        )
+        with urllib.request.urlopen(request, timeout=90) as response:
+            payload = json.loads(response.read().decode())
+        data = sorted(payload.get("data") or [], key=lambda item: item.get("index", 0))
+        return [item["embedding"] for item in data]
+
     def _embed(self, text: str) -> list[float]:
+        from .modules.context_engineering.privacy import sanitize_text
+        text = sanitize_text(text)
         if not self.settings.embedding_api_key:
             raise RuntimeError("Embedding API key is not configured")
         endpoint = self.settings.embedding_base_url.rstrip("/") + "/embeddings"
@@ -161,15 +181,20 @@ class PgVectorStore:
 
     def search_expanded(self, file_id: str, question: str, top_k: int = 5) -> list[str]:
         """Recall children, then hand the LLM the whole parent section when there is one."""
-        if not self.settings.embedding_api_key or not self._connect():
+        return self.search_expanded_files([file_id], question, top_k)
+
+    def search_expanded_files(self, file_ids: list[str], question: str, top_k: int = 5) -> list[str]:
+        """Same recall across several files of one workspace; one embedding covers all of them."""
+        file_ids = [file_id for file_id in (file_ids or []) if file_id]
+        if not file_ids or not self.settings.embedding_api_key or not self._connect():
             return []
         vector = self._embed(question)
         with self._connection.cursor() as cursor:
             cursor.execute(
                 f"""SELECT c.content, c.metadata->>'parentChunkId' AS parent_id
-                    FROM {self._table} c WHERE c.metadata->>'fileid' = %s
+                    FROM {self._table} c WHERE c.metadata->>'fileid' = ANY(%s)
                     ORDER BY c.embedding <=> %s::vector LIMIT %s""",
-                (file_id, self._vector_literal(vector), top_k),
+                (file_ids, self._vector_literal(vector), top_k),
             )
             hits = cursor.fetchall()
             parent_ids = [row[1] for row in hits if row[1]]
@@ -271,6 +296,18 @@ class PgVectorStore:
                         (file_id, subject, predicate, obj, evidence),
                     )
         return len(relations)
+
+    def document_chunks(self, file_id: str) -> list[str]:
+        """The document's own chunk texts, used to feed the workspace lexical index."""
+        if not self._connect():
+            return []
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                f"""SELECT content FROM {self._table} WHERE metadata->>'fileid' = %s
+                    ORDER BY NULLIF(metadata->>'chunkId', '')::int NULLS LAST""",
+                (file_id,),
+            )
+            return [row[0] for row in cursor.fetchall()]
 
     def delete_document(self, file_id: str) -> None:
         if not self._connect():

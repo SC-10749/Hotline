@@ -444,6 +444,30 @@ class SkillRegistry:
     def get(self, skill_id: str) -> Skill | None:
         return next((s for s in self.list() if s.id == skill_id), None)
 
+    def detail(self, skill_id: str) -> dict | None:
+        skill = self.get(skill_id)
+        if not skill:
+            return None
+        root = self.root.resolve()
+        entry = self.skill_file(skill).absolute()
+        try:
+            if not entry.resolve().is_relative_to(root) or entry.name.lower() != 'skill.md':
+                raise SkillError('技能入口不可读')
+            cursor = entry
+            while cursor != self.root.absolute():
+                if cursor.is_symlink() or cursor == cursor.parent:
+                    raise SkillError('技能入口不支持符号链接')
+                cursor = cursor.parent
+            stamp = _file_stamp(entry)
+            with entry.open('rb') as stream:
+                content = stream.read(1024 * 1024 + 1)
+            if len(content) > 1024 * 1024 or b'\x00' in content or _file_stamp(entry) != stamp:
+                raise SkillError('技能入口过大、非文本或正在更新')
+            text = content.decode('utf-8')
+        except (OSError, UnicodeError) as exc:
+            raise SkillError('技能入口不可读，请重新安装技能包后重试') from exc
+        return {**skill.to_dict(), 'content': text[:12000], 'truncated': len(text) > 12000}
+
     def enabled(self) -> list[Skill]:
         return [s for s in self.list() if s.enabled] + self.catalog_skills()
 
@@ -541,15 +565,21 @@ class SkillRegistry:
         return True
 
     def set_enabled(self, skill_id: str, enabled: bool) -> Skill | None:
-        skill = self.get(skill_id)
-        if not skill:
-            return None
-        meta = self._skill_dir(skill.dirName) / META_NAME
-        data = json.loads(meta.read_text("utf-8"))
-        data["enabled"] = enabled
-        meta.write_text(json.dumps(data, ensure_ascii=False, indent=2), "utf-8")
-        skill.enabled = enabled
-        return skill
+        with self._metadata_lock:
+            skill = self.get(skill_id)
+            if not skill:
+                return None
+            meta = self._skill_dir(skill.dirName) / META_NAME
+            data = json.loads(meta.read_text("utf-8"))
+            data["enabled"] = enabled
+            temporary = meta.with_name(f'{META_NAME}.{uuid4().hex}.tmp')
+            try:
+                temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2), 'utf-8')
+                temporary.replace(meta)
+            finally:
+                temporary.unlink(missing_ok=True)
+            skill.enabled = enabled
+            return skill
 
     def skill_file(self, skill: Skill) -> Path:
         return self._skill_dir(skill.dirName) / PurePosixPath(skill.entry)

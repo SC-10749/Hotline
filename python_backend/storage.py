@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
+from contextlib import closing
 from typing import Any
 
 from .config import Settings
@@ -92,7 +93,7 @@ class Storage:
             connection.close()
 
     def _init_sqlite(self) -> None:
-        with self._connect_sqlite() as db:
+        with closing(self._connect_sqlite()) as db, db:
             db.executescript("""CREATE TABLE IF NOT EXISTS ai_file_info (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, file_id TEXT NOT NULL UNIQUE, file_name TEXT NOT NULL,
                 file_type TEXT, file_size INTEGER, minio_path TEXT, extracted_text TEXT, created_at TEXT,
@@ -131,7 +132,7 @@ class Storage:
 
     def _execute(self, sql: str, params: tuple = (), fetch: str | None = None):
         if self.backend == "sqlite":
-            with self._lock, self._connect_sqlite() as db:
+            with self._lock, closing(self._connect_sqlite()) as db, db:
                 cursor = db.execute(sql, params)
                 if fetch == "one": return cursor.fetchone()
                 if fetch == "all": return cursor.fetchall()
@@ -190,6 +191,27 @@ class Storage:
 
     def session_messages(self, conversation_id: str) -> list[SessionMessage]:
         return [self._message(row) for row in self._execute("SELECT * FROM ai_session WHERE session_id=? ORDER BY id ASC", (conversation_id,), "all")]
+
+    def context_messages(self, conversation_id: str, limit: int = 64) -> list[SessionMessage]:
+        rows = self._execute('SELECT * FROM ai_session WHERE session_id=? ORDER BY id DESC LIMIT ?',
+                             (conversation_id, limit), 'all')
+        return [self._message(row) for row in reversed(rows)]
+
+    def search_session_messages(self, conversation_id: str, query: str, limit: int = 6) -> list[SessionMessage]:
+        """Make pre-migration history readable without loading an entire conversation."""
+        import re
+        terms = re.findall(r'[A-Za-z0-9_]{2,}|[\u4e00-\u9fff]{2,}', query)[:8]
+        if not terms:
+            return []
+        predicates = ' OR '.join('(question LIKE ? OR answer LIKE ?)' for _ in terms)
+        parameters = [conversation_id]
+        for term in terms:
+            # Treat wildcard characters as ordinary text in the search request.
+            literal = term.replace('%', '').replace('_', '')[:80]
+            parameters.extend(['%' + literal + '%'] * 2)
+        rows = self._execute(f'''SELECT * FROM ai_session WHERE session_id=? AND answer IS NOT NULL
+            AND answer<>'' AND ({predicates}) ORDER BY id DESC LIMIT ?''', (*parameters, limit), 'all')
+        return [self._message(row) for row in rows]
 
     def conversation_file_id(self, conversation_id: str) -> str | None:
         row = self._execute(

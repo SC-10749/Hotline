@@ -1,0 +1,93 @@
+/* Shared control behavior. Theme colors live in static/console/tokens.css. */
+body { color: var(--text); background: var(--canvas); font-size: 13px; line-height: 1.6; }
+button, input, textarea, select { font: inherit; }
+input, textarea, select { color: var(--text); accent-color: var(--accent); caret-color: var(--text); }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
+::selection { color: var(--text); background: var(--selection); }
+:is(button, input, textarea, select, a, summary):focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+:is(button, input, textarea, select):disabled { cursor: not-allowed; }
+button:disabled { opacity: .5; }
+a { text-underline-offset: 3px; }
+
+.app-rail { color: var(--text-secondary); background: var(--sidebar); border-color: var(--line-soft); }
+.rail-profile { color: var(--text-secondary); background: var(--surface-hover); border-color: var(--line); }
+.rail-profile:hover { background: var(--surface-hover); }
+.rail-button { color: var(--muted); }
+.rail-button:hover, .rail-button.active { color: var(--text); background: var(--surface-hover); box-shadow: none; }
+.rail-button:first-child svg { fill: none; }
+.app-shell .rail-button { width: 36px; height: 36px; border-radius: 9px; transition: color 140ms var(--ease), background-color 140ms var(--ease); }
+.app-shell .rail-button svg { width: 19px; height: 19px; stroke-width: 1.7; }
+.app-shell .rail-profile { width: 32px; height: 32px; }
+
+@media (min-width: 961px) {
+  html { scrollbar-gutter: stable; }
+  .app-shell.chat-page { grid-template-columns: 52px 248px minmax(0, 1fr); }
+  .app-shell.chat-page.sidebar-collapsed { grid-template-columns: 52px 0 minmax(0, 1fr); }
+  .app-shell.standalone-page-active { grid-template-columns: 52px minmax(0, 1fr); }
+  .app-shell .app-rail { gap: 7px; padding: 16px 0; }
+}
+.standalone-page { background: var(--canvas); }
+.page-sidebar { background: var(--sidebar); border-color: var(--line-soft); }
+.page-sidebar-header h2 { font-size: 18px; }
+.standalone-header h1 { margin-top: 0; font-size: 24px; }
+.page-empty-state h2 { font-size: 24px; }
+.page-empty-state p { color: var(--text-secondary); font-size: 14px; }
+.page-empty-icon { width: 56px; height: 56px; border: 0; border-radius: 12px; color: var(--text-secondary); background: var(--surface-subtle); }
+.page-empty-icon svg { width: 28px; height: 28px; }
+
+:is(.primary-button, .secondary-button, .danger-button, .button) { min-height: 38px; border-radius: var(--control-radius); font-size: 12px; }
+.primary-button, .page-empty-state .primary-button { color: var(--on-accent); background: var(--accent); border-color: var(--accent); border-radius: var(--control-radius); }
+.primary-button:hover:not(:disabled), .page-empty-state .primary-button:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+.secondary-button { color: var(--text-secondary); background: var(--surface); }
+.secondary-button:hover:not(:disabled) { background: var(--surface-hover); }
+.danger-button { color: var(--error); background: var(--error-soft); }
+.text-action.danger { color: var(--error); }
+.text-field { font: inherit; font-size: 13px; border-radius: var(--control-radius); background: var(--surface); }
+textarea.text-field { height: auto; min-height: 96px; padding-block: 10px; line-height: 1.6; }
+.schedule-form :is(input, textarea, select), .preference-row select { min-width: 0; max-width: 100%; border-radius: var(--control-radius); color: var(--text); background: var(--surface); }
+.preference-row { flex-wrap: wrap; padding-block: 12px; gap: 12px; }
+.preference-row > div { min-width: 0; }
+.plugins-page { align-content: start; }
+.plugin-row { grid-template-columns: minmax(0, 1fr) repeat(3, auto); }
+.text-action { display: inline-flex; min-height: 34px; align-items: center; justify-content: center; gap: 5px; padding: 0 8px; border: 0; border-radius: var(--control-radius); color: var(--text-secondary); background: transparent; font-size: 12px; cursor: pointer; }
+.text-action:hover:not(:disabled) { background: var(--surface-hover); }
+.plugin-state { color: var(--success); }
+.profile-settings-content { min-width: 0; }
+.settings-section-copy { flex-wrap: wrap; }
+.settings-section-copy > div { min-width: 0; flex: 1 1 220px; }
+.settings-section-copy > .primary-button { flex: 0 0 auto; }
+.profile-settings-content > .primary-button { margin-top: 20px; }
+
+.modal-backdrop { overflow-y: auto; background: var(--backdrop); }
+.dialog { max-height: calc(100dvh - 40px); overflow-y: auto; border-radius: 16px; }
+.dialog-actions { flex-wrap: wrap; }
+.dialog :is(p, code), .profile-settings-content p { overflow-wrap: anywhere; }
+.connection-banner { max-width: calc(100vw - 32px); background: var(--error-soft); color: var(--error); border-color: var(--line); }
+.connection-banner > span { min-width: 0; overflow-wrap: anywhere; }
+.toast-message { max-width: calc(100vw - 32px); color: var(--text); background: var(--surface); border-color: var(--line); }
+.markdown-content :is(h1, h2, h3, th) { color: var(--text); }
+.markdown-content a { color: var(--info); }
+.markdown-content pre { background: var(--code-bg) !important; }
+.markdown-content pre code { color: var(--code-text); background: transparent; }
+
+@media (hover: none) {
+  .session-delete, .project-add-task { opacity: 1; }
+}
+@media (max-width: 960px) {
+  .app-shell .app-rail { position: fixed; z-index: 20; inset: auto 0 0; display: flex; width: 100%; height: calc(52px + env(safe-area-inset-bottom)); flex-direction: row; justify-content: space-around; gap: 2px; overflow-x: auto; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); border: 0; border-top: 1px solid var(--line-soft); }
+  .app-shell .app-rail :is(.rail-button, .rail-profile) { flex: 0 0 auto; width: 36px; height: 36px; margin: 0; }
+  .app-shell.chat-page { padding-bottom: calc(52px + env(safe-area-inset-bottom)); }
+  .app-shell.chat-page .workspace { height: calc(100dvh - 52px - env(safe-area-inset-bottom)); }
+  .app-shell.standalone-page-active { padding-bottom: calc(52px + env(safe-area-inset-bottom)); }
+  .harness-shell .harness-sidebar { height: calc(100dvh - 52px - env(safe-area-inset-bottom)); }
+}
+@media (max-width: 700px) {
+  .plugin-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .plugin-row > div { grid-column: 1 / -1; }
+  .plugin-row .secondary-button { width: 100%; }
+  .standalone-header { gap: 12px; flex-wrap: wrap; }
+  .profile-settings-content .dialog-actions { justify-content: flex-start; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}

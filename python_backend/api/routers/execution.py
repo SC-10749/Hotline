@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from typing import Callable
@@ -18,34 +19,52 @@ class ExecutionCreatePayload(BaseModel):
     agent: str = "chat"
     query: str
     fileId: str | None = None
+    agentId: str | None = None
+    workspaceId: str | None = None
 
 
 def create_execution_router(
     service: ExecutionApplicationService,
     file_exists: Callable[[str], bool],
+    pending_approvals: Callable[[], int] | None = None,
+    workspace_exists: Callable[[str], bool] | None = None,
 ) -> APIRouter:
     router = APIRouter()
 
-    def event_stream(run_id: str, last_event_id: int = 0):
+    @router.get('/harness/overview')
+    def harness_overview():
+        """总览聚合：今日运行、模型用量与待审批数量，全部来自真实记录。"""
+        stats = service.daily_stats()
+        stats['pendingApprovals'] = pending_approvals() if pending_approvals else 0
+        return stats
+
+    async def event_stream(run_id: str, last_event_id: int = 0, envelope: bool = False):
         cursor = last_event_id
         heartbeat_at = time.monotonic()
         while True:
-            for item in service.queue.events_after(run_id, cursor):
+            # Read terminal state before draining so the final event cannot be skipped.
+            run = service.get_run(run_id)
+            status = run["status"] if run else None
+            for item in service.get_events(run_id, cursor):
                 cursor = item["event_id"]
-                yield f"id: {cursor}\ndata: {json.dumps(item['event'], ensure_ascii=False)}\n\n"
+                payload = item if envelope else item["event"]
+                yield f"id: {cursor}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
                 heartbeat_at = time.monotonic()
 
-            status = service.queue.get_status(run_id)
             if status in {"completed", "failed", "cancelled", None}:
-                yield "data: [DONE]\n\n"
+                yield (f"event: done\ndata: {json.dumps({'status': status})}\n\n"
+                       if envelope else "data: [DONE]\n\n")
                 return
             if time.monotonic() - heartbeat_at >= 15:
                 yield ": keep-alive\n\n"
                 heartbeat_at = time.monotonic()
-            time.sleep(0.25)
+            await asyncio.sleep(0.08)
 
     def submit(agent: str, query: str, conversation_id: str, file_id: str | None,
-               last_event_id: str | None):
+               last_event_id: str | None, workspace_id: str = ''):
+        workspace_id = workspace_id.strip()
+        if workspace_id and (len(workspace_id) > 255 or (workspace_exists and not workspace_exists(workspace_id))):
+            raise HTTPException(404, '工作区不存在')
         try:
             request = ExecutionRequest(
                 conversation_id=(conversation_id or "").strip(),
@@ -62,7 +81,9 @@ def create_execution_router(
         except ValueError:
             cursor = 0
         try:
-            run = service.submit_or_resume(request, cursor)
+            run = service.submit_or_resume(request, cursor, workspace_id.strip())
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
         except WorkerUnavailableError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         except ActiveExecutionError as exc:
@@ -81,6 +102,8 @@ def create_execution_router(
 
     @router.post("/execution/runs")
     def create_run(payload: ExecutionCreatePayload):
+        if payload.workspaceId and (len(payload.workspaceId) > 255 or (workspace_exists and not workspace_exists(payload.workspaceId.strip()))):
+            raise HTTPException(404, '工作区不存在')
         try:
             request = ExecutionRequest(
                 conversation_id=payload.conversationId.strip(),
@@ -93,7 +116,7 @@ def create_execution_router(
         if request.file_id and not file_exists(request.file_id):
             raise HTTPException(status_code=404, detail="文件或文档不存在")
         try:
-            return {"run": service.create(request)}
+            return {"run": service.create(request, (payload.agentId or "").strip(), (payload.workspaceId or "").strip())}
         except WorkerUnavailableError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         except ActiveExecutionError as exc:
@@ -122,6 +145,26 @@ def create_execution_router(
             raise HTTPException(status_code=404, detail="运行不存在")
         return {"items": service.get_events(run_id, after)}
 
+    @router.get('/execution/runs/{run_id}/context')
+    def get_run_context(run_id: str):
+        if not service.get_run(run_id):
+            raise HTTPException(status_code=404, detail='运行不存在')
+        return {'items': service.get_context_snapshots(run_id)}
+
+    @router.get("/execution/runs/{run_id}/stream")
+    def stream_run_events(run_id: str, request: Request, after: int = Query(0, ge=0)):
+        if not service.get_run(run_id):
+            raise HTTPException(status_code=404, detail="运行不存在")
+        try:
+            cursor = max(after, int(request.headers.get("last-event-id", "0")))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="事件游标无效") from exc
+        return StreamingResponse(
+            event_stream(run_id, cursor, envelope=True),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
     @router.post("/execution/runs/{run_id}/cancel")
     def cancel_run(run_id: str):
         if not service.get_run(run_id):
@@ -144,23 +187,24 @@ def create_execution_router(
         return {"run": run}
 
     @router.get("/agent/chat/stream")
-    def chat_stream(query: str, conversationId: str, request: Request):
-        return submit("chat", query, conversationId, None, request.headers.get("last-event-id"))
+    def chat_stream(query: str, conversationId: str, request: Request, workspaceId: str = ''):
+        return submit("chat", query, conversationId, None, request.headers.get("last-event-id"), workspaceId)
 
     @router.get("/agent/file/stream")
-    def file_stream(query: str, conversationId: str, fileId: str, request: Request):
-        return submit("file", query, conversationId, fileId, request.headers.get("last-event-id"))
+    def file_stream(query: str, conversationId: str, fileId: str, request: Request, workspaceId: str = ''):
+        return submit("file", query, conversationId, fileId, request.headers.get("last-event-id"), workspaceId)
 
     @router.get("/agent/pptx/stream")
-    def pptx_stream(query: str, conversationId: str, request: Request):
-        return submit("ppt", query, conversationId, None, request.headers.get("last-event-id"))
+    def pptx_stream(query: str, conversationId: str, request: Request, workspaceId: str = ''):
+        return submit("ppt", query, conversationId, None, request.headers.get("last-event-id"), workspaceId)
 
     @router.get("/agent/deep/stream")
-    def deep_stream(query: str, conversationId: str, request: Request):
-        return submit("deep", query, conversationId, None, request.headers.get("last-event-id"))
+    def deep_stream(query: str, conversationId: str, request: Request, workspaceId: str = ''):
+        return submit("deep", query, conversationId, None, request.headers.get("last-event-id"), workspaceId)
 
     @router.get("/agent/skills/stream")
-    def skills_stream(query: str, conversationId: str, request: Request, fileId: str | None = None):
-        return submit("skills", query, conversationId, fileId, request.headers.get("last-event-id"))
+    def skills_stream(query: str, conversationId: str, request: Request, fileId: str | None = None,
+                      workspaceId: str = ''):
+        return submit("skills", query, conversationId, fileId, request.headers.get("last-event-id"), workspaceId)
 
     return router
