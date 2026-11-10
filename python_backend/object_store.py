@@ -94,6 +94,12 @@ class ObjectStorage:
         assert self.client is not None
         self.client.remove_object(self.settings.minio_bucket, object_name)
 
+    def open_download(self, object_name: str):
+        """Read an indexed object without publishing the provider's address."""
+        if self.backend != 'minio' or self.client is None:
+            raise RuntimeError('对象存储未配置')
+        return self.client.get_object(self.settings.minio_bucket, object_name)
+
     def public_url(self, url: str, object_name: str) -> str:
         """Address an object the way a browser would reach it.
 

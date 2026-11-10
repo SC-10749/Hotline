@@ -23,7 +23,41 @@ from .storage import Storage
 from .vector_store import PgVectorStore
 from .application.execution_service import ExecutionApplicationService
 from .infrastructure.queue import SqliteExecutionQueue
+from .agents import ModelClient
 from .api.routers.execution import create_execution_router
+from .api.routers.context_engineering import create_context_router
+from .modules.context_engineering.service import ContextService
+from .api.routers.intent import create_intent_router
+from .modules.intent import (ACTION_CATALOG, RETRIEVAL_CATALOG, ExampleVectorStore,
+                              vector_config_from_settings)
+from .api.routers.evaluation import create_evaluation_router, wait_for_background_runs
+from .api.routers.release import create_release_router, stop_release_observation
+from .api.routers.resources import create_resource_router
+from .api.routers.registry import create_registry_router
+from .api.routers.mcp import create_mcp_router
+from .api.routers.governance import create_governance_router
+from .api.routers.observability import create_observability_router
+from .api.routers.artifacts import create_artifact_router
+from .api.routers.code_map import create_code_map_router
+from .api.routers.workspace_import import create_workspace_import_router
+from .modules.artifacts.store import ArtifactStore
+from .modules.retention.maintenance import start_retention_loop
+from .modules.execution.scheduler import register_runner, stop_schedule_loop
+from .api.routers.settings import create_settings_router
+from .api.routers.schedules import create_schedule_runner, create_schedules_router
+from .api.routers.bots import create_bots_router
+from .api.routers.profile import create_profile_router
+from .llm import probe_credential
+from .infrastructure.evaluation_store import EvaluationStore
+from .infrastructure.resource_store import ResourceStore
+from .infrastructure.registry_store import RegistryStore
+from .infrastructure.governance_store import GovernanceStore
+from .infrastructure.notification_store import NotificationStore
+from .infrastructure.settings_store import SettingsStore
+from .infrastructure.scheduled_store import ScheduledStore
+from .infrastructure.bot_store import BotStore
+from .infrastructure.profile_store import ProfileStore
+from .infrastructure.credential_store import CredentialStore
 
 settings.ensure_dirs()
 storage = Storage(settings)
@@ -33,6 +67,18 @@ skills = SkillRegistry(settings)
 documents = DocumentService(settings, storage, object_store, vector_store)
 execution_store = SqliteExecutionQueue(settings.execution_db_path)
 execution_service = ExecutionApplicationService(execution_store)
+context_service = ContextService(settings) if settings.context_enabled else None
+evaluation_store = EvaluationStore(settings.data_dir / "evaluation.db")
+resource_store = ResourceStore(settings.data_dir / "harness-resources.db")
+registry_store = RegistryStore(settings.data_dir / "harness-registry.db")
+governance_store = GovernanceStore(settings.data_dir / "harness-governance.db")
+notification_store = NotificationStore(settings.data_dir / "harness-notifications.db")
+settings_store = SettingsStore(settings.data_dir / "harness-settings.db")
+artifact_store = ArtifactStore(settings.data_dir / "artifacts.db")
+scheduled_store = ScheduledStore(settings.data_dir / "harness-schedules.db")
+bot_store = BotStore(settings.data_dir / "harness-bots.db")
+profile_store = ProfileStore(settings.data_dir / "harness-profile.db")
+credential_store = CredentialStore(settings.data_dir / "harness-credentials.db")
 
 STATIC_DIR = Path(__file__).parent.parent / "static"
 CONSOLE_DIR = STATIC_DIR / "console"
@@ -62,7 +108,20 @@ CONSOLE_ACTIONS = {'save', 'bind', 'eval_case', 'eval_cases', 'evaluate', 'evolv
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     documents.start_sweeper()
+    register_runner(create_schedule_runner(scheduled_store, execution_service))
+    retention_stop = start_retention_loop(
+        {
+            'execution': settings.execution_db_path,
+            'governance': settings.data_dir / 'harness-governance.db',
+            'artifacts': settings.data_dir / 'artifacts.db',
+        },
+        settings_store.get,
+    )
     yield
+    retention_stop.set()
+    stop_schedule_loop()
+    stop_release_observation()
+    wait_for_background_runs(timeout=5)
     documents.stop_sweeper()
 
 
@@ -78,8 +137,31 @@ app.include_router(
     create_execution_router(
         execution_service,
         lambda file_id: bool(storage.get_file(file_id) or storage.get_document(file_id)),
+        lambda: len(governance_store.list('pending')),
+        workspace_exists=lambda workspace_id: resource_store.get_workspace(workspace_id) is not None,
     )
 )
+app.include_router(create_evaluation_router(evaluation_store, execution_service))
+if context_service:
+    app.include_router(create_context_router(context_service, storage.delete_session))
+app.include_router(create_resource_router(resource_store))
+app.include_router(create_workspace_import_router(resource_store, settings.data_dir / 'workspace-imports'))
+app.include_router(create_registry_router(registry_store))
+app.include_router(create_mcp_router(registry_store))
+app.include_router(create_governance_router(execution_store.list_workers, governance_store, execution_store.set_worker_state, settings_store.get, notification_store, execution_store.list_worker_errors))
+app.include_router(create_observability_router(execution_store.list_runs, execution_store.get_run, execution_store.get_events))
+app.include_router(create_artifact_router(artifact_store, object_store))
+app.include_router(create_code_map_router(settings.data_dir / 'code-map' / 'hotline'))
+app.include_router(create_settings_router(settings_store))
+app.include_router(create_schedules_router(scheduled_store, execution_service))
+app.include_router(create_bots_router(bot_store))
+app.include_router(create_profile_router(profile_store, credential_store, model_probe=probe_credential))
+# 意图识别：第二层向量召回按 scope 各建一份缓存，未配置 embedding 时自动跳过。
+_intent_vector_config = vector_config_from_settings(settings)
+app.include_router(create_intent_router(ModelClient(settings).chat, {
+    catalog.name: ExampleVectorStore(catalog, _intent_vector_config)
+    for catalog in (ACTION_CATALOG, RETRIEVAL_CATALOG)
+}))
 
 
 def ok(data=None, message="操作成功", code=200):
@@ -266,6 +348,17 @@ async def skill_upload(file: UploadFile = File(...), entry: str = Form("")):
     return ok(skill.to_dict(), "技能安装成功")
 
 
+@app.get('/skill/{skill_id}')
+def skill_detail(skill_id: str):
+    try:
+        item = skills.detail(skill_id)
+    except SkillError as exc:
+        return fail(str(exc))
+    if not item:
+        return fail('技能不存在', 404)
+    return ok(item)
+
+
 @app.post("/skill/{skill_id}/toggle")
 def skill_toggle(skill_id: str, enabled: bool = Query(...)):
     skill = skills.set_enabled(skill_id, enabled)
@@ -290,6 +383,30 @@ def run_catalog(action: str, args: dict):
         catalog.db.close()
 
 
+app.include_router(create_release_router(run_catalog, settings.skill_project, evaluation_store.get_run, governance_store))
+
+
+@app.get('/harness/skills/catalog')
+def harness_skill_catalog():
+    return ok(run_catalog('catalog_summary', {'project': settings.skill_project}))
+
+
+@app.get('/harness/skills/catalog/version')
+def harness_skill_version(name: str = Query(min_length=1, max_length=200), version: str = Query(min_length=1, max_length=100)):
+    try:
+        return ok(run_catalog('version_detail', {'name': name, 'version': version}))
+    except ValueError as exc:
+        return fail(str(exc), 404)
+
+
+@app.get('/harness/skills/catalog/compare')
+def harness_skill_compare(name: str = Query(min_length=1, max_length=200), baseVersion: str = Query(min_length=1, max_length=100), version: str = Query(min_length=1, max_length=100)):
+    try:
+        return ok(run_catalog('version_compare', {'name': name, 'baseVersion': baseVersion, 'version': version}))
+    except ValueError as exc:
+        return fail(str(exc), 404)
+
+
 @app.get("/console")
 def console_index():
     index = CONSOLE_DIR / "index.html"
@@ -300,7 +417,7 @@ def console_index():
 
 @app.get("/console/{asset}")
 def console_asset(asset: str):
-    if Path(asset).name != asset or asset not in {"console.js", "console.css"}:
+    if Path(asset).name != asset or asset not in {"console.js", "console.css", "tokens.css"}:
         raise HTTPException(status_code=404, detail="资源不存在")
     target = CONSOLE_DIR / asset
     if not target.is_file():
@@ -383,9 +500,11 @@ def session_detail(conversation_id: str):
     rows = storage.session_messages(conversation_id)
     if not rows:
         return fail("会话不存在", 404)
+    scope = context_service.store.conversation(conversation_id) if context_service else None
     return ok(
         {
             "conversationId": conversation_id,
+            "workspaceId": scope['workspace_id'] if scope else '',
             "agentType": rows[0].agentType,
             "fileid": rows[0].fileid,
             "messages": [row.to_dict() for row in rows],
@@ -397,6 +516,8 @@ def session_detail(conversation_id: str):
 def session_delete(conversation_id: str):
     existed = bool(storage.session_messages(conversation_id))
     deleted = storage.delete_session(conversation_id)
+    if context_service:
+        context_service.forget(conversation_id)
     if not existed:
         return fail("会话不存在", 404)
     return ok("会话删除成功" if deleted else None)
