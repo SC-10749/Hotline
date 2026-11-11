@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from ..agents import AgentEngine
+from python_backend.modules.execution.engine import AgentEngine
 from ..llm import model_config, model_ready
 from ..infrastructure.bot_store import BotStore
 from ..infrastructure.credential_store import CredentialStore

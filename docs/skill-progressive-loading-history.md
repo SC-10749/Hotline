@@ -1,3 +1,5 @@
+> 历史实施计划（2026-10-27），用于保留设计取舍与验收步骤，不作为当前待办。当前技能入口位于 `python_backend/modules/skills/`，使用说明见 [主 README](../README.md)。
+
 # LangChain 工具调用与自定义 Skill 渐进披露 Implementation Plan
 
 > **状态：四阶段实现已完成，离线测试通过；替代本文件此前的手写 Agent 循环方案。未连接真实模型服务。**

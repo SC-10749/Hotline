@@ -13,3 +13,4 @@ psycopg[binary]>=3.2
 fastapi[standard]>=0.115.0
 uvicorn[standard]>=0.30.0
 python-multipart>=0.0.9
+nacos-sdk-python==3.2.0

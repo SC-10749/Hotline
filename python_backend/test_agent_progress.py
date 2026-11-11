@@ -6,7 +6,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from .agents import AgentEngine
+from python_backend.modules.execution.engine import AgentEngine
 
 
 class AgentProgressTests(unittest.TestCase):

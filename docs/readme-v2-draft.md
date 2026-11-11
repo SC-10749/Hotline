@@ -1,6 +1,8 @@
+> 并行排版草稿，保留供后续选用，尚未替换主说明。本文包含 Java 入口迁移前的运行描述；当前架构、端口和启动命令以 [主 README](../README.md) 为准。
+
 <div align="center">
 
-  <img src="static/favicon.ico" alt="Hotline" width="76" height="76">
+  <img src="../static/favicon.ico" alt="Hotline" width="76" height="76">
 
   # ⚡ Hotline Agent
 
@@ -407,7 +409,7 @@ Execution Worker 没在跑。只起网关不够，用 `npm start` 或单独执�
 | `SKILLS_DIRECTORY` | `data/skills/` | 原技能安装目录 |
 | `DODO_DEV_FRONTEND_PORT` / `DODO_DEV_BACKEND_PORT` | `5180` / `8888` | 开发端口覆盖 |
 
-完整清单见 [`.env.example`](./.env.example)。
+完整清单见 [`.env.example`](../.env.example)。
 
 ---
 
@@ -459,7 +461,7 @@ Hotline/
 | `governance` | 审批、机器、通知与保留策略 | `modules/governance/` |
 | `evaluation` | 数据集、用例、快照与运行对比 | `modules/evaluation/` |
 
-> 协作约束与迁移规则见 [AGENTS.md](./AGENTS.md)。
+> 协作约束与迁移规则见 [AGENTS.md](../AGENTS.md)。
 
 ---
 
@@ -499,15 +501,14 @@ node --test frontend/src/modules/workspaces/paths.test.js frontend/src/modules/e
 
 | 文档 | 内容 |
 | --- | --- |
-| [AGENTS.md](./AGENTS.md) | 协作规则、目录边界、私密信息保护 |
-| [DESIGN.md](./DESIGN.md) | 前端视觉唯一事实源：色板、排版、动效、响应式 |
-| [上下文工程实现与验收](./docs/context-engineering-design.md) | 装配顺序、分层读取、多跳检索与验收口径 |
-| [第二阶段能力设计](./docs/stage-two-capability-design.md) | 重排、冲突时效、权限模型、向量流水线、评测门禁与业界做法对照 |
-| [Harness 实施计划](./docs/harness-implementation-plan.md) | 控制平面落地路径 |
-| [性能测量与压测方案](./docs/performance-benchmark-plan.md) | 容量与并发测量方法 |
-| [前端设计规范](./docs/前端设计规范.md) | 界面细则 |
-| [微服务架构迁移草案](./docs/微服务架构迁移草案.md) | 后续拆分方向（草案） |
-| [eval/README](./eval/README.md) | RAG 评测（Ragas 打分）与提示词静态检查 |
+| [AGENTS.md](../AGENTS.md) | 协作规则、目录边界、私密信息保护 |
+| [DESIGN.md](../DESIGN.md) | 前端视觉唯一事实源：色板、排版、动效、响应式 |
+| [上下文工程实现与验收](context-engineering-design.md) | 装配顺序、分层读取、多跳检索与验收口径 |
+| [第二阶段能力设计](stage-two-capability-design.md) | 重排、冲突时效、权限模型、向量流水线、评测门禁与业界做法对照 |
+| [Harness 实施计划](harness-implementation-plan.md) | 控制平面落地路径 |
+| [性能测量与压测方案](performance-benchmark-plan.md) | 容量与并发测量方法 |
+| [微服务架构迁移草案](微服务架构迁移草案.md) | 后续拆分方向（草案） |
+| [独立 RAG 测评工具](./evaluation.md) | RAG 评测（Ragas 打分）与提示词静态检查 |
 
 ---
 
@@ -524,7 +525,7 @@ node --test frontend/src/modules/workspaces/paths.test.js frontend/src/modules/e
 
 ## 🤝 参与贡献
 
-1. 先读 [AGENTS.md](./AGENTS.md)，了解目录边界与私密信息规则。
+1. 先读 [AGENTS.md](../AGENTS.md)，了解目录边界与私密信息规则。
 2. 在对应子目录（`frontend/` / `python_backend/` / `skill-center/`）内修改，跨目录改动在提交说明里写清影响范围。
 3. 跑通本文档「验证与测试」中的命令。
 4. 使用清晰的 Conventional Commits 信息提交。

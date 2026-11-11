@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage
 
-from ...agents import AgentEngine, TaskManager
+from python_backend.modules.execution.engine import AgentEngine, TaskManager
 from ...api.routers.execution import create_execution_router
 from ...api.routers.context_engineering import create_context_router
 from ...api.routers.workspace_import import create_workspace_import_router
@@ -28,7 +28,7 @@ from ...modules.memory.tools import build_context_tools
 from ...modules.retrieval.workspace_index import WorkspaceIndex
 from ...modules.workspaces.context import load_workspace_rules, recall_workspace
 from ...runtime import AgentEngineRuntime
-from ...storage import Storage
+from python_backend.modules.storage.relational import Storage
 from ...workers.execution_worker import ExecutionWorker
 from .privacy import private_path, sanitize_text
 from .service import ContextService

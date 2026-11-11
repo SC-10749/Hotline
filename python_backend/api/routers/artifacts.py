@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from ...infrastructure.settings_store import SettingsStore
 from ...modules.artifacts.store import ArtifactStore, artifact_metadata
-from ...object_store import ObjectStorage
+from python_backend.modules.storage.objects import ObjectStorage
 
 PREVIEW_CHAR_LIMIT = 20000
 PREVIEW_BYTE_LIMIT = PREVIEW_CHAR_LIMIT * 4 + 4

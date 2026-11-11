@@ -1,6 +1,6 @@
 # RAG 自动评测（Ragas）
 
-对应任务清单第 13 条「引入 RAG 测评组件 Ragas 自动化指标评测」。
+本说明对应根目录 `eval/` 的独立 RAG 测评脚本。以下命令均在仓库根目录执行；应用内 `/evaluation/*` 接口属于另一条测评链路。
 
 ## 本次交付范围
 
@@ -28,7 +28,7 @@
 ## 一次性准备
 
 ```powershell
-cd C:\workspace\agent\Hotline
+# 在 Hotline 仓库根目录执行
 
 # 1) 隔离环境（只装一次，约 300MB）
 uv venv eval\.venv --python 3.13

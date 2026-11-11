@@ -20,7 +20,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import StructuredTool
 from pydantic import Field
 
-from ...agents import AgentEngine, TaskManager, ModelClient
+from python_backend.modules.execution.engine import AgentEngine, TaskManager, ModelClient
 from ...api.routers.context_engineering import create_context_router
 from ...api.routers.execution import create_execution_router
 from ...application.execution_service import ExecutionApplicationService
@@ -32,7 +32,7 @@ from ...modules.memory.tools import build_context_tools
 from ...modules.memory.store import MemoryConflict, MemoryStore
 from ...modules.retrieval.fusion import fuse_evidence
 from ...runtime import AgentEngineRuntime
-from ...storage import Storage
+from python_backend.modules.storage.relational import Storage
 from ...workers.execution_worker import ExecutionWorker, build_worker
 from ...infrastructure.resource_store import ResourceStore
 from ...modules.workspaces.context import load_workspace_rules

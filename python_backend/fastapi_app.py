@@ -13,17 +13,18 @@ from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
-from .documents import DocumentError, DocumentService
+from .infrastructure.service_registry import NacosRegistry, RegistryConfig
+from python_backend.modules.documents.service import DocumentError, DocumentService
 from .models import DocumentRecord, FileInfo, now_iso
-from .object_store import ObjectStorage
-from .parser import parse_file
-from .skill_center import Catalog
-from .skills import SkillError, SkillRegistry
-from .storage import Storage
-from .vector_store import PgVectorStore
+from python_backend.modules.storage.objects import ObjectStorage
+from python_backend.modules.documents.parser import parse_file
+from python_backend.modules.skills.catalog import Catalog
+from python_backend.modules.skills.registry import SkillError, SkillRegistry
+from python_backend.modules.storage.relational import Storage
+from python_backend.modules.retrieval.vector_store import PgVectorStore
 from .application.execution_service import ExecutionApplicationService
 from .infrastructure.queue import SqliteExecutionQueue
-from .agents import ModelClient
+from python_backend.modules.execution.engine import ModelClient
 from .api.routers.execution import create_execution_router
 from .api.routers.context_engineering import create_context_router
 from .modules.context_engineering.service import ContextService
@@ -67,6 +68,7 @@ skills = SkillRegistry(settings)
 documents = DocumentService(settings, storage, object_store, vector_store)
 execution_store = SqliteExecutionQueue(settings.execution_db_path)
 execution_service = ExecutionApplicationService(execution_store)
+service_registry = NacosRegistry(RegistryConfig.from_environment(), settings.data_dir, execution_store.has_live_worker)
 context_service = ContextService(settings) if settings.context_enabled else None
 evaluation_store = EvaluationStore(settings.data_dir / "evaluation.db")
 resource_store = ResourceStore(settings.data_dir / "harness-resources.db")
@@ -107,6 +109,7 @@ CONSOLE_ACTIONS = {'save', 'bind', 'eval_case', 'eval_cases', 'evaluate', 'evolv
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    await service_registry.start()
     documents.start_sweeper()
     register_runner(create_schedule_runner(scheduled_store, execution_service))
     retention_stop = start_retention_loop(
@@ -117,12 +120,15 @@ async def lifespan(_: FastAPI):
         },
         settings_store.get,
     )
-    yield
-    retention_stop.set()
-    stop_schedule_loop()
-    stop_release_observation()
-    wait_for_background_runs(timeout=5)
-    documents.stop_sweeper()
+    try:
+        yield
+    finally:
+        await service_registry.stop()
+        retention_stop.set()
+        stop_schedule_loop()
+        stop_release_observation()
+        wait_for_background_runs(timeout=5)
+        documents.stop_sweeper()
 
 
 app = FastAPI(title="Hotline Agent", version="1.0.0", lifespan=lifespan)
@@ -180,10 +186,12 @@ def health():
 @app.get("/health/ready")
 def readiness():
     worker_available = execution_store.has_live_worker()
+    ready = worker_available and service_registry.available
     return JSONResponse(
-        {"status": "UP" if worker_available else "DEGRADED", "service": "hotline-agent",
-         "executionWorker": "available" if worker_available else "unavailable"},
-        status_code=200 if worker_available else 503,
+        {"status": "UP" if ready else "DEGRADED", "service": "hotline-agent",
+         "executionWorker": "available" if worker_available else "unavailable",
+         "serviceRegistry": "available" if service_registry.available else "unavailable"},
+        status_code=200 if ready else 503,
     )
 
 

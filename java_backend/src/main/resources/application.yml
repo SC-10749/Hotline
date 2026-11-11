@@ -1,0 +1,37 @@
+server:
+  address: ${HOTLINE_JAVA_HOST:127.0.0.1}
+  port: ${HOTLINE_JAVA_PORT:8080}
+  shutdown: graceful
+
+spring:
+  servlet:
+    multipart:
+      enabled: false
+  application:
+    name: hotline-java-api
+  threads:
+    virtual:
+      enabled: true
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  cloud:
+    nacos:
+      discovery:
+        enabled: ${HOTLINE_NACOS_ENABLED:false}
+        register-enabled: ${HOTLINE_NACOS_REGISTER_ENABLED:false}
+        ip: ${HOTLINE_NACOS_ADVERTISED_IP:}
+        server-addr: ${HOTLINE_NACOS_SERVER_ADDR:127.0.0.1:8848}
+        namespace: ${HOTLINE_NACOS_NAMESPACE:}
+        group: ${HOTLINE_NACOS_GROUP:DEFAULT_GROUP}
+        username: ${HOTLINE_NACOS_USERNAME:}
+        password: ${HOTLINE_NACOS_PASSWORD:}
+        metadata:
+          apiVersion: "1"
+
+hotline:
+  python:
+    mode: ${HOTLINE_PYTHON_MODE:static}
+    base-url: ${HOTLINE_PYTHON_BASE_URL:http://127.0.0.1:8888}
+    service-name: ${HOTLINE_PYTHON_SERVICE_NAME:hotline-python-api}
+    connect-timeout: ${HOTLINE_PYTHON_CONNECT_TIMEOUT:1s}
+    read-timeout: ${HOTLINE_PYTHON_READ_TIMEOUT:60s}

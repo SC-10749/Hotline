@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hotline Agent · 项目总览</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500&family=Noto+Serif+SC:wght@600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --cream:#f7f5f0; --card:#ffffff; --line:#e9e3d6; --line-soft:#f0ebe0;
+  --ink:#14171e; --ink-2:#3a4256; --muted:#7c7a72;
+  --primary:#2f6f5e; --primary-soft:rgba(47,111,94,.10);
+  --blue:#36718c; --blue-soft:rgba(54,113,140,.10);
+  --sand:#8a7041; --sand-soft:rgba(138,112,65,.10);
+  --radius:16px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--cream); color:var(--ink);
+  font:15px/1.6 'Outfit','Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;
+}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+@media(min-width:768px){.wrap{padding:0 40px}}
+h1,h2,h3{font-weight:600;letter-spacing:-.01em;margin:0}
+.serif{font-family:'DM Serif Display','Noto Serif SC',serif;font-weight:600;letter-spacing:-.005em}
+h1{font-size:40px;line-height:1.15}
+h2{font-size:26px;line-height:1.25}
+h3{font-size:17px;line-height:1.4}
+p{margin:0 0 10px}
+a{color:var(--primary);text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.88em;background:var(--primary-soft);color:#245347;padding:2px 6px;border-radius:5px}
+section{padding:44px 0}
+section+section{border-top:1px solid var(--line)}
+
+/* hero */
+.hero{padding:52px 0 44px;position:relative;overflow:hidden}
+.hero::before,.hero::after{content:"";position:absolute;border-radius:50%;pointer-events:none}
+.hero::before{width:420px;height:420px;right:-140px;top:-160px;background:radial-gradient(circle,rgba(47,111,94,.10),transparent 68%)}
+.hero::after{width:360px;height:360px;left:-130px;bottom:-190px;background:radial-gradient(circle,rgba(54,113,140,.09),transparent 68%)}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--primary);font-weight:600;margin-bottom:14px}
+.eyebrow::before{content:"";width:22px;height:1px;background:var(--primary)}
+.lede{font-size:17px;color:var(--ink-2);max-width:60ch;margin-top:14px}
+.hero-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.tag{font-size:12px;padding:5px 11px;border-radius:999px;background:var(--card);border:1px solid var(--line);color:var(--ink-2)}
+.tag.primary{background:var(--primary-soft);border-color:rgba(47,111,94,.22);color:#245347}
+.hero-figure{margin-top:30px;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line);box-shadow:0 4px 16px -2px rgba(0,0,0,.06);background:var(--card)}
+.hero-figure img{display:block;width:100%;height:auto}
+figcaption{font-size:12px;color:var(--muted);padding:9px 14px;border-top:1px solid var(--line-soft);background:var(--card)}
+
+/* section head */
+.sec-head{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
+.sec-head h2{font-family:'DM Serif Display','Noto Serif SC',serif;font-weight:600}
+.sec-note{color:var(--muted);font-size:14px;margin-bottom:22px;max-width:70ch}
+
+/* stat strip */
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:22px}
+@media(min-width:720px){.stats{grid-template-columns:repeat(4,1fr)}}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+.stat b{display:block;font-family:'DM Serif Display',serif;font-size:26px;font-weight:600;color:var(--primary);line-height:1.2}
+.stat span{font-size:12.5px;color:var(--muted)}
+
+/* layer diagram */
+.stack{display:flex;flex-direction:column;gap:0}
+.layer{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.layer.is-primary{border-color:rgba(47,111,94,.35);background:linear-gradient(180deg,var(--primary-soft),transparent 70%),var(--card)}
+.layer.is-blue{border-color:rgba(54,113,140,.28);background:linear-gradient(180deg,var(--blue-soft),transparent 70%),var(--card)}
+.layer.is-sand{border-color:rgba(138,112,65,.26);background:linear-gradient(180deg,var(--sand-soft),transparent 70%),var(--card)}
+.layer-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.layer-head h3{font-size:15px}
+.layer-role{font-size:12px;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{font-size:12px;padding:4px 9px;border-radius:7px;background:var(--cream);border:1px solid var(--line);color:var(--ink-2)}
+.chip.mono{font-family:'JetBrains Mono',monospace;font-size:11.5px}
+.flow{display:flex;justify-content:center;padding:8px 0;color:var(--muted)}
+.flow svg{display:block}
+.legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:16px;font-size:12.5px;color:var(--muted)}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px;vertical-align:baseline}
+
+/* timeline */
+.timeline{list-style:none;margin:0;padding:0;position:relative}
+.timeline::before{content:"";position:absolute;left:9px;top:10px;bottom:10px;width:2px;background:var(--primary);opacity:.28}
+.timeline li{position:relative;padding:0 0 20px 38px}
+.timeline li:last-child{padding-bottom:0}
+.timeline li::before{content:"";position:absolute;left:2px;top:4px;width:16px;height:16px;border-radius:50%;background:var(--cream);border:2px solid var(--primary)}
+.timeline b{display:block;font-size:15px;margin-bottom:3px}
+.timeline p{margin:0;font-size:14px;color:var(--ink-2)}
+.timeline em{font-style:normal;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--primary)}
+
+/* cards grid */
+.grid3{display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:820px){.grid3{grid-template-columns:repeat(3,1fr)}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px 18px 16px}
+.card h3{margin-bottom:6px}
+.card p{font-size:13.5px;color:var(--ink-2);margin:0}
+.card .mod{margin-top:12px;display:flex;gap:6px;flex-wrap:wrap}
+.mod span{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);background:var(--cream);border:1px solid var(--line-soft);border-radius:5px;padding:2px 7px}
+
+/* kv table */
+.kv{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--card)}
+.kv table{width:100%;border-collapse:collapse;font-size:13.5px}
+.kv th,.kv td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+.kv tr:last-child th,.kv tr:last-child td{border-bottom:0}
+.kv th{width:210px;font-weight:600;color:var(--ink-2);background:rgba(47,111,94,.05)}
+.kv code{font-size:12px}
+
+/* friends */
+.friend{display:flex;gap:14px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+.friend .badge{flex:0 0 auto;width:38px;height:38px;border-radius:11px;background:var(--primary-soft);display:grid;place-items:center;color:var(--primary)}
+.friend p{font-size:13.5px;color:var(--ink-2);margin:4px 0 0}
+.friend a{font-size:13px;font-weight:600}
+
+footer{border-top:1px solid var(--line);padding:26px 0 40px;color:var(--muted);font-size:13px}
+.foot{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="hero">
+    <div class="eyebrow">Hotline Agent</div>
+    <h1 class="serif">把前沿 AI 能力，<br>接入真实工作流。</h1>
+    <p class="lede">对话 · 文档问答 · 深度研究 · PPT 生成 · Skills。Java 统一接入，Python 组件化能力，独立 Worker 执行。</p>
+    <div class="hero-tags">
+      <span class="tag primary">Java 21 / Spring Boot 3.5</span>
+      <span class="tag">Python 3.11+ / FastAPI</span>
+      <span class="tag">Vue 3 / Vite 6</span>
+      <span class="tag">SQLite 执行队列</span>
+      <span class="tag">可选 Nacos 发现</span>
+    </div>
+    <figure class="hero-figure">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="assets/readme-hero-dark.webp">
+        <img src="assets/readme-hero-light.webp" alt="Vue 工作台、Java 统一入口、Python 能力模块与执行节点之间的数据流" width="1600" height="640">
+      </picture>
+      <figcaption>Vue 工作台 → Java 统一入口 → FastAPI 能力 API → 独立 Execution Worker</figcaption>
+    </figure>
+  </header>
+
+  <section>
+    <div class="sec-head"><h2>仓库规模</h2></div>
+    <p class="sec-note">前端、服务端、技能中心与部署工具在同一仓库维护，运行数据全部落在被 Git 忽略的 <code>data/</code>。</p>
+    <div class="stats">
+      <div class="stat"><b>132</b><span>Python 后端文件 / 18.3k 行</span></div>
+      <div class="stat"><b>17</b><span>Vue 前端文件 / 7.2k 行</span></div>
+      <div class="stat"><b>17</b><span>Java 入口文件 / 629 行</span></div>
+      <div class="stat"><b>14</b><span>后端能力模块 / 前端同名边界 11 个</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>服务与能力全景</h2></div>
+    <p class="sec-note">实线为主要调用与数据流，虚线为可选依赖。FastAPI 提供 Vue 构建产物和静态控制台，浏览器通过 Java 入口统一访问。</p>
+
+    <div class="stack">
+      <div class="layer">
+        <div class="layer-head"><h3>Vue 3 工作台</h3><span class="layer-role">对话 · 文档 · Skills · Harness</span></div>
+        <div class="chips"><span class="chip">会话与工作区</span><span class="chip">文件与产物</span><span class="chip">运行观测</span><span class="chip">设置与凭证</span></div>
+      </div>
+      <div class="flow"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg></div>
+      <div class="layer is-primary">
+        <div class="layer-head"><h3>Java 21 / Spring Boot</h3><span class="layer-role">统一接入</span></div>
+        <div class="chips">
+          <span class="chip mono">/health/live</span><span class="chip mono">/health/ready</span>
+          <span class="chip">能力路由 · 流式转发</span><span class="chip">Python 实例选择</span><span class="chip">虚拟线程</span>
+        </div>
+      </div>
+      <div class="flow"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg></div>
+      <div class="layer is-blue">
+        <div class="layer-head"><h3>Python / FastAPI</h3><span class="layer-role">能力 API</span></div>
+        <div class="chips">
+          <span class="chip mono">/agent/*/stream</span><span class="chip mono">/execution/runs</span><span class="chip mono">/harness/*</span>
+          <span class="chip">会话 · 文档 · 技能管理</span><span class="chip">17 个路由工厂</span>
+        </div>
+      </div>
+      <div class="flow"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg></div>
+      <div class="layer is-blue">
+        <div class="layer-head"><h3>Execution Worker</h3><span class="layer-role">独立进程 · 领取队列任务</span></div>
+        <div class="chips">
+          <span class="chip">Agent Runtime</span><span class="chip">意图识别与澄清</span><span class="chip">上下文工程</span>
+          <span class="chip">检索 / Skills / MCP / 文档 / 产物</span>
+        </div>
+      </div>
+      <div class="flow"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg></div>
+      <div class="layer is-sand">
+        <div class="layer-head"><h3>存储与外部能力</h3><span class="layer-role">按配置接入</span></div>
+        <div class="chips">
+          <span class="chip">SQLite · 本地文件</span><span class="chip">MySQL · Redis · MinIO</span>
+          <span class="chip">PostgreSQL / pgvector</span><span class="chip">模型 API · Embedding</span><span class="chip">OpenViking 长期记忆</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><i style="background:var(--primary)"></i>接入层</span>
+      <span><i style="background:var(--blue)"></i>能力层</span>
+      <span><i style="background:var(--sand)"></i>存储与外部依赖</span>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>一次 Agent 请求</h2></div>
+    <p class="sec-note">Worker 离线时就绪检查返回 503，新的 Agent 运行会被拒绝。事件保存在 <code>data/execution.db</code>，支持按游标恢复与回放。</p>
+    <ol class="timeline">
+      <li><b>工作台发起请求</b><em>Vue → Java</em><p>浏览器请求经 Java 统一入口进入，Java 保留上游 HTTP 状态、内容类型与 SSE 事件。</p></li>
+      <li><b>转发与寻址</b><em>Java → FastAPI</em><p>Java 按静态寻址或 Nacos 发现选择 Python 实例，并把恢复游标一起带过去。</p></li>
+      <li><b>提交或恢复运行</b><em>FastAPI → SQLite 队列</em><p>能力 API 检查 Worker 状态，向执行队列提交任务或按 run_id 恢复既有运行。</p></li>
+      <li><b>Worker 领取任务</b><em>队列 → Worker</em><p>独立进程领取任务，恢复工作区上下文、任务状态与近期交互，进入 Agent 工具循环。</p></li>
+      <li><b>事件流式回传</b><em>Worker → 队列 → Java → 浏览器</em><p>阶段、工具调用与回答事件按序持久化并按游标读取，Java 用虚拟线程持续流式转发。</p></li>
+    </ol>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>意图三级级联与澄清门闸</h2></div>
+    <p class="sec-note">关键词粗筛 → embedding 召回 → 大模型判定。歧义度超过门闸阈值时先澄清需求，用户作答后作为新一轮对话重新进入级联。</p>
+    <ol class="timeline">
+      <li><b>关键词粗筛</b><em>catalog.keywords</em><p>按命中词数量与词长打分。单命中且高置信直接判定，并列或低置信继续向下走。</p></li>
+      <li><b>embedding 召回</b><em>ExampleVectorStore</em><p>向量相似度达阈值时直接作为判定层，未达阈值则把候选合并后交给模型。</p></li>
+      <li><b>大模型判定</b><em>多次采样取平均</em><p>候选去重后交给模型判定意图，避免单次采样抖动影响结论。</p></li>
+      <li><b>澄清门闸</b><em>歧义度 ≥ 0.86</em><p>配置决策模型后走 System One 协议，一次前向同时给出意图与诉求歧义度；超阈值发出 clarify 事件，该轮不产出答案。</p></li>
+    </ol>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>能力地图</h2></div>
+    <p class="sec-note">普通聊天、文件问答、研究、PPT 规划与技能执行共用同一上下文入口，按预算装配输入并记录调用前快照。</p>
+    <div class="grid3">
+      <div class="card">
+        <h3>日常对话</h3>
+        <p>模型问答、按需检索、低置信度需求澄清。</p>
+        <div class="mod"><span>intent</span><span>execution</span></div>
+      </div>
+      <div class="card">
+        <h3>文件问答</h3>
+        <p>文档解析、分块、关键词与向量召回、来源回读。</p>
+        <div class="mod"><span>documents</span><span>retrieval</span></div>
+      </div>
+      <div class="card">
+        <h3>深度研究</h3>
+        <p>证据规划、补充检索、联网工具调用与证据整理。</p>
+        <div class="mod"><span>execution</span><span>context_engineering</span></div>
+      </div>
+      <div class="card">
+        <h3>PPT 生成</h3>
+        <p>规划内容、渲染演示文稿、登记与下载产物。</p>
+        <div class="mod"><span>documents</span><span>artifacts</span></div>
+      </div>
+      <div class="card">
+        <h3>技能执行</h3>
+        <p>按需读取 Skill、调用工具、选择绑定版本。</p>
+        <div class="mod"><span>skills</span><span>execution</span></div>
+      </div>
+      <div class="card">
+        <h3>连续工作</h3>
+        <p>任务状态、历史摘要、工作区检索与可选长期记忆。</p>
+        <div class="mod"><span>context_engineering</span><span>memory</span><span>workspaces</span></div>
+      </div>
+      <div class="card">
+        <h3>运行管理</h3>
+        <p>状态、事件、取消、重试、上下文快照。</p>
+        <div class="mod"><span>execution</span><span>governance</span></div>
+      </div>
+      <div class="card">
+        <h3>检索分层</h3>
+        <p>词面四层：精确 token / trigram / bigram / LIKE 兜底，结果轮转交错。</p>
+        <div class="mod"><span>retrieval</span><span>workspaces</span></div>
+      </div>
+      <div class="card">
+        <h3>技能治理</h3>
+        <p>评测、自进化 patch、五道门禁、灰度绑定与自动回滚。</p>
+        <div class="mod"><span>skills</span><span>evaluation</span><span>release</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>快速开始</h2></div>
+    <p class="sec-note">本机默认地址：应用页面 <code>http://127.0.0.1:8080/</code>，技能控制台 <code>/console</code>，Python 能力 API 端口 8888，前端开发端口 5180。</p>
+    <div class="kv">
+      <table>
+        <tr><th>安装依赖</th><td><code>uv sync</code> &nbsp;·&nbsp; <code>npm --prefix frontend install</code> &nbsp;·&nbsp; <code>npm --prefix frontend run build</code></td></tr>
+        <tr><th>本地启动</th><td><code>npm start</code> —— 拉起 Java 统一入口、FastAPI 能力 API 与 Execution Worker</td></tr>
+        <tr><th>开发模式</th><td><code>npm run dev</code> —— Vue HMR，联动启动 Java、FastAPI 与 Worker</td></tr>
+        <tr><th>配置来源</th><td>根目录 <code>.env</code>（Git 忽略）或 <code>DODO_ENV_FILE</code> 指定的本地配置</td></tr>
+        <tr><th>验证命令</th><td><code>python -m compileall python_backend</code> · <code>python skill-center/test_center.py</code> · <code>npm --prefix frontend run build</code></td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>友情链接</h2></div>
+    <div class="friend">
+      <div class="badge"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></div>
+      <div>
+        <a href="https://github.com/zklmiao/prompt-vault" target="_blank" rel="noopener">Prompt Vault</a>
+        <p>收集、整理与复用提示词，让经过验证的好 Prompt 随时可查、持续积累。</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="foot">
+      <span>Hotline Agent · 探索、验证、封装，让 AI 能力进入日常工作。</span>
+      <span><a href="../README.md">项目说明</a> · <a href="index.md">文档目录</a></span>
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>

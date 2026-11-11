@@ -6,9 +6,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from ...agents import AgentEngine, TaskManager
+from python_backend.modules.execution.engine import AgentEngine, TaskManager
 from ...config import Settings
-from ...storage import Storage
+from python_backend.modules.storage.relational import Storage
 from ..context_engineering.service import ContextService
 from ..memory.store import MemoryStore
 from ..workspaces.context import recall_workspace

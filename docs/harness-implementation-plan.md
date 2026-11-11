@@ -1,3 +1,5 @@
+> 实施记录：保留 Harness 建设过程、接口与验收说明。涉及迁移前目录和入口的内容仅供追溯，当前组件路径、Java 入口和启动命令以 [主 README](../README.md) 为准。
+
 # Harness 功能实施计划
 
 ## 目标
@@ -451,7 +453,7 @@ Harness 设置：超时、重试、隔离、审批超时、审计保留、产物
 |---|---|
 | deep / file / ppt 步骤级追踪 | `agents.py` 的 `AgentEngine.step()` 与 worker 的 `step` 事件（stage / content / durationMs / details） |
 | 产物按身份下载 | `run_artifact` 增 `owner` 列，下载与预览按 `X-Harness-Owner` 请求头校验，`GET /harness/artifacts?owner=` 按归属过滤 |
-| 其他生成入口产物登记 | `python_backend/main.py` 的旧 PPT 入口写入登记 |
+| 生成入口收敛 | 已移除旧标准库 HTTP 服务，统一通过 `main:app` 与执行 Worker 生成产物 |
 | 模型评分 | 可选 rubric `{"type":"model"}`，模型不可用时 verdict=`scorer_unavailable`、score=0，不伪造分数 |
 | 报告对比与导出 | `GET /evaluation/runs/compare`、`GET /evaluation/runs/{id}/export?format=csv\|json` |
 | 灰度定时观察 | 后台观察线程 + `POST /release/rollouts/observe` + `GET /release/observations`，观察记录落 `release_observation` 表 |

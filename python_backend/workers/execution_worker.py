@@ -14,14 +14,14 @@ from ..bootstrap import load_environment
 
 load_environment()
 
-from ..agents import AgentEngine, TaskManager  # noqa: E402
+from python_backend.modules.execution.engine import AgentEngine, TaskManager  # noqa: E402
 from ..config import settings  # noqa: E402
-from ..documents import DocumentService  # noqa: E402
-from ..object_store import ObjectStorage  # noqa: E402
-from ..ppt import generate_ppt  # noqa: E402
-from ..skills import SkillRegistry  # noqa: E402
-from ..storage import Storage  # noqa: E402
-from ..vector_store import PgVectorStore  # noqa: E402
+from python_backend.modules.documents.service import DocumentService  # noqa: E402
+from python_backend.modules.storage.objects import ObjectStorage  # noqa: E402
+from python_backend.modules.documents.ppt import generate_ppt  # noqa: E402
+from python_backend.modules.skills.registry import SkillRegistry  # noqa: E402
+from python_backend.modules.storage.relational import Storage  # noqa: E402
+from python_backend.modules.retrieval.vector_store import PgVectorStore  # noqa: E402
 from ..infrastructure.queue import SqliteExecutionQueue  # noqa: E402
 from ..infrastructure.settings_store import SettingsStore  # noqa: E402
 from ..infrastructure.resource_store import ResourceStore  # noqa: E402

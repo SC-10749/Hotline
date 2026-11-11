@@ -18,7 +18,7 @@ from ...api.routers.artifacts import create_artifact_router
 from ...api.routers.observability import create_observability_router
 from ...modules.execution.store import ExecutionStore
 from ...modules.execution.test_execution import FakeEngine, FakeTasks
-from ...object_store import ObjectStorage
+from python_backend.modules.storage.objects import ObjectStorage
 from ...workers.execution_worker import ExecutionWorker
 from .store import (ArtifactStore, legacy_run_id, register_generated_file,
                      register_legacy_artifact)
@@ -188,7 +188,7 @@ class ArtifactTests(unittest.TestCase):
         self.assertEqual(self.artifacts.list(run['run_id'])[1], 0)
 
     def test_cancel_during_generation_retains_actual_artifact_without_success(self):
-        from ...ppt import generate_ppt
+        from python_backend.modules.documents.ppt import generate_ppt
         run = self.queue.enqueue('conversation', 'ppt', 'test', None)
 
         def generate_then_cancel(*args):

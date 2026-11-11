@@ -29,9 +29,19 @@ __pycache__/
 *.py[cod]
 *.pyo
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
 /data/
 
 # Build output and temporary files.
+/java_backend/target/
 dist/
 coverage/
 *.log
@@ -40,7 +50,29 @@ coverage/
 .DS_Store
 .turbo/
 .pnpm-store/
+*.tsbuildinfo
+.eslintcache
+.stylelintcache
+Thumbs.db
+Desktop.ini
 
 # Local editor state.
 .idea/
 .vscode/
+*.iml
+*.iws
+*.ipr
+*.swp
+*.swo
+*~
+
+# Local assistant permissions; shared instructions remain versioned.
+.claude/settings.local.json
+
+# JVM compiler output and crash diagnostics.
+*.class
+hs_err_pid*.log
+replay_pid*.log
+
+# Legacy backend runtime data stays local.
+/python_backend/data/

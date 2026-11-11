@@ -28,4 +28,4 @@ if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
 fi
 
 cd "$ROOT_DIR"
-exec "$PYTHON_BIN" -m python_backend.main
+exec "$PYTHON_BIN" -m uvicorn main:app --host "${DODO_HOST:-0.0.0.0}" --port "${DODO_PORT:-8888}"

@@ -5,10 +5,10 @@
 ## 项目结构与目录管理
 
 - 所有开发者和 Agent 开始开发前，必须阅读并遵循本文件；子目录另有说明文件时一并遵循。子目录规则不得放宽本文件中的私密信息保护要求。
-- **本仓库是单一项目 Hotline Agent**：Vue 前端（`frontend/`）、FastAPI 后端（`python_backend/`）、技能中心（`python_backend/skill_center.py` 与 `skill-center/`）、静态资源与技能控制台（`static/`）、部署脚本（`deploy/`）、文档（`docs/`）同仓维护，不再有平台与项目之分。
+- **本仓库是单一项目 Hotline Agent**：Java 21 入口（`java_backend/`）、Vue 前端（`frontend/`）、FastAPI 后端（`python_backend/`）、技能中心（`python_backend/modules/skills/` 与 `skill-center/`，根 `skill_center.py` 为兼容入口）、静态资源与技能控制台（`static/`）、部署脚本（`deploy/`）、文档（`docs/`）同仓维护，不再有平台与项目之分。
 - 修改默认限于对应子目录；涉及跨目录的公共改动（如 `.env.example`、`AGENTS.md`、根启动脚本）需在提交说明中写清影响范围。
 - 项目元数据保留在 `project.yaml`，README 说明用途、当前状态、安装、启动、验证命令及配置项。
-- 根目录 `README.md` 是仓库主项目说明文件；不要在子目录新增 README。模块说明、迁移边界和当前状态统一写入根 README 或本文件。根目录另有 `README.v2.md`，是 2026-11-10 按代码实况重写的并行稿（华化排版版），在用户明确决定替换前与 `README.md` 并存，不要当成冗余文件删除。
+- 根目录 `README.md` 是仓库主项目说明文件；不要在子目录新增 README。模块说明、迁移边界和当前状态统一写入根 README 或本文件。补充说明、设计、草案和历史记录统一放入 `docs/`，导航位于 `docs/index.md`。原 `README.v2.md` 已按用户要求归入 `docs/readme-v2-draft.md`，作为并行排版草稿保留；在用户明确决定替换前，不要删除或用它替换主 README。
 - 根目录 `DESIGN.md` 是前端视觉唯一事实源；不要在 `frontend/` 或模块目录维护第二份设计锚。
 - `python_backend/modules/` 与 `frontend/src/modules/` 是能力边界目录。新增模块先建立接口与验证，再迁移旧实现；模块之间不得直接读取彼此的数据库细节。
 - 模块命名保持前后端对应：`memory`、`retrieval`、`storage`、`context_engineering`、`skills`、`mcp`、`execution`、`workspaces`、`artifacts`、`intent`；`execution` 统一承载脚本、EXE 和后台任务执行能力；`intent` 统一承载意图目录与意图分类（关键词粗筛 → embedding 向量召回 → 大模型判定的三级级联，含置信度分级）；配置决策模型后该层改走 System One 协议（`modules/intent/decision.py`，阿里云百炼 decision-model-preview，与 TypeSafe Jev 同接口），一次前向同时给出意图与诉求歧义度，门闸按歧义度判断是否澄清；置信度不足时由门闸转成需求澄清，用户作答后作为新一轮对话重新进入级联。

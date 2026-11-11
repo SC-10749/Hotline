@@ -1,17 +1,19 @@
 name: hotline-agent
 category: ai
 status: working
-description: 企业级端到端通用智能体平台（FastAPI 后端 + Vue 前端 + 技能中心）
+description: 企业级端到端通用智能体平台（FastAPI 后端 + Vue 前端 + 技能中心 + Java 21 统一入口）
 language:
+  - Java
   - Python
   - Vue
 mode: local-demo
-url: http://127.0.0.1:8888/
+url: http://127.0.0.1:8080/
 healthChecks:
-  - http://127.0.0.1:8888/health
-  - http://127.0.0.1:8888/console
+  - http://127.0.0.1:8080/health
+  - http://127.0.0.1:8080/console
 overview:
   techStack:
+    - Java 21、Spring Boot 3.5 统一入口，可选 Nacos 服务发现
     - Vue 3、Vite 6、Lucide 图标
     - Python 3.11+、FastAPI、Uvicorn、SSE 流式响应
     - 技能中心与 Skill 自进化（SQLite 目录库，已并入后端）
@@ -24,7 +26,7 @@ overview:
   services:
     - name: Node.js、Python 3.11+（可选 uv）
       requirement: 启动必需
-      description: 先在 frontend 目录执行 npm install；后端依赖通过 pyproject.toml / requirements.txt 安装。确保 5180 和 8888 端口空闲。
+      description: 先在 frontend 目录执行 npm install；后端依赖通过 pyproject.toml / requirements.txt 安装。确保 5180、8080 和 8888 端口空闲。
     - name: 大模型 API
       requirement: 对话功能必需
       description: 配置兼容 OpenAI 的服务地址、模型和 API Key；仅启动页面无需调用模型。
@@ -39,19 +41,13 @@ overview:
       description: 分别用于 PDF / Word 文档库解析、图片图注和联网搜索，需对应服务凭据。
   startup:
     - 首次使用：在项目根目录执行 npm --prefix frontend install && npm --prefix frontend run build。
-    - 日常启动：npm start，页面与接口同端口 8888。
+    - 日常启动：npm start，页面与接口同端口 8080。
     - 前端开发热更新：node dev-launcher.mjs（Vite 代理保持同源）。
-    - 页面、健康检查与技能控制台均通过后，访问 http://127.0.0.1:8888/ 进入 Hotline Agent。
+    - 页面、健康检查与技能控制台均通过后，访问 http://127.0.0.1:8080/ 进入 Hotline Agent。
 commands:
   start:
-    - python
-    - -m
-    - uvicorn
-    - main:app
-    - --host
-    - 127.0.0.1
-    - --port
-    - "8888"
+    - node
+    - start-services.mjs
   dev:
     - node
     - dev-launcher.mjs

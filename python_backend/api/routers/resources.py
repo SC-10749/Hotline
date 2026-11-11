@@ -18,7 +18,7 @@ from ...infrastructure.resource_store import (
     ResourceConflictError,
     ResourceStore,
 )
-from ...skill_center import Catalog
+from python_backend.modules.skills.catalog import Catalog
 
 DIFF_FIELDS = ('name', 'description', 'version', 'model', 'policy', 'tools', 'skills', 'enabled')
 
