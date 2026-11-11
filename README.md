@@ -79,31 +79,31 @@ Hotline Agent 是一个**持续探索前沿 AI 技术的智能体应用**：把�
 
 ```mermaid
 flowchart TB
-    UI["Vue 3 工作台\n对话 · 文档 · Skills · Harness"]
+    UI["Vue 3 工作台<br/>对话 · 文档 · Skills · Harness"]
 
     subgraph JAVA["Java 21 / Spring Boot · 统一接入"]
-        API["能力路由 · 健康检查\nHTTP / JSON · 文件流 · SSE"]
-        DISC["Python 实例选择\n静态寻址 / Nacos 发现"]
+        API["能力路由 · 健康检查<br/>HTTP / JSON · 文件流 · SSE"]
+        DISC["Python 实例选择<br/>静态寻址 / Nacos 发现"]
         API --> DISC
     end
 
     subgraph PYTHON["Python / FastAPI · 能力 API"]
-        ROUTER["路由与应用服务\n任务提交 · 会话 · 文档 · 技能管理"]
-        QUEUE[("SQLite 执行队列\n运行状态 · 持久化事件")]
+        ROUTER["路由与应用服务<br/>任务提交 · 会话 · 文档 · 技能管理"]
+        QUEUE[("SQLite 执行队列<br/>运行状态 · 持久化事件")]
         ROUTER --> QUEUE
     end
 
     subgraph WORKER["Python Execution Worker · 独立进程"]
         RUNTIME["Agent Runtime / AgentEngine"]
-        INTENT["意图识别\n需求澄清"]
-        CONTEXT["上下文工程\n任务状态 · 预算 · 来源"]
-        TOOLS["能力组件\n检索 · Skills · MCP · 文档 · 产物"]
+        INTENT["意图识别<br/>需求澄清"]
+        CONTEXT["上下文工程<br/>任务状态 · 预算 · 来源"]
+        TOOLS["能力组件<br/>检索 · Skills · MCP · 文档 · 产物"]
         RUNTIME --> INTENT --> CONTEXT --> TOOLS
     end
 
     subgraph DEPS["存储与外部能力 · 按配置接入"]
         LOCAL["SQLite / 本地文件"]
-        EXT["MySQL · Redis · MinIO\nPostgreSQL / pgvector"]
+        EXT["MySQL · Redis · MinIO<br/>PostgreSQL / pgvector"]
         MODEL["模型 API / Embedding / 搜索"]
         MEMORY["OpenViking 长期记忆"]
     end
@@ -162,14 +162,14 @@ Worker 离线时，就绪检查返回 503，新的 Agent 运行会被拒绝。�
 
 ```mermaid
 flowchart LR
-    Q["用户提问"] --> KW["关键词粗筛\ncatalog.keywords"]
+    Q["用户提问"] --> KW["关键词粗筛<br/>catalog.keywords"]
     KW -->|"单命中且高置信"| DONE["直接判定意图"]
-    KW -->|"并列或低置信"| VEC["embedding 召回\nExampleVectorStore"]
+    KW -->|"并列或低置信"| VEC["embedding 召回<br/>ExampleVectorStore"]
     VEC -->|"相似度达阈值"| DONE
-    VEC -->|"候选合并"| LLM["大模型判定\n多次采样取平均"]
+    VEC -->|"候选合并"| LLM["大模型判定<br/>多次采样取平均"]
     LLM --> DONE
     DONE --> GATE{"歧义度 ≥ 0.86 ?"}
-    GATE -->|"是"| CLARIFY["clarify 事件\n三个理解方向 + 自由输入"]
+    GATE -->|"是"| CLARIFY["clarify 事件<br/>三个理解方向 + 自由输入"]
     GATE -->|"否"| RUN["进入上下文装配与执行"]
     CLARIFY -->|"用户作答后"| Q
 
@@ -189,19 +189,19 @@ flowchart LR
 flowchart TB
     subgraph ASSEMBLE["上下文装配 · 按预算分层"]
         RULES["规则与安全约束"]
-        TASK["任务状态\n目标 · 约束 · 决策 · 待办"]
+        TASK["任务状态<br/>目标 · 约束 · 决策 · 待办"]
         RECENT["近期完整轮次"]
         SUMMARY["阶段摘要"]
         EVIDENCE["检索证据 L0 / L1 / L2"]
     end
 
     subgraph RETRIEVAL["工作区检索 · 双通道"]
-        LEX["词面通道 · 四层\n精确 token / trigram / bigram / LIKE"]
-        SEM["语义通道 · 成员范围\n工作区全部文档 + 本地文件向量"]
+        LEX["词面通道 · 四层<br/>精确 token / trigram / bigram / LIKE"]
+        SEM["语义通道 · 成员范围<br/>工作区全部文档 + 本地文件向量"]
     end
 
-    BUDGET["输入字节预算\n超长必需输入返回明确错误"]
-    SNAP["调用前脱敏快照\n预算 · 来源 · 裁剪信息"]
+    BUDGET["输入字节预算<br/>超长必需输入返回明确错误"]
+    SNAP["调用前脱敏快照<br/>预算 · 来源 · 裁剪信息"]
 
     RULES --> BUDGET
     TASK --> BUDGET
@@ -364,13 +364,13 @@ Java 默认端口 8080 可用同样的方法查询。Java 可以在 Python 暂�
 flowchart TB
     subgraph LOAD["运行时加载"]
         direction LR
-        C["技能目录\n仓库 / 安装 / 中心"] --> M["发现元数据\n名称与摘要"]
-        M --> R["read_skill\n按需读取指令与资源"]
+        C["技能目录<br/>仓库 / 安装 / 中心"] --> M["发现元数据<br/>名称与摘要"]
+        M --> R["read_skill<br/>按需读取指令与资源"]
         R --> E["Agent 工具循环"]
     end
     subgraph GOVERN["版本治理"]
         direction LR
-        V["评测与候选 patch"] --> G["静态 · 动态 · 回归\n增益 · 安全门禁"]
+        V["评测与候选 patch"] --> G["静态 · 动态 · 回归<br/>增益 · 安全门禁"]
         G --> S["staged 候选版本"]
         S --> P["灰度绑定 / 回滚"]
     end
