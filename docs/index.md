@@ -19,6 +19,7 @@
 
 | 文档 | 用途与状态 |
 | --- | --- |
+| [Java 高并发、高可用与权限治理方案](java-production-readiness-plan.md) | Java/Python 职责边界、30 项功能的设计/实现/结果、VictoriaMetrics 源码对照与开源参考、迁移与验收；属于草案 |
 | [Java 21 与 Python 架构方案](微服务架构迁移草案.md) | 注册发现与调用边界、契约，以及权限、限流、分布式执行等后续建设目标；开篇说明当前进度 |
 | [第二阶段能力设计](stage-two-capability-design.md) | 检索、存储一致性、权限与测评等设计建议；属于草案 |
 | [性能测量与并发压测方案](performance-benchmark-plan.md) | 分层测量、压测场景与验收方法；属于方案，不是压测结果 |
