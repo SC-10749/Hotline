@@ -7,7 +7,7 @@ import { backendStatus } from './backend-status.js'
 const backendPort = process.env.HOTLINE_JAVA_PORT || '8080'
 const backend = `http://127.0.0.1:${backendPort}`
 const backendRoutes = [
-  '/health', '/file', '/document', '/skill', '/session', '/agent',
+  '/api', '/health', '/file', '/document', '/skill', '/session', '/agent',
   '/execution', '/evaluation', '/release', '/harness', '/code-map', '/doc-asset', '/generated', '/console', '/docs', '/openapi.json', '/favicon.ico',
 ]
 
