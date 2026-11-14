@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"spring.cloud.nacos.discovery.enabled=false", "hotline.python.mode=static",
+                "hotline.admission.store=memory",
                 "HOTLINE_NACOS_ENABLED=true", "HOTLINE_NACOS_REGISTER_ENABLED=false"})
 class CapabilityHttpTest {
     private static final HttpServer UPSTREAM = upstream();
