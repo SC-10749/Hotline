@@ -60,7 +60,7 @@ Hotline Agent 是一个**持续探索前沿 AI 技术的智能体应用**：把�
 </tr>
 </table>
 
-> **当前阶段** · Java 统一入口、Python 能力 API 与独立 Worker 已接入。AI 能力集中在一个 FastAPI API 部署单元中，执行队列使用同机 SQLite，项目正按能力边界逐步演进。
+> **当前阶段** · Java 统一入口、Python 能力 API 与独立 Worker 已接入；Java 侧已具备配置化流程编排与接入治理（黑名单、限流、并发限制）。AI 能力集中在一个 FastAPI API 部署单元中，执行队列使用同机 SQLite，项目正按能力边界逐步演进。
 
 ### 仓库规模
 
@@ -68,7 +68,7 @@ Hotline Agent 是一个**持续探索前沿 AI 技术的智能体应用**：把�
 | --- | --- |
 | Python 后端 | 132 个文件 / 18.3k 行，`python_backend/` |
 | Vue 前端 | 17 个文件 / 7.2k 行，`frontend/src/` |
-| Java 入口 | 17 个文件 / 629 行，`java_backend/` |
+| Java 入口 | 83 个文件 / 4.3k 行，`java_backend/src/` |
 | 能力模块 | 后端 14 个，前端同名边界 11 个 |
 | HTTP 路由 | 17 个路由工厂，5 条 Agent SSE 流 |
 | 运行数据 | 全部落在 Git 忽略的 `data/`，按模块拆分本地 SQLite |
@@ -227,13 +227,27 @@ flowchart TB
 | 层级 | 当前职责 | 主要技术 |
 | --- | --- | --- |
 | 工作台 | 会话、工作区、文件、技能、运行观测与设置 | Vue 3、Vite 6、Lucide |
-| Java 入口 | 统一接入、能力转发、健康检查、实例选择 | Java 21、Spring Boot 3.5、Nacos |
+| Java 入口 | 统一接入、能力转发、健康检查、实例选择、流程编排、接入治理 | Java 21、Spring Boot 3.5、Nacos、Redis（可选） |
 | Python API | 路由装配、应用用例、资源与运行管理 | Python 3.11+、FastAPI、Uvicorn |
 | 执行进程 | 领取任务、Agent 编排、工具调用、事件持久化 | Execution Worker、Agent Runtime、LangChain |
 | 能力模块 | 意图、上下文、检索、记忆、Skills、MCP、文档、产物 | `python_backend/modules/` |
 | 数据与适配 | 本地持久化与可选外部存储 | SQLite、本地文件、MySQL、Redis、MinIO、pgvector |
 
-Java 当前以统一入口和能力调用为主。身份认证、租户授权、配额、限流、熔断及 Java 业务持久化列入后续规划。多机执行需要升级队列基础设施并完成对应验收。阶段目标见架构草案。[Java / Python 架构方案](docs/微服务架构迁移草案.md)
+Java 当前以统一入口和能力调用为主，并提供两项自有能力：
+
+- **流程编排**：`java_backend/src/main/resources/flow/flows.json` 按场景声明任务，`flow_funcmaps.properties` 把 `fmap` 键映射到处理器类。任务按 `order` 升序执行，相邻且 `order` 相同的任务在流程线程池中并行，全部完成后才进入下一组；单个任务在调用线程串行执行。任务之间通过流程上下文交换产物，`toggle` 为 `0` 时跳过该任务。配置在启动时加载，修改后需重启。
+- **接入治理**：过滤器对纳入治理的路径依次检查黑名单、固定窗口限流和并发租约，拒绝时返回 `{code, message}` 与 `Retry-After`。状态可存放在 Redis 或进程内存。
+
+| Java 自有接口 | 说明 |
+| --- | --- |
+| `GET /api/v1/capabilities/overview` | 并行聚合 Python 健康、技能目录与 Harness 概览，单项不可用时降级返回 |
+| `POST /api/v1/execution/requests` | 校验与配额检查后调用 Python `POST /execution/runs`，返回 202 与 `requestId`、`runId`、`status` |
+| `GET /api/v1/admission/status` | 查看治理存储类型与黑名单 |
+| `POST` / `DELETE /api/v1/admission/blacklist` | 增删黑名单条目，形如 `ip:1.2.3.4` 或 `user:someone` |
+
+治理管理接口不经过治理过滤器，当前没有认证，部署时只在管理网络暴露。调用方身份取自可配置请求头，缺省按来源 IP 区分；该请求头未经认证，仅适用于受信任的上游。提交配额只做按日计数，不持久化提交记录。
+
+身份认证、租户授权、熔断及 Java 业务持久化列入后续规划。多机执行需要升级队列基础设施并完成对应验收。阶段目标见架构草案。[Java / Python 架构方案](docs/微服务架构迁移草案.md)
 
 ## 能力地图
 
@@ -573,7 +587,37 @@ Python 使用官方 `nacos-sdk-python` 3.2.0，由 FastAPI lifespan 管理注册
 
 先构建 Java，再使用隔离测试注册中心运行 `python deploy/test_service_discovery.py`，通过本地 `HOTLINE_TEST_NACOS_SERVER_ADDR` 指定测试环境。脚本使用独立数据和临时服务名。
 
-当前部署面向单用户环境，Python API 使用内部网络访问。跨服务身份认证、独立 SSE 空闲超时与共享并发限额仍待建设。
+当前部署面向单用户环境，Python API 使用内部网络访问。跨服务身份认证与独立 SSE 空闲超时仍待建设。
+
+</details>
+
+<details>
+<summary><strong>Java 流程编排与接入治理参数</strong></summary>
+
+| 配置 | 作用 |
+| --- | --- |
+| `HOTLINE_FLOW_SCENES` / `HOTLINE_FLOW_FUNCMAPS` | 流程场景与处理器映射文件位置，默认使用 classpath 下 `flow/` 内置文件 |
+| `HOTLINE_FLOW_POOL_CORE` / `HOTLINE_FLOW_POOL_MAX` / `HOTLINE_FLOW_POOL_KEEP_ALIVE` | 流程线程池核心、最大线程数与空闲回收时间，默认 16 / 64 / 60s |
+| `HOTLINE_ADMISSION_ENABLED` | 接入治理总开关，默认 true |
+| `HOTLINE_ADMISSION_STORE` | `auto`、`memory` 或 `redis`，默认 `auto` |
+| `HOTLINE_REDIS_HOST` / `HOTLINE_REDIS_PORT` / `HOTLINE_REDIS_PASSWORD` | Redis 连接，默认本机回环 6379；真实地址与密码保存在本地配置 |
+| `HOTLINE_ADMISSION_REDIS_FAIL_OPEN` | Redis 运行时故障是否放行，默认 false（返回 503） |
+| `HOTLINE_ADMISSION_CLIENT_HEADER` | 调用方标识请求头，默认 `X-Hotline-User` |
+| `HOTLINE_ADMISSION_TRUST_FORWARDED_FOR` | 是否采信 `X-Forwarded-For`，默认 false，仅在可信反向代理之后开启 |
+| `HOTLINE_ADMISSION_RATE_LIMIT` / `HOTLINE_ADMISSION_RATE_WINDOW` | 每个调用方在窗口内的请求上限，默认 600 / 1m |
+| `HOTLINE_ADMISSION_CONCURRENCY_LIMIT` / `HOTLINE_ADMISSION_CONCURRENCY_LEASE` | 每个调用方在 `/agent/**`、`/execution/**` 上的在途请求上限与租约时长，默认 4 / 30m |
+| `HOTLINE_ADMISSION_SUBMISSION_QUOTA` | 每个调用方每日经 Java 提交的执行次数上限，默认 0（不限制） |
+
+`auto` 在启动时探测 Redis：可用则使用 Redis，多个 Java 实例共享限额；不可用则回退到进程内存并输出告警，限额只在单实例内生效。`redis` 模式下启动时连接失败会直接终止启动。
+
+| 状态码 | `code` | 含义 |
+| --- | --- | --- |
+| 400 | `INVALID_ARGUMENT` | 请求参数不合法 |
+| 403 | `FORBIDDEN` | 调用方在黑名单中 |
+| 404 | `RESOURCE_NOT_FOUND` | 会话等目标不存在 |
+| 409 | `INVALID_STATE` | 目标当前状态不允许提交 |
+| 429 | `QUOTA_EXCEEDED` / `QUEUE_FULL` | 超出速率或每日配额 / 在途请求过多 |
+| 503 | `CAPACITY_UNAVAILABLE` / `DEPENDENCY_UNAVAILABLE` / `PYTHON_UNAVAILABLE` | 执行容量不足 / 治理存储不可用 / Python 不可达 |
 
 </details>
 

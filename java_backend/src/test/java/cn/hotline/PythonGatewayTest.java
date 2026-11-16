@@ -22,7 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = {"spring.cloud.nacos.discovery.enabled=false", "hotline.python.mode=nacos"})
+        properties = {"spring.cloud.nacos.discovery.enabled=false", "hotline.python.mode=nacos",
+                "hotline.admission.store=memory"})
 class PythonGatewayTest {
     private static final HttpServer UPSTREAM = upstream();
     private static volatile String receivedBody;

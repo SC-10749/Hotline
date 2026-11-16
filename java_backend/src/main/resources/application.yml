@@ -9,6 +9,13 @@ spring:
       enabled: false
   application:
     name: hotline-java-api
+  data:
+    redis:
+      host: ${HOTLINE_REDIS_HOST:127.0.0.1}
+      port: ${HOTLINE_REDIS_PORT:6379}
+      password: ${HOTLINE_REDIS_PASSWORD:}
+      timeout: 500ms
+      connect-timeout: 500ms
   threads:
     virtual:
       enabled: true
@@ -35,3 +42,45 @@ hotline:
     service-name: ${HOTLINE_PYTHON_SERVICE_NAME:hotline-python-api}
     connect-timeout: ${HOTLINE_PYTHON_CONNECT_TIMEOUT:1s}
     read-timeout: ${HOTLINE_PYTHON_READ_TIMEOUT:60s}
+  flow:
+    # abjson 场景定义与处理器映射（pandora-search-music 同构约定）
+    scenes-location: ${HOTLINE_FLOW_SCENES:classpath:flow/flows.json}
+    funcmaps-location: ${HOTLINE_FLOW_FUNCMAPS:classpath:flow/flow_funcmaps.properties}
+    pool:
+      core-size: ${HOTLINE_FLOW_POOL_CORE:16}
+      max-size: ${HOTLINE_FLOW_POOL_MAX:64}
+      keep-alive: ${HOTLINE_FLOW_POOL_KEEP_ALIVE:60s}
+  admission:
+    # 接入治理：黑名单、请求速率、并发租约与日提交配额
+    enabled: ${HOTLINE_ADMISSION_ENABLED:true}
+    # auto=启动探测 Redis，不可用回退内存；redis=要求 Redis，不可用启动失败
+    store: ${HOTLINE_ADMISSION_STORE:auto}
+    # 存储运行时故障时是否放行；false（默认）时返回 503 保护下游
+    redis-fail-open: ${HOTLINE_ADMISSION_REDIS_FAIL_OPEN:false}
+    client-header: ${HOTLINE_ADMISSION_CLIENT_HEADER:X-Hotline-User}
+    max-client-header-length: 128
+    trust-forwarded-for: ${HOTLINE_ADMISSION_TRUST_FORWARDED_FOR:false}
+    rate-limit:
+      limit: ${HOTLINE_ADMISSION_RATE_LIMIT:600}
+      window: ${HOTLINE_ADMISSION_RATE_WINDOW:1m}
+    concurrency:
+      limit: ${HOTLINE_ADMISSION_CONCURRENCY_LIMIT:4}
+      lease: ${HOTLINE_ADMISSION_CONCURRENCY_LEASE:30m}
+    # 每客户端每日提交配额，0 表示不限
+    submission-quota-per-day: ${HOTLINE_ADMISSION_SUBMISSION_QUOTA:0}
+    include-paths:
+      - /api/**
+      - /agent/**
+      - /execution/**
+      - /skill/**
+      - /session/**
+      - /file/**
+      - /document/**
+      - /evaluation/**
+      - /release/**
+      - /harness/**
+      - /console/api/**
+      - /code-map/**
+    concurrency-paths:
+      - /agent/**
+      - /execution/**
