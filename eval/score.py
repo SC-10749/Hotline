@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import math
 import os
 import statistics
 import sys
@@ -37,7 +38,7 @@ def read_env_file() -> None:
         key, _, value = line.partition("=")
         key, value = key.strip(), value.strip()
         if key and key not in os.environ:
-            os.environ[key] = value
+            os.environ[key] = value.strip('"\'')
 
 
 def pick(*names: str, default: str = "") -> str:
@@ -114,7 +115,10 @@ async def score_all(samples, scorers, concurrency: int) -> list[dict[str, Any]]:
                     continue
                 try:
                     result = await scorer(sample)
-                    row["scores"][name] = float(getattr(result, "value", result))
+                    value = float(getattr(result, "value", result))
+                    if not math.isfinite(value):
+                        raise ValueError('指标未产生有限分数')
+                    row["scores"][name] = value
                     reason = getattr(result, "reason", "")
                     if reason:
                         row["reasons"][name] = str(reason)[:400]

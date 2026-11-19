@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class ApiExceptionHandler {
     @ExceptionHandler(PythonUnavailableException.class)
     @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
-    public ApiError pythonUnavailable() {
-        return new ApiError("PYTHON_UNAVAILABLE", "Python 能力服务暂不可用");
+    public ApiError pythonUnavailable(PythonUnavailableException exception) {
+        return new ApiError("PYTHON_UNAVAILABLE", exception.getMessage());
     }
 }

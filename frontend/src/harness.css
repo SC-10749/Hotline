@@ -259,10 +259,10 @@
 @media (prefers-reduced-motion: reduce) {
   :where(.harness-shell) *, :where(.harness-shell) *::before, :where(.harness-shell) *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
-:where(.harness-shell) .evaluation-page { display: grid; gap: 14px; }
-:where(.harness-shell) .evaluation-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 2px; }
-:where(.harness-shell) .evaluation-tabs { display: flex; gap: 5px; }
-:where(.harness-shell) .evaluation-tabs button { border: 0; border-radius: 7px; padding: 8px 11px; color: var(--h-muted); background: transparent; cursor: pointer; font: inherit; font-size: 12px; }
+:where(.harness-shell) .evaluation-page { display: grid; min-width: 0; gap: 14px; }
+:where(.harness-shell) .evaluation-toolbar { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 2px; }
+:where(.harness-shell) .evaluation-tabs { display: flex; min-width: 0; gap: 5px; overflow-x: auto; }
+:where(.harness-shell) .evaluation-tabs button { flex: 0 0 auto; min-height: 38px; white-space: nowrap; border: 0; border-radius: 7px; padding: 8px 11px; color: var(--h-muted); background: transparent; cursor: pointer; font: inherit; font-size: 12px; }
 :where(.harness-shell) .evaluation-tabs button:hover:not(:disabled), :where(.harness-shell) .evaluation-tabs button.active { color: var(--h-text); background: var(--surface-hover); }
 :where(.harness-shell) .evaluation-kpis { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }:where(.harness-shell) .evaluation-kpis > div { display: grid; gap: 5px; padding: 15px 16px; border-right: 1px solid var(--line); }:where(.harness-shell) .evaluation-kpis > div:last-child { border-right: 0; }:where(.harness-shell) .evaluation-kpis span, :where(.harness-shell) .evaluation-kpis small { color: var(--muted); font-size: 11px; }:where(.harness-shell) .evaluation-kpis strong { color: var(--h-text); font: 600 23px Consolas, monospace; }:where(.harness-shell) .evaluation-kpis small.positive { color: var(--success); }:where(.harness-shell) .evaluation-kpis strong.stat-warn { color: var(--warning); }
 :where(.harness-shell) .evaluation-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(260px, .8fr); gap: 14px; }:where(.harness-shell) .evaluation-dimensions, :where(.harness-shell) .evaluation-health, :where(.harness-shell) .evaluation-datasets { min-width: 0; }

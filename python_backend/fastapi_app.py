@@ -128,6 +128,7 @@ async def lifespan(_: FastAPI):
         stop_schedule_loop()
         stop_release_observation()
         wait_for_background_runs(timeout=5)
+        evaluation_router.benchmark_service.close()
         documents.stop_sweeper()
 
 
@@ -147,7 +148,8 @@ app.include_router(
         workspace_exists=lambda workspace_id: resource_store.get_workspace(workspace_id) is not None,
     )
 )
-app.include_router(create_evaluation_router(evaluation_store, execution_service))
+evaluation_router = create_evaluation_router(evaluation_store, execution_service)
+app.include_router(evaluation_router)
 if context_service:
     app.include_router(create_context_router(context_service, storage.delete_session))
 app.include_router(create_resource_router(resource_store))

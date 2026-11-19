@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { marked } from 'marked'
+import { usePageState } from './composables/usePageState'
 import DOMPurify from 'dompurify'
 import hljs from 'highlight.js/lib/core'
 import bash from 'highlight.js/lib/languages/bash'
@@ -54,9 +55,9 @@ const changedFiles = [
 const supportedExtensions = new Set(['pdf', 'doc', 'docx', 'txt', 'png', 'jpg', 'jpeg'])
 const backendUrl = ref(localStorage.getItem('dodo-api-base') || import.meta.env.VITE_API_BASE_URL || '')
 const settingsDraft = ref(backendUrl.value)
-const activeMode = ref('chat')
-const activePage = ref('home')
-const profileSection = ref('basics')
+const activeMode = usePageState('chat-mode', 'chat', modes.map(mode => mode.id))
+const activePage = usePageState('page', 'home', ['home', 'automation', 'plugins', 'bot', 'docs', 'harness', 'code-map', 'export', 'profile'])
+const profileSection = usePageState('profile', 'basics', ['basics', 'api', 'personalization', 'pet'])
 const exportingHistory = ref(false)
 const sessions = ref([])
 const activeId = ref(null)
@@ -80,7 +81,7 @@ const deletingId = ref(null)
 const mobileSidebarOpen = ref(false)
 const sidebarCollapsed = ref(false)
 const showWorkspacePanel = ref(false)
-const workspacePanelTab = ref('files')
+const workspacePanelTab = usePageState('workspace-tab', 'files', ['files', 'changes'])
 const selectedProjectName = ref('')
 const selectedProjectId = ref('')
 const projectFiles = ref([])
@@ -1708,11 +1709,15 @@ onMounted(() => {
     if (event.key === 'Escape') mobileSidebarOpen.value = false
   }
   window.addEventListener('keydown', keydownHandler)
+  const restoredMode = activeMode.value
   newSession()
+  activeMode.value = restoredMode
   refreshSessions()
   refreshWorkspaces()
   getSkills(backendUrl.value).then((list) => { skills.value = list }).catch(() => {})
   refreshProfile()
+  if (activePage.value === 'automation') refreshSchedules()
+  if (activePage.value === 'bot') refreshBots()
 })
 
 onUnmounted(() => {

@@ -1,7 +1,9 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { usePageState } from './composables/usePageState'
 import ExecutionRunDetails from './modules/execution/ExecutionRunDetails.vue'
 import ArtifactList from './modules/artifacts/ArtifactList.vue'
+import BenchmarkPanel from './modules/evaluation/BenchmarkPanel.vue'
 import { useRunEvents } from './modules/execution/useRunEvents'
 import { getHarnessAgent, updateHarnessAgent } from './api'
 import { getHarnessWorkspace, updateHarnessWorkspace } from './api'
@@ -20,12 +22,12 @@ const sections = [
 ]
 const props = defineProps({ embedded: { type: Boolean, default: false }, apiBase: { type: String, default: '' } })
 const runs = ref([])
-const activeSection = ref('overview')
+const activeSection = usePageState('harness-section', 'overview', sections.flatMap(group => group.items.map(item => item.id)))
 const activeView = ref('control')
 const filter = ref('全部任务')
 const search = ref('')
 const selectedModuleRecord = ref(null)
-const evaluationTab = ref('overview')
+const evaluationTab = usePageState('evaluation-tab', 'overview', ['overview', 'datasets', 'config', 'rag', 'bird', 'load', 'reports'])
 const selectedRunId = ref('')
 const toast = ref('')
 const mobileNavOpen = ref(false)
@@ -332,7 +334,7 @@ const skillsError = ref('')
 const selectedSkill = ref(null)
 const skillChangingId = ref('')
 const skillChangeError = ref('')
-const skillDirectoryTab = ref('installed')
+const skillDirectoryTab = usePageState('skills-tab', 'installed', ['installed', 'catalog'])
 const catalog = ref({ project: '', skills: [], bindings: [], rollouts: [] })
 const catalogLoading = ref(false)
 const catalogConnected = ref(false)
@@ -1872,6 +1874,8 @@ watch(harnessDialogCount, async (count, previousCount) => {
 })
 
 onMounted(() => {
+  if (skillDirectoryTab.value === 'catalog') refreshCatalogData()
+  if (activeSection.value === 'observability') loadTraceEvents()
   refreshSkillData()
   refreshModelData()
   refreshToolData()
@@ -1938,8 +1942,9 @@ onUnmounted(() => {
           <footer class="page-footer"><span>{{ activeSection === 'runs' ? '运行记录来自执行服务 · 每 5 秒刷新' : '总览指标来自今日真实运行记录' }}</span></footer>
         </template>
           <section v-else-if="activeSection === 'evaluations'" class="evaluation-page">
-          <div class="evaluation-toolbar"><div class="evaluation-tabs"><button :class="{ active: evaluationTab === 'overview' }" @click="selectEvaluationTab('overview')">测评总览</button><button :class="{ active: evaluationTab === 'datasets' }" @click="selectEvaluationTab('datasets')">测评集</button><button :class="{ active: evaluationTab === 'config' }" @click="selectEvaluationTab('config')">评测配置</button><button :class="{ active: evaluationTab === 'reports' }" @click="selectEvaluationTab('reports')">历史报告</button></div><button class="button button-primary" :disabled="evalRunBusy" @click="runEvaluation"><Play :size="14" />{{ evalRunBusy ? '测评进行中…' : '运行测评' }}</button><span v-if="evalProgress" class="evaluation-progress">{{ evalProgress }}</span></div>
-          <template v-if="evaluationTab === 'overview'">
+          <div class="evaluation-toolbar"><div class="evaluation-tabs"><button :class="{ active: evaluationTab === 'overview' }" @click="selectEvaluationTab('overview')">测评总览</button><button :class="{ active: evaluationTab === 'datasets' }" @click="selectEvaluationTab('datasets')">测评集</button><button :class="{ active: evaluationTab === 'config' }" @click="selectEvaluationTab('config')">评测配置</button><button v-for="tool in [{ id: 'rag', label: 'RAG 评测' }, { id: 'bird', label: 'BIRD SQL' }, { id: 'load', label: '并发压测' }]" :key="tool.id" :class="{ active: evaluationTab === tool.id }" @click="selectEvaluationTab(tool.id)">{{ tool.label }}</button><button :class="{ active: evaluationTab === 'reports' }" @click="selectEvaluationTab('reports')">历史报告</button></div><button v-if="!['rag', 'bird', 'load'].includes(evaluationTab)" class="button button-primary" :disabled="evalRunBusy" @click="runEvaluation"><Play :size="14" />{{ evalRunBusy ? '测评进行中…' : '运行测评' }}</button><span v-if="evalProgress" class="evaluation-progress">{{ evalProgress }}</span></div>
+          <BenchmarkPanel v-if="['rag', 'bird', 'load'].includes(evaluationTab)" :key="evaluationTab" :kind="evaluationTab" :api-base="apiBase" />
+          <template v-else-if="evaluationTab === 'overview'">
 
           <section class="evaluation-kpis"><div><span>活跃测评集</span><strong>{{ evaluationConnected ? evalDatasets.length : '—' }}</strong><small>{{ evaluationConnected ? evalCaseTotal + ' 条测试样本' : '未连接测评服务' }}</small></div><div><span>最近通过率</span><strong>{{ evalPassRateText }}</strong><small v-if="latestEvalRun">{{ latestEvalRun.eval_run_id }}</small><small v-else>本次测评未产出可比结果</small></div><div><span>失败样本</span><strong class="stat-warn">{{ latestEvalSummary?.failedCount ?? '—' }}</strong></div><div><span>通过样本</span><strong>{{ latestEvalSummary?.passedCount ?? '—' }}</strong><small>最近一次运行共 {{ latestEvalSummary?.caseCount ?? '—' }} 个样本</small></div></section>
           <div class="evaluation-grid"><section class="harness-panel evaluation-dimensions"><div class="harness-panel-heading"><div><h3>能力维度</h3><p>{{ latestEvalRun ? '以最近一次测评 ' + latestEvalRun.eval_run_id + ' 为准' : '暂无真实测评结果' }}</p></div><button class="text-action" @click="selectEvaluationTab('config')">配置维度 <ArrowRight :size="13" /></button></div><div class="dimension-list"><div v-for="dimension in dimensionRows" :key="dimension.label" class="dimension-row"><div class="dimension-icon" :class="dimension.color"><Gauge :size="15" /></div><div class="dimension-copy"><strong>{{ dimension.label }}</strong><small>{{ dimension.note }}</small></div><div class="dimension-track"><i :class="dimension.color" style="width:0%"></i></div><strong class="dimension-score">{{ dimension.score }}</strong></div><div v-if="!dimensionRows.length" class="release-empty"><span>暂无评测维度配置</span></div></div></section><aside class="harness-panel evaluation-health"><div class="harness-panel-heading"><div><h3>质量门禁</h3></div><span v-if="latestGate" class="dataset-state" :class="{ attention: !latestGate.passed }"><i></i>{{ latestGate.passed ? '通过' : '未通过' }}</span></div><template v-if="latestGate"><div v-for="row in gateCheckRows" :key="row.label" class="gate-row" :class="{ failed: row.passed !== true }"><span>{{ row.label }} · 阈值 {{ row.value }}</span><strong>{{ row.passed === true ? '通过' : row.passed === false ? '未通过' : '未评估' }}</strong><Check v-if="row.passed === true" :size="14" /><X v-else :size="14" /></div><div class="gate-note"><ShieldCheck :size="14" />{{ latestGate.eval_run_id ? '关联测评运行 ' + latestGate.eval_run_id : '未关联测评运行' }} · {{ latestGate.name || '未命名版本' }} {{ latestGate.version || '' }} · 门禁编号 {{ latestGate.gate_id }}</div></template><div v-else class="release-empty"><span>暂无门禁记录</span><small>未连接发布服务</small></div></aside></div>

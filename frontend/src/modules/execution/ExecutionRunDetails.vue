@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { usePageState } from '../../composables/usePageState'
 import ArtifactList from '../artifacts/ArtifactList.vue'
 import ContextSnapshots from '../context_engineering/ContextSnapshots.vue'
 
@@ -14,7 +14,7 @@ const props = defineProps({
   apiBase: { type: String, default: '' },
 })
 defineEmits(['refresh', 'cancel', 'retry', 'duplicate'])
-const tab = ref('result')
+const tab = usePageState('execution-detail-tab', 'result', ['result', 'trace', 'request', 'context', 'artifacts'])
 const labels = { queued: '排队中', running: '运行中', completed: '已完成', failed: '失败', cancelled: '已取消' }
 const streamLabels = { connecting: '正在连接实时事件', live: '实时事件已连接', reconnecting: '实时事件重连中', complete: '事件流已结束', failed: '实时事件未连接' }
 const toolLabels = { running: '调用中', completed: '调用成功', failed: '调用失败', cancelled: '调用已停止' }

@@ -27,6 +27,7 @@ for path in (ROOT, EVAL_DIR):
         sys.path.insert(0, str(path))
 
 import prompts  # noqa: E402  (同目录模块，需先补 sys.path)
+from python_backend.modules.context_engineering.privacy import sanitize_text, sanitize_value
 
 
 def load_cases(path: Path, limit: int | None) -> list[dict[str, Any]]:
@@ -70,15 +71,24 @@ def build_engine():
     return engine, settings
 
 
+def drain(generator):
+    """Consume progress events and retain the generator's actual result."""
+    while True:
+        try:
+            next(generator)
+        except StopIteration as result:
+            return result.value
+
+
 def retrieve(engine, question: str, source_id: str | None) -> tuple[str, list[str]]:
     """复用主链路的两个步骤：路由分类 + 分路召回。"""
-    route = engine._choose_retrieval(question)
-    contexts = list(engine._retrieve(source_id, question, route)) if source_id else []
+    route = drain(engine._choose_retrieval(question))
+    contexts = drain(engine._retrieve(source_id, question, route)) if source_id else []
     return route, contexts
 
 
 def collect_case(engine, case: dict[str, Any], variants: list[prompts.PromptVariant]) -> list[dict[str, Any]]:
-    question = case["question"]
+    question = sanitize_text(case["question"])
     source_id = case.get("source_id")
     started = time.perf_counter()
 
@@ -107,12 +117,13 @@ def collect_case(engine, case: dict[str, Any], variants: list[prompts.PromptVari
         if not error and engine.settings.model_api_key:
             begin = time.perf_counter()
             try:
-                row["answer"] = engine.model.chat(prompts.render(variant, question, contexts, route))
+                row["answer"] = engine.model.chat(sanitize_value(prompts.render(variant, question, contexts, route)))
                 if not row["answer"]:
                     row["error"] = "模型返回空答案（被静默降级或调用失败）"
             except Exception as exc:
                 row["error"] = f"生成失败 {type(exc).__name__}: {exc}"
-            row["latency_ms"] = int((time.perf_counter() - begin) * 1000)
+            row["generation_ms"] = int((time.perf_counter() - begin) * 1000)
+            row["latency_ms"] = retrieval_ms + row["generation_ms"]
         elif not error:
             row["error"] = "未配置模型 Key，答案为空（上下文仍可用于检索侧指标）"
         rows.append(row)
@@ -144,7 +155,7 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--prompt", default="current", help="提示词变体，逗号分隔：current,cited")
     parser.add_argument("--list-prompts", action="store_true", help="列出所有变体后退出")
-    parser.add_argument("--out", default="", help="输出目录，默认 eval/runs/<时间戳>")
+    parser.add_argument("--out", default="", help="输出目录，默认 data/evaluations/<时间戳>")
     parser.add_argument("--mock", action="store_true", help="不连库不调模型，只验证管线")
     args = parser.parse_args()
 
@@ -161,7 +172,7 @@ def main() -> int:
         print("没有用例，先在 eval/cases.jsonl 里加几条", file=sys.stderr)
         return 2
 
-    out_dir = Path(args.out) if args.out else EVAL_DIR / "runs" / datetime.now().strftime("%Y%m%d-%H%M%S")
+    out_dir = Path(args.out) if args.out else ROOT / "data" / "evaluations" / datetime.now().strftime("%Y%m%d-%H%M%S")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     engine = settings = None

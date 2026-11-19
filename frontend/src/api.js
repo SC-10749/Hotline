@@ -14,6 +14,26 @@ const unwrap = async (response) => {
 
 export const apiUrl = (base, path) => `${base.replace(/\/+$/, '')}${path}`
 
+export async function getBenchmarkTools(base) {
+  return unwrap(await fetch(apiUrl(base, '/evaluation/benchmarks/tools'), { signal: AbortSignal.timeout(20000) }))
+}
+export async function getBenchmarkRuns(base, kind) {
+  return unwrap(await fetch(apiUrl(base, `/evaluation/benchmarks/runs?kind=${encodeURIComponent(kind)}`)))
+}
+export async function startBenchmark(base, payload) {
+  return unwrap(await fetch(apiUrl(base, '/evaluation/benchmarks/runs'), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  }))
+}
+export async function getBenchmarkRun(base, id) {
+  return unwrap(await fetch(apiUrl(base, `/evaluation/benchmarks/runs/${encodeURIComponent(id)}`)))
+}
+export async function cancelBenchmark(base, id, keepalive = false) {
+  return unwrap(await fetch(apiUrl(base, `/evaluation/benchmarks/runs/${encodeURIComponent(id)}/cancel`), {
+    method: 'POST', keepalive,
+  }))
+}
+
 export async function getCodeMapStatus(base) {
   const response = await fetch(apiUrl(base, '/code-map'), { signal: AbortSignal.timeout(8000) })
   return unwrap(response)

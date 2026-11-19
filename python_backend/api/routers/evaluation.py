@@ -109,6 +109,11 @@ def wait_for_run(service: ExecutionApplicationService, run_id: str,
 def create_evaluation_router(store: EvaluationStore,
                               execution_service: ExecutionApplicationService | None = None) -> APIRouter:
     router = APIRouter()
+    from .benchmarks import create_benchmark_router
+    from ...modules.evaluation.benchmarks import BenchmarkService
+    benchmarks = BenchmarkService(store.path.parent)
+    router.include_router(create_benchmark_router(benchmarks))
+    router.benchmark_service = benchmarks
 
     def service() -> ExecutionApplicationService:
         nonlocal execution_service

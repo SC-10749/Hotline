@@ -1,6 +1,64 @@
-# RAG 自动评测（Ragas）
+# AI 测评工具与 Harness 接入
 
-本说明对应根目录 `eval/` 的独立 RAG 测评脚本。以下命令均在仓库根目录执行；应用内 `/evaluation/*` 接口属于另一条测评链路。
+## Harness 按需测试
+
+入口：Harness → 测评中心 → **RAG 评测 / BIRD SQL / 并发压测**。
+
+- 普通启动、打开 Harness 或打开测试页都不会开始测评，也不会导入 Ragas、Locust。只有点击开始才创建独立子进程，结束后退出。
+- 切换测试页签、离开 Harness 或关闭页面会取消本页启动的任务；异常断开时，30 秒页面心跳租约到期后取消。取消会终止测试进程树；SSE 压测还会尝试取消尚未完成的 Agent 对话。若目标后端离线，取消请求可能无法送达，应检查目标执行队列。
+- 一次运行一个基准任务。服务重启会将遗留运行标记为 interrupted，不自动重跑。
+- 输入统一放在被 Git 忽略的 `data/benchmarks/`；页面填写该目录内的相对路径。报告、预测和工具日志写入 `data/evaluations/benchmarks/<运行编号>/`。日志只留本地，不通过页面暴露原始工具异常。
+
+一次性安装（仓库根目录，Windows）：
+
+```powershell
+uv venv eval/.venv --python 3.13
+uv pip install --python eval/.venv/Scripts/python.exe -r eval/requirements-tools.txt
+.venv/Scripts/python.exe eval/setup_tools.py
+```
+
+最后一条命令只下载 BIRD Mini-Dev 官方评分脚本，不下载大型数据集，不创建嵌套仓库。下载时解析官方提交号，保存原始文件、SHA256 和版本记录；每次评分校验文件摘要。显式重新执行安装脚本才会更新版本。
+
+### RAG 页面
+
+默认读取已采集 JSONL，每行包含 `id`、`question`、`answer`、`contexts`（字符串数组），可选 `reference`、`relevant_ids`、`retrieved_ids`。例如把公开、脱敏的样本保存为 `data/benchmarks/rag/samples.jsonl`，页面输入 `rag/samples.jsonl`。
+
+选择「先调用当前检索链采集答案」后，输入改为问题用例 JSONL（下文格式），采集使用主环境和当前存储配置，评分使用隔离环境。生成器的阶段事件会被消费，使用其最终返回的路由和片段，不把事件对象当作召回内容。输入判分器前脱敏；原始采集、答案与工具日志仍属于本地运行数据，不应外传。
+
+页面展示 Ragas 指标均值和评分样本数；缺失、失败、非有限指标不计作零分，未评分样本另列。标注相关片段 ID 后另算 Recall@5 和 MRR@5，按去重后前五个召回 ID 计算。这是组件级评测，不等同于完整多轮 Agent 质量。
+
+### BIRD SQL 页面
+
+从 [BIRD 官方网站](https://bird-bench.github.io/) 获取 Mini-Dev SQLite 数据。题目 JSON 数组或 JSONL 使用 `question_id`、`db_id`、`question`、`evidence`、`SQL`、`difficulty` 字段；数据库目录布局为 `<目录>/<db_id>/<db_id>.sqlite`。由于当前官方 EX 脚本会按难度直接做除法，选取的前 N 条必须覆盖 simple / moderate / challenging 三类，否则在启动评分前说明原因并失败。
+
+提供预测 JSON 时按 `question_id` 映射 SQL 字符串；也接受官方 `SQL\t----- bird -----\tdb_id` 值格式。缺失预测会直接失败，避免短预测文件导致样本被静默忽略。留空则使用当前应用模型按 Schema、问题和可选 Evidence 单次生成 SQL，消耗模型额度。该路径不是完整 SQL Agent。
+
+调用未修改的官方 EX 脚本，每条执行超时 15 秒，单进程评分。通过独立子进程的 SQLite 连接保护强制只读、禁用扩展加载，并拒绝写入、ATTACH 与 PRAGMA 等操作。显示 EX、分难度准确率、题目文件 SHA256 和工具提交号。已有预测的 Evidence 设置无法追溯，因此结果标为未知；生成模式记录实际设置。当前仅支持 SQLite，不提供 MySQL / PostgreSQL 评测及效率排名。
+
+### 并发压测页面
+
+Locust 仅在点击开始后以 headless 模式启动。目标限于本机 Python 8888 或 Java 8080；当前为固定并发、固定时长，默认 2 用户 / 15 秒，上限 100 用户 / 600 秒。
+
+- HTTP 场景请求 `/health/ready`，不调用模型。
+- SSE 场景请求 `/agent/chat/stream`，创建真实对话并消耗额度。解析阶段、文本、complete、error、clarify 与结束事件；只有成功 complete 计为任务完成。首事件、首段文本、完成时间分别统计。
+- 完整 SSE 耗时覆盖流消费，HTTP 200 不等于业务成功。汇总从退出事件中的最终统计生成，避免短测试读取旧 CSV。辅助取消请求不计入主场景请求数与分位数。
+- 页面展示请求数、错误率、吞吐、P50/P95/P99；保留 Locust CSV 供本地诊断。当前未实现假模型运行模式、阶梯负载和队列积压采样；模型限流也会计入真实链路错误。
+
+### 验证命令
+
+```powershell
+.venv/Scripts/python.exe -m unittest python_backend.modules.evaluation.test_benchmarks python_backend.modules.evaluation.test_evaluation python_backend.api.test_router_contracts -q
+.venv/Scripts/python.exe eval/test_tools.py
+.venv/Scripts/python.exe -m compileall python_backend
+.venv/Scripts/python.exe skill-center/test_center.py
+npm --prefix frontend run build
+```
+
+`test_tools.py` 使用本地模拟 OpenAI 判分接口和本地 HTTP/SSE 服务，实际调用隔离环境的 Ragas 与 Locust，验证工具接入与错误判定，不产生真实能力分数或外部模型调用。
+
+## 独立 RAG 脚本
+
+本说明对应根目录 `eval/` 的独立 RAG 测评脚本。以下命令均在仓库根目录执行；Harness → 测评中心新增 RAG 评测、BIRD SQL、并发压测页签，通过 `/evaluation/benchmarks/*` 按需调用独立工具；原有通用测评集与运行接口保持可用。
 
 ## 本次交付范围
 
@@ -45,14 +103,14 @@ uv run python eval\collect.py --mock --limit 3
 uv run python eval\collect.py --limit 20
 
 # 2) 打分（隔离环境）
-eval\.venv\Scripts\python.exe eval\score.py --samples "eval\runs\20261031-120000\samples.jsonl"
+eval\.venv\Scripts\python.exe eval\score.py --samples "data\evaluations\20261031-120000\samples.jsonl"
 
 # 3) 对比基线
-eval\.venv\Scripts\python.exe eval\score.py --samples "..." --baseline "eval\runs\<旧目录>\scores.json"
+eval\.venv\Scripts\python.exe eval\score.py --samples "..." --baseline "data\evaluations\<旧目录>\scores.json"
 eval\.venv\Scripts\python.exe eval\score.py --samples "..." --set-baseline
 ```
 
-产物在 `eval/runs/<时间戳>/`：`samples.jsonl`、`meta.json`、`report.md`、`scores.json`。
+产物在 `data/evaluations/<时间戳>/`：`samples.jsonl`、`meta.json`、`report.md`、`scores.json`。
 
 ## 用例格式（`cases.jsonl`，一行一条）
 
@@ -92,7 +150,7 @@ uv run python eval\collect.py --limit 20 --prompt current,cited  # 一次跑两�
 
 ```powershell
 uv run python eval\prompt_checks.py                                        # 只查提示词本身
-uv run python eval\prompt_checks.py --samples "eval\runs\<时间戳>\samples.jsonl"  # 再查输出
+uv run python eval\prompt_checks.py --samples "data\evaluations\<时间戳>\samples.jsonl"  # 再查输出
 ```
 
 **静态**（对每个变体）：
@@ -139,7 +197,7 @@ uv run python eval\collect.py --mock --limit 3
 ## 已知边界（先写清楚，避免误读）
 
 - **只评单轮文件问答**。多轮对话、技能、PPT、深度研究都不在这条链路上。
-- **prompt 是复刻的**：`collect.py` 里的 `build_prompt` 与 `agents._fallback` 保持一致；主链路改 prompt 时要同步，否则评的不是线上那套。
+- **prompt 是复刻的**：`eval/prompts.py` 与 `AgentEngine._fallback` 保持一致；主链路改 prompt 时要同步，否则评的不是线上那套。
 - **上下文是字符串**：`_retrieve` 返回的是片段列表，但主链路喂给模型时拼成了一整段。这里按列表评，属于对主链路的"理想化"切片。
 - **空答案会被跳过**：没配 Key 时模型静默降级，这类样本只统计检索侧指标。
 - **判分有噪声**：同一份答案两次打分可能差 0.05，比较时看均值差是否大于 0.05，别盯着小数点后三位。
