@@ -13,6 +13,7 @@
 | [上下文工程实现与验收](context-engineering-design.md) | 请求链路、工作区、检索与上下文装配、验证方法 |
 | [AI 测评工具与 Harness 接入](evaluation.md) | 按需 Ragas、BIRD SQL、Locust 压测与独立脚本 |
 | [变更规格（spec）](spec/index.md) | 每次代码、接口与方案变更的规格契约；开工前先读 |
+| [模块功能规格](spec/modules/index.md) | 按能力模块拆分的功能现状说明；改哪个模块就只读哪一份 |
 
 根目录三个约定文件保留在原位，确保仓库入口和开发工具可以直接找到；其他项目说明集中在本目录。
 
