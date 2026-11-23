@@ -129,7 +129,7 @@ class RouterContractTests(unittest.TestCase):
             create_evaluation_router(evaluation_store),
             create_resource_router(resource_store),
             create_registry_router(registry_store),
-            create_mcp_router(registry_store),
+            create_mcp_router(registry_store, governance_store),
             create_governance_router(
                 lambda: [], governance_store, None, settings_store.get, NotificationStore(root / 'notifications.db'),
             ),

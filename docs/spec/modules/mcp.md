@@ -2,7 +2,7 @@
 
 > 模块路径：`python_backend/modules/mcp/`（连接器实现）＋ `python_backend/api/routers/mcp.py`（HTTP 路由）＋ `python_backend/infrastructure/registry_store.py`（登记存储）
 > 前端对应：`frontend/src/modules/mcp/` 只有 `.gitkeep` 占位，无独立前端模块；实际调用在 `frontend/src/api.js`（`getHarnessMcpServers`、`callMcpTool`）与 `frontend/src/HarnessApp.vue` 的「工具与 MCP」面板
-> 状态：最小 stdio 型 MCP 连接器（自研 JSON-RPC over stdio，不引入 MCP SDK）；支持 initialize 探测、tools/list 工具发现、tools/call 工具调用；HTTP 路由只提供服务器清单与工具调用，审批链不经过本路由
+> 状态：最小 stdio 型 MCP 连接器（自研 JSON-RPC over stdio，不引入 MCP SDK）；支持 initialize 探测、tools/list 工具发现、tools/call 工具调用；HTTP 路由提供服务器清单与工具调用，工具调用会先过审批策略（规格 S-013）
 
 ## stdio 会话启动与收尾
 
@@ -121,7 +121,7 @@
 - 审批链的通用规则（来自 `prepare_tool_call`）：先查本次运行的工具白名单（不在名单内直接拒绝），再按登记的 `input_schema` 校验参数，最后按登记项的 `approval_policy` 与 `risk` 决定是否阻塞等待审批。
 - 审批策略判定：`approval_policy` 为 `always` 时必审；`risk-based` 只有 `risk='high'` 才审；策略非 always/required 则不审。没有 run 上下文（`run_id` 为空）时不阻塞；`HARNESS_APPROVAL_ENFORCE` 置 0 时整段审批跳过。
 - 审批请求详情只写参数名与类型摘要，不写参数值；超时或被拒时抛 ValueError，消息分别为「等待工具审批超时（N 秒），未执行该工具」「工具审批被拒绝，未执行该工具」「工具审批已过期，未执行该工具」。
-- 本模块的 HTTP 路由只调用 `validate_tool_arguments` 做参数校验，不走 `prepare_tool_call`：MCP 工具经由 `/harness/mcp/servers/.../call` 调用时，运行级白名单与人工审批策略都不生效，审批链目前只作用在 Agent 工具调用路径上。
+- 本模块的 HTTP 路由自己做参数校验并**执行审批策略**（规格 S-013）：调用登记为需要审批的 MCP 工具时，先查治理库里该工具（标识 `mcp:<tool_id>:<tool_name>`）最近一条已批准且未过期的记录；没有就创建审批请求并返回 409，detail 为「该 MCP 工具需要人工审批（请求编号 approval-xxx），批准后重试」。批准后原样重试即可通过；审批记录过期后需要重新批准。运行级工具白名单仍然只作用在 Agent 工具调用路径上（控制台调用没有运行上下文）。
 
 ### 关键实现
 - `python_backend/infrastructure/registry_store.py:list_mcp_servers` —— 以 `input_schema.mcp` 判定 MCP 服务器

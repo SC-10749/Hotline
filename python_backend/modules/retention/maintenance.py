@@ -49,8 +49,10 @@ def purge_approvals(path: Path, retention_days: int) -> int:
     try:
         with db:
             removed = db.execute(
-                "DELETE FROM harness_approval WHERE status != 'pending' AND created_at < ?", (cutoff,)
-            ).rowcount
+                # 审批表的 created_at 是 SQLite 时间格式（空格分隔），与 ISO 截止时间直接比字符串会提前一天；
+                # 交给 SQLite 的 datetime() 归一化后再比。
+                "DELETE FROM harness_approval WHERE status != 'pending' AND datetime(created_at) < datetime(?)",
+                (cutoff,)).rowcount
         return max(0, removed)
     finally:
         db.close()

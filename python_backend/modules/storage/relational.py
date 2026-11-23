@@ -220,11 +220,15 @@ class Storage:
         return row["fileid"] if row else None
 
     def session_list(self, offset: int, limit: int) -> tuple[list[SessionMessage], int]:
-        count = self._execute("SELECT COUNT(DISTINCT session_id) AS total FROM ai_session", fetch="one")["total"]
+        # 测评跑批的会话不进用户侧栏：它们只是评测产物，不是用户的对话。
+        count = self._execute(
+            "SELECT COUNT(DISTINCT session_id) AS total FROM ai_session WHERE session_id NOT LIKE 'eval:%'",
+            fetch="one")["total"]
         # 标题取第一条消息，助手类型取最后一条：会话中途切到技能助手后要认得出来。
         rows = self._execute("""SELECT s.*, (SELECT t.agent_type FROM ai_session t WHERE t.session_id=s.session_id
             ORDER BY t.id DESC LIMIT 1) AS last_agent_type FROM ai_session s
             JOIN (SELECT session_id, MIN(id) id FROM ai_session GROUP BY session_id) first ON first.id=s.id
+            WHERE s.session_id NOT LIKE 'eval:%'
             ORDER BY s.update_time DESC, s.id DESC LIMIT ? OFFSET ?""", (limit, offset), "all")
         messages = []
         for row in rows:

@@ -117,6 +117,31 @@ def _fallback_clients(config: dict[str, str], model_ids: Sequence[str],
     return clients
 
 
+def find_registered_model(settings: Settings, model_id: str) -> dict[str, Any] | None:
+    """按 id 查模型路由；找不到返回 None，调用方据此判配置错误。"""
+    path = Path(getattr(settings, 'data_dir', 'data')) / REGISTRY_DB_NAME
+    if not path.exists():
+        return None
+    row = RegistryStore(path).get_model(model_id)
+    if not row:
+        return None
+    return dict(row)
+
+
+def build_chat_model_by_id(settings: Settings, model_id: str) -> BaseChatModel:
+    """按模型路由里的 id 构建对话模型；凭据与地址沿用当前模型配置。"""
+    row = find_registered_model(settings, model_id)
+    if not row:
+        raise ValueError(f'找不到判分模型：{model_id}')
+    name = str(row.get('name') or '').strip()
+    if not name:
+        raise ValueError(f'判分模型没有可用名称：{model_id}')
+    config = model_config(settings)
+    if not config['api_key'] or not config['base_url']:
+        raise ValueError('未配置模型，无法执行技能。')
+    return ChatOpenAI(**_client_kwargs(config, name))
+
+
 def build_chat_model(settings: Settings,
                      fallback_model_ids: Sequence[str] | None = None,
                      on_fallback: Callable[[dict], None] | None = None) -> BaseChatModel:

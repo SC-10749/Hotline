@@ -32,7 +32,7 @@
 
 ### 行为
 
-- 触发条件：登记记录的 `approval_policy` 为 `always` 或 `required`；当 `approval_policy != 'always'` 时还要求 `risk == 'high'`。其余组合直接放行。
+- 触发条件由唯一口径 `python_backend/modules/execution/tools.py:approval_required` 判定（规格 S-013）：`approval_policy` 为 `always` 时必审；为 `risk-based` 或 `required` 时只有 `risk == 'high'` 才审；其余组合直接放行。登记接口只接受 `risk-based` 与 `always`，两者现在都能真正触发审批。
 - 全局开关：环境变量 `HARNESS_APPROVAL_ENFORCE`（默认开启），取值 `0/false/no/off` 时整条审批链跳过；没有运行上下文（`run_id` 为空）时不阻塞、不建请求。
 - 等待时长取 `harness_settings.defaultTimeoutSeconds`，读不到或非正数时回落到 `DEFAULT_APPROVAL_WAIT_SECONDS = 120` 秒；轮询间隔 `APPROVAL_POLL_SECONDS = 0.5` 秒。
 - 裁决结果：`approved` 继续执行工具；`rejected` 抛 `ValueError`「工具审批被拒绝，未执行该工具」；`expired` 或超过等待上限抛 `ValueError`（提示等待超时秒数），工具均不执行。
@@ -151,7 +151,6 @@
 ## 边界与已知限制
 
 - 工具登记接口只接受 `approval_policy` 取 `risk-based` 或 `always`，而 `enforce_approval` 判定的是 `always`/`required`：`risk-based` 的高风险工具实际不会触发审批。
-- `python_backend/modules/execution/tools.py:enforce_approval` 里 `run_id or _current_run_id` 引用了模块内不存在的名字（应为 `current_run_id()`），缺 `run_id` 时会抛 `NameError` 而不是「跳过审批」。
 - 审批有效期与执行侧等待上限用同一个超时值：接口创建走 `approvalTimeoutSeconds`（默认 3600），执行侧等待走 `defaultTimeoutSeconds`（默认 900，缺省回落 120），两个设置项互不相通。
 - 过期标记只在读接口触发，没有后台定时过期任务；未读的过期请求在库里仍是 `pending`。
 - 排空状态只落库与展示，领任务查询不按状态过滤，节点仍会领取新运行。

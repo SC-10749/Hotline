@@ -160,7 +160,7 @@ if context_service:
 app.include_router(create_resource_router(resource_store))
 app.include_router(create_workspace_import_router(resource_store, settings.data_dir / 'workspace-imports'))
 app.include_router(create_registry_router(registry_store))
-app.include_router(create_mcp_router(registry_store))
+app.include_router(create_mcp_router(registry_store, governance_store))
 app.include_router(create_governance_router(execution_store.list_workers, governance_store, execution_store.set_worker_state, settings_store.get, notification_store, execution_store.list_worker_errors))
 app.include_router(create_observability_router(execution_store.list_runs, execution_store.get_run, execution_store.get_events))
 app.include_router(create_artifact_router(artifact_store, object_store))

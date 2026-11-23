@@ -206,7 +206,9 @@ class ExecutionWorker:
             self.object_store.upload_bytes(content, key, content_type)
         artifact = self.artifacts.register(run_id=run['run_id'], name=output.name, size=len(content),
                                            sha256=hashlib.sha256(content).hexdigest(), content_type=content_type,
-                                           storage_backend=backend, storage_key=key)
+                                           storage_backend=backend, storage_key=key,
+                                           # 归属方就是发起这次生成的会话；没有归属的产物谁都下不了。
+                                           owner=str(run.get('conversation_id') or run['run_id']))
         if backend == 'minio':
             output.unlink(missing_ok=True)
         metadata = artifact_metadata(artifact)

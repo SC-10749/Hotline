@@ -198,19 +198,28 @@ def _expired(expires_at: Any) -> bool:
         return False
 
 
+def approval_required(record: dict[str, Any] | None) -> bool:
+    """审批策略判定（唯一口径）：always 一律要批，risk-based / required 只在高风险时要批。"""
+    item = record if isinstance(record, dict) else {}
+    policy = str(item.get('approval_policy') or '').strip().lower()
+    risk = str(item.get('risk') or '').strip().lower()
+    if policy == 'always':
+        return True
+    if policy in {'risk-based', 'required'}:
+        return risk == 'high'
+    return False
+
+
 def enforce_approval(tool_name: str, arguments: Any, record: dict[str, Any],
                       run_id: str | None = None, governance_db: Path | None = None,
                       wait_seconds: int | None = None) -> None:
     """按登记的审批策略阻塞等待人工审批；不需要审批时直接返回。"""
     if not approval_enforced():
         return
-    policy = str(record.get('approval_policy') or '').strip().lower()
-    risk = str(record.get('risk') or '').strip().lower()
-    if policy not in {'always', 'required'}:
+    risk = str((record or {}).get('risk') or '').strip().lower()
+    if not approval_required(record):
         return
-    if policy != 'always' and risk != 'high':
-        return
-    effective_run_id = run_id or _current_run_id
+    effective_run_id = run_id or current_run_id()
     if not effective_run_id:
         # 没有运行上下文时不阻塞，调用方需要显式登记 run_id 才会走审批。
         return

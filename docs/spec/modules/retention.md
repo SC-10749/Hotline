@@ -34,7 +34,7 @@
 ### 行为
 
 - 目标库是 `DODO_DATA_DIR/harness-governance.db`，表 `harness_approval`。
-- 删除条件是 `status != 'pending'` 且 `created_at` 早于截止时间：状态为 `pending` 的行永远不会被本模块删掉。
+- 删除条件是 `status != 'pending'` 且 `created_at` 早于截止时间：状态为 `pending` 的行永远不会被本模块删掉。时间比较交给 SQLite 的 `datetime()` 归一化（审批表用 `CURRENT_TIMESTAMP` 的空格分隔格式，执行库用 ISO 串），不再用字符串直接比——规格 S-013 之前会把截止当天的记录提前整整一天清掉。
 - 审批状态取值 `pending`/`approved`/`rejected`/`expired`；超时未裁决的请求由治理库改成 `expired`，之后按窗口正常清理。
 - 判定只看 `created_at`，裁决时间 `decided_at` 不参与；返回删除条数。
 

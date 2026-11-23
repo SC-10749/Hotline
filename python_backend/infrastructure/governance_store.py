@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
+
+from .sqlite_base import SqliteStore
 
 
 DEFAULT_RELEASE_CONFIG: dict[str, Any] = {
@@ -26,27 +27,8 @@ class ApprovalStateError(RuntimeError):
     """Raised when an approval request can no longer be decided."""
 
 
-class GovernanceStore:
+class GovernanceStore(SqliteStore):
     """Approval requests and decisions for high-impact tool calls."""
-
-    def __init__(self, path: Path):
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._initialize()
-
-    def _connect(self):
-        db = sqlite3.connect(self.path, timeout=30, isolation_level=None)
-        db.row_factory = sqlite3.Row
-        db.execute("PRAGMA busy_timeout = 30000")
-        return db
-
-    @contextmanager
-    def _db(self):
-        db = self._connect()
-        try:
-            yield db
-        finally:
-            db.close()
 
     def _initialize(self):
         with self._db() as db:
@@ -110,21 +92,15 @@ class GovernanceStore:
                 );
                 """
             )
-            db.execute("BEGIN IMMEDIATE")
-            try:
-                columns = {row["name"] for row in db.execute("PRAGMA table_info(harness_approval)")}
-                if "expires_at" not in columns:
-                    db.execute("ALTER TABLE harness_approval ADD COLUMN expires_at TEXT")
-                if "operator" not in columns:
-                    db.execute("ALTER TABLE harness_approval ADD COLUMN operator TEXT")
-                record_columns = {row['name'] for row in db.execute('PRAGMA table_info(release_record)')}
-                for column, ddl in (("error_rate", "REAL"), ("sample_count", "INTEGER"), ("threshold", "REAL")):
-                    if column not in record_columns:
-                        db.execute(f"ALTER TABLE release_record ADD COLUMN {column} {ddl}")
-                db.commit()
-            except Exception:
-                db.rollback()
-                raise
+            self.ensure_columns(db, "harness_approval", {
+                "expires_at": "TEXT",
+                "operator": "TEXT",
+            })
+            self.ensure_columns(db, "release_record", {
+                "error_rate": "REAL",
+                "sample_count": "INTEGER",
+                "threshold": "REAL",
+            })
 
     def list(self, status: str | None = None) -> list[dict[str, Any]]:
         with self._db() as db:
@@ -181,6 +157,25 @@ class GovernanceStore:
         with self._db() as db:
             db.execute("INSERT INTO harness_approval(request_id,run_id,tool,risk,detail,expires_at,operator) VALUES(?,?,?,?,?,?,?)", (request_id, payload['run_id'], payload['tool'], payload.get('risk','high'), payload.get('detail',''), expires_at, payload.get('operator','')))
             return dict(db.execute("SELECT * FROM harness_approval WHERE request_id=?", (request_id,)).fetchone())
+
+    def find_latest(self, tool: str, status: str) -> dict[str, Any] | None:
+        """某个工具最近一条指定状态的审批记录；已批准但过期的算作没有。"""
+        with self._db() as db:
+            row = db.execute(
+                """SELECT * FROM harness_approval WHERE tool=? AND status=?
+                   ORDER BY created_at DESC, rowid DESC LIMIT 1""",
+                (tool, status)).fetchone()
+        if not row:
+            return None
+        item = dict(row)
+        if status == 'approved' and item.get('expires_at'):
+            with self._db() as db:
+                expired = db.execute(
+                    "SELECT datetime(expires_at) <= datetime('now') FROM harness_approval WHERE request_id=?",
+                    (item['request_id'],)).fetchone()[0]
+            if expired:
+                return None
+        return item
 
     def expire_pending(self) -> int:
         """Mark pending approvals whose deadline passed as expired."""

@@ -11,8 +11,9 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from ...infrastructure.governance_store import GovernanceStore
 from ...infrastructure.registry_store import RegistryStore
-from ...modules.execution.tools import validate_tool_arguments
+from ...modules.execution.tools import approval_required, validate_tool_arguments
 from ...modules.mcp import call_stdio_tool, list_stdio_tools
 
 DISCOVERY_TIMEOUT_SECONDS = 5.0
@@ -28,7 +29,24 @@ def _mcp_config(tool: dict[str, Any]) -> dict[str, Any] | None:
     return config if isinstance(config, dict) else None
 
 
-def create_mcp_router(store: RegistryStore) -> APIRouter:
+def _approval_block(governance_store: GovernanceStore, tool: dict[str, Any],
+                     tool_id: str, tool_name: str) -> str:
+    """需要审批时返回拒绝说明；已批准或无需审批时返回空串。"""
+    if not approval_required(tool):
+        return ''
+    key = f"mcp:{tool_id}:{tool_name}"
+    if governance_store.find_latest(key, 'approved'):
+        return ''
+    request = governance_store.find_latest(key, 'pending') or governance_store.create({
+        'run_id': key,
+        'tool': key,
+        'risk': str(tool.get('risk') or 'high'),
+        'detail': f"MCP 服务器 {tool.get('name') or tool_id} 的工具 {tool_name}",
+    })
+    return f"该 MCP 工具需要人工审批（请求编号 {request['request_id']}），批准后重试"
+
+
+def create_mcp_router(store: RegistryStore, governance_store: GovernanceStore) -> APIRouter:
     router = APIRouter()
 
     @router.get('/harness/mcp/servers')
@@ -54,6 +72,9 @@ def create_mcp_router(store: RegistryStore) -> APIRouter:
         config = _mcp_config(tool)
         if not config:
             raise HTTPException(status_code=404, detail='该工具不是 MCP 服务器')
+        blocked = _approval_block(governance_store, tool, tool_id, tool_name)
+        if blocked:
+            raise HTTPException(status_code=409, detail=blocked)
         discovery = list_stdio_tools(config)
         if not discovery.get('ok'):
             raise HTTPException(status_code=502, detail=discovery.get('message') or 'MCP 服务器不可用')

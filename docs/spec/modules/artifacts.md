@@ -19,7 +19,7 @@
 - `name` 必须是纯文件名（等于 `PurePosixPath(name).name`），不含反斜杠与控制字符；`size` 不得为负；`sha256` 必须是小写 64 位十六进制。
 - `storage_backend` 只接受 `local` 与 `minio`；`storage_key` 必须是相对 POSIX 路径，绝对路径、含 `..`、含反斜杠或冒号一律拒绝，抛 `ValueError('无效的产物登记信息')`。
 - 唯一键是 `(run_id, storage_backend, storage_key)`：完全相同的重复登记返回原记录（`artifact_id` 不变）；同键但字段不同抛 `ValueError('产物位置已登记，不能覆盖原始记录')`。
-- `owner` 可选、长度不超过 200；老库没有 `owner` 列时构造时自动补列，历史记录归属为空串。
+- `owner` 必填且非空（规格 S-013）：空归属登记直接 `ValueError('产物登记必须带归属身份')`；长度不超过 200。老库没有 `owner` 列时构造时自动补列，历史记录归属为空串。
 
 ### 关键实现
 
@@ -104,8 +104,9 @@
 
 ### 行为
 
-- 记录的 `owner` 为空（历史登记）时放行任何请求；有 `owner` 时请求必须带归属请求头，缺失或空白返回 403，值不匹配返回 403。
-- 请求头名取自 Harness 设置 `artifactOwnerHeader`，默认 `X-Harness-Owner`；取不到设置时回退默认值；403 响应只说明缺哪个请求头或身份不匹配，不回显记录里的归属值。
+- 记录的 `owner` 为空（历史登记）时**一律拒绝**：返回 403「产物未登记归属，无法访问」；有 `owner` 时请求必须带归属身份，缺失或空白返回 403，值不匹配返回 403。
+- 归属值可以来自请求头或下载链接上的 `owner` 参数：请求头名取自 Harness 设置 `artifactOwnerHeader`，默认 `X-Harness-Owner`（设置改过名时默认名仍然兼容）；403 响应只说明缺哪个请求头或身份不匹配，不回显记录里的归属值。
+- `artifact_metadata` 生成的下载链接会带上 `?owner=<归属值>`，聊天里的直接下载链接因此仍可用。
 
 ### 关键实现
 
@@ -136,7 +137,7 @@
 
 - 登记库：`DODO_DATA_DIR/artifacts.db`（SQLite），表 `run_artifact`。
 - 字段：`artifact_id`（uuid4 hex）、`run_id`、`name`、`size`、`sha256`、`content_type`、`storage_backend`、`storage_key`、`owner`、`created_at`；唯一约束 `(run_id, storage_backend, storage_key)`，索引 `(run_id, created_at)`。
-- 老库缺 `owner` 列时在构造阶段补齐，历史记录归属为空串，下载行为不变。
+- 老库缺 `owner` 列时在构造阶段补齐，历史记录归属为空串；归属为空的记录现在会被拒绝下载，需要人工补归属后重试。
 - 产物文件：local 后端落在 `DODO_GENERATED_DIR`（默认 `data/generated`）之下；minio 后端对象名为 `ppt/<run_id>/<文件名>`。
 - 相关配置项：`DODO_DATA_DIR`、`DODO_GENERATED_DIR`、`DODO_FILE_STORAGE_BACKEND`；Harness 设置项 `artifactRetentionDays`、`artifactOwnerHeader`。
 
