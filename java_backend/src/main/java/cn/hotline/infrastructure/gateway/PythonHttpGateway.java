@@ -10,6 +10,8 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 import cn.hotline.infrastructure.config.PythonServiceProperties;
+import cn.hotline.infrastructure.config.SecurityProperties;
+import cn.hotline.trigger.http.SharedTokenFilter;
 import cn.hotline.domain.capability.PythonUnavailableException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -25,12 +27,14 @@ public class PythonHttpGateway {
     private final HttpClient client;
     private final PythonEndpointResolver endpoints;
     private final PythonServiceProperties properties;
+    private final String sharedToken;
 
     public PythonHttpGateway(HttpClient pythonHttpClient, PythonEndpointResolver endpoints,
-                             PythonServiceProperties properties) {
+                             PythonServiceProperties properties, SecurityProperties security) {
         this.client = pythonHttpClient;
         this.endpoints = endpoints;
         this.properties = properties;
+        this.sharedToken = security.token();
     }
 
     public void forward(HttpServletRequest request, HttpServletResponse response) throws IOException {
@@ -45,6 +49,10 @@ public class PythonHttpGateway {
         for (String name : REQUEST_HEADERS) {
             var values = request.getHeaders(name);
             while (values.hasMoreElements()) outgoing.header(name, values.nextElement());
+        }
+        // Python 也校验共享密钥，转发时必须带上，否则下游会拒掉本次请求。
+        if (!sharedToken.isEmpty()) {
+            outgoing.header(SharedTokenFilter.TOKEN_HEADER, sharedToken);
         }
         var body = request.getContentLengthLong() == 0 || Set.of("GET", "HEAD").contains(request.getMethod())
                 ? HttpRequest.BodyPublishers.noBody()

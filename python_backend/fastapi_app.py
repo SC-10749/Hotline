@@ -25,6 +25,7 @@ from python_backend.modules.retrieval.vector_store import PgVectorStore
 from .application.execution_service import ExecutionApplicationService
 from .infrastructure.queue import SqliteExecutionQueue
 from python_backend.modules.execution.engine import ModelClient
+from .api.auth import build_auth_middleware
 from .api.routers.execution import create_execution_router
 from .api.routers.context_engineering import create_context_router
 from .modules.context_engineering.service import ContextService
@@ -133,6 +134,8 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Hotline Agent", version="1.0.0", lifespan=lifespan)
+# 共享密钥鉴权：配置为空时不启用，启用后所有非健康检查路由都需要该请求头。
+app.add_middleware(build_auth_middleware(settings.api_token))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -146,6 +149,8 @@ app.include_router(
         lambda file_id: bool(storage.get_file(file_id) or storage.get_document(file_id)),
         lambda: len(governance_store.list('pending')),
         workspace_exists=lambda workspace_id: resource_store.get_workspace(workspace_id) is not None,
+        sse_limit=settings.sse_limit,
+        sse_idle_timeout=settings.sse_idle_timeout,
     )
 )
 evaluation_router = create_evaluation_router(evaluation_store, execution_service)

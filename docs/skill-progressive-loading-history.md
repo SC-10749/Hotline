@@ -32,7 +32,7 @@
 - `skill_center.py` 的 runtime 查询返回完整内容；新目录接口必须直接投影元数据，不能先查询正文再丢弃。
 - 根 `skills/README.md` 将该目录标注为可复用 Codex 技能来源；新增业务说明只更新根 README，不新增子目录 README。
 - 仓库已有 execution/context_engineering/skills 能力模块占位。这里的根 skills/ 是技能包目录，不等于 python_backend/modules/skills；本期不在后者新增实现。
-- 项目已跟踪 uv.lock；新增依赖必须同时维护 pyproject.toml、requirements.txt 和 uv.lock，不只修改其中一份。
+- 项目已跟踪 uv.lock；新增依赖必须同时维护 pyproject.toml 和 uv.lock，不只修改其中一份。
 - 当前系统 python3 为 3.9，未定位到 python/uv 命令；实施前定位可用 Python >=3.11，必要时使用用户已有的本地运行时，不在本次规划中安装依赖。
 
 ## Global Constraints
@@ -162,7 +162,7 @@ execution 不反向导入 skills.py，通过 reader 注入实现解耦。禁止�
 
 ## Task 3：LangChain 模型与工具集成
 
-**Files:** 新增 llm.py、modules/execution/langchain_agent.py、modules/execution/tools.py、skill-center/test_agent_tools.py；修改 pyproject.toml、requirements.txt、uv.lock。
+**Files:** 新增 llm.py、modules/execution/langchain_agent.py、modules/execution/tools.py、skill-center/test_agent_tools.py；修改 pyproject.toml、uv.lock。
 
 - [ ] 定位 Python >=3.11 和可用依赖管理方式；确认模型适配器兼容现有 OpenAI-compatible 配置。依赖使用经解析验证的具体兼容版本，不凭空指定版本号。
 - [ ] 先写假模型红测：第一轮请求无正文，模型调用 read_file 后下一轮获得正文，按需再读参考文档并最终输出。
@@ -204,7 +204,7 @@ python skill-center/test_agent_tools.py
 
 新增 6 个实现/测试文件：llm.py、execution/langchain_agent.py、execution/tools.py、context_engineering/skill_catalog.py、test_skill_disclosure.py、test_agent_tools.py。
 
-修改 9 个现有文件：config.py、skills.py、skill_center.py、agents.py、test_center.py、pyproject.toml、requirements.txt、uv.lock、根 README.md。
+修改 9 个现有文件：config.py、skills.py、skill_center.py、agents.py、test_center.py、pyproject.toml、uv.lock、根 README.md。
 
 不新增 skills/runtime.py 或 skills/runner.py，不重构所有 Agent 模式，不接入 history，不更改现有技能包内容。本计划文档更新另计。
 

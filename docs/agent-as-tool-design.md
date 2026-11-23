@@ -15,7 +15,7 @@
 
 **边界（本期不做）**
 
-- 不引入新的 Agent 框架依赖（LangChain 已经是仓库既有依赖，见 `requirements.txt`）。
+- 不引入新的 Agent 框架依赖（LangChain 已经是仓库既有依赖，见 `pyproject.toml`）。
 - 不新建独立数据库、不新建独立注册中心服务。
 - 不做跨进程的分布式 Agent 注册（留到 P2 的 MCP 形态）。
 - 不改前端交互：工具调用沿用现有 SSE 事件与澄清卡片。

@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python 校验
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: 语法编译
+        run: python -m compileall -q python_backend
+        env:
+          # CI 没有 MySQL / Redis / MinIO：显式选本地后端，避免继承 mysql 默认值
+          DODO_STORAGE_BACKEND: sqlite
+          DODO_FILE_STORAGE_BACKEND: local
+          DODO_REDIS_ENABLED: 'false'
+          DODO_VECTOR_ENABLED: 'false'
+      - name: 技能中心回归
+        run: python skill-center/test_center.py
+      - name: 技能披露与工具调用
+        run: |
+          python skill-center/test_skill_disclosure.py
+          python skill-center/test_agent_tools.py
+      - name: 单元测试
+        run: |
+          python -m unittest discover -s python_backend -p 'test_*.py' -t .
+        env:
+          DODO_STORAGE_BACKEND: sqlite
+          DODO_FILE_STORAGE_BACKEND: local
+          DODO_REDIS_ENABLED: 'false'
+          DODO_VECTOR_ENABLED: 'false'
+      - name: 门禁 CLI
+        run: python -m python_backend.eval_gate --help
+
+  frontend:
+    name: 前端构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 安装依赖
+        run: npm --prefix frontend ci
+      - name: 构建
+        run: npm --prefix frontend run build
+      - name: 前端单元测试
+        run: node --test frontend/src/modules/**/*.test.js
+
+  java:
+    name: Java 校验
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: 构建与测试
+        run: ./java_backend/mvnw -f java_backend/pom.xml verify

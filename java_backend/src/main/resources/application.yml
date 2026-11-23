@@ -29,6 +29,9 @@ spring:
           apiVersion: "1"
 
 hotline:
+  security:
+    # 共享密钥：为空时不启用鉴权，行为与启用前一致。
+    token: ${HOTLINE_API_TOKEN:}
   python:
     mode: ${HOTLINE_PYTHON_MODE:static}
     base-url: ${HOTLINE_PYTHON_BASE_URL:http://127.0.0.1:8888}

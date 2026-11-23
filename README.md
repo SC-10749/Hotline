@@ -66,11 +66,11 @@ Hotline Agent 是一个**持续探索前沿 AI 技术的智能体应用**：把�
 
 | 维度 | 现状 |
 | --- | --- |
-| Python 后端 | 132 个文件 / 18.3k 行，`python_backend/` |
-| Vue 前端 | 17 个文件 / 7.2k 行，`frontend/src/` |
-| Java 入口 | 17 个文件 / 629 行，`java_backend/` |
+| Python 后端 | 155 个文件 / 22.0k 行，`python_backend/` |
+| Vue 前端 | 33 个文件 / 8.9k 行，`frontend/src/` |
+| Java 入口 | 16 个文件 / 640 行，`java_backend/` |
 | 能力模块 | 后端 14 个，前端同名边界 11 个 |
-| HTTP 路由 | 17 个路由工厂，5 条 Agent SSE 流 |
+| HTTP 路由 | 20 个路由工厂，5 条 Agent SSE 流 |
 | 运行数据 | 全部落在 Git 忽略的 `data/`，按模块拆分本地 SQLite |
 
 ## 技术架构
@@ -299,7 +299,7 @@ npm --prefix frontend install
 npm --prefix frontend run build
 ```
 
-使用 pip 时，可在已激活的 Python 3.11+ 虚拟环境中执行 `python -m pip install -r requirements.txt`。启动器优先使用 `uv run python`，未安装 uv 时使用系统 Python，需确保它对应已安装依赖的环境。
+依赖清单只有一份：`pyproject.toml`，锁文件是 `uv.lock`。安装用 `uv sync`。没有 uv 时，可在已激活的 Python 3.11+ 虚拟环境中执行 `python -m pip install -e .`。启动器优先使用 `uv run python`，未安装 uv 时使用系统 Python，需确保它对应已安装依赖的环境。
 
 模型 Key、真实服务地址和凭据保存在 Git 忽略的根 `.env` 或 `DODO_ENV_FILE` 指定的本地配置中。配置项参考模板，模型也可通过工作台的个人中心配置。[配置模板](.env.example)
 
@@ -558,7 +558,8 @@ node --test frontend/src/modules/workspaces/paths.test.js frontend/src/modules/e
 | `DODO_DEV_FRONTEND_PORT` / `HOTLINE_JAVA_PORT` / `DODO_PORT` | 前端 / Java / Python 端口，默认 5180 / 8080 / 8888 |
 | `HOTLINE_PYTHON_AUTOSTART` / `HOTLINE_PYTHON_EXECUTABLE` / `HOTLINE_PYTHON_ROOT` | Java 启动时是否自动拉起本地 Python、解释器路径、项目根目录 |
 | `HOTLINE_PYTHON_WORKER_INSTANCES` | Java 启动时拉起的执行 Worker 进程数，默认 2；决定并行执行的运行数上限 |
-| `DODO_REDIS_ENABLED` / `DODO_REDIS_HOST` / `DODO_REDIS_PORT` | 任务锁与停止广播走 Redis，默认仅在存储后端为 MySQL 时开启；本地可用 `DODO_REDIS_ENABLED=true` 验证分布式任务锁 |
+| `DODO_REDIS_ENABLED` / `DODO_REDIS_HOST` / `DODO_REDIS_PORT` | 任务锁与停止广播走 Redis，默认关闭；生产在 `.env` 里显式开启并填远程地址 |
+| `HOTLINE_API_TOKEN` | 共享密钥，Java 入口与 Python API 同时校验；留空不启用。启用后浏览器需在「个人中心 → API Key」填入同一个令牌 |
 
 完整清单见 [.env.example](./.env.example)。
 
