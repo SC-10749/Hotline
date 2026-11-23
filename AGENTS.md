@@ -5,6 +5,7 @@
 ## 项目结构与目录管理
 
 - 所有开发者和 Agent 开始开发前，必须阅读并遵循本文件；子目录另有说明文件时一并遵循。子目录规则不得放宽本文件中的私密信息保护要求。
+- 动手改代码、接口或方案之前，先读 `docs/spec/index.md` 与相关规格（见下方「规格驱动变更」）；后续功能和接口改动以已生效规格为约束。
 - **本仓库是单一项目 Hotline Agent**：Java 21 入口（`java_backend/`）、Vue 前端（`frontend/`）、FastAPI 后端（`python_backend/`）、技能中心（`python_backend/modules/skills/` 与 `skill-center/`，根 `skill_center.py` 为兼容入口）、静态资源与技能控制台（`static/`）、部署脚本（`deploy/`）、文档（`docs/`）同仓维护，不再有平台与项目之分。
 - 修改默认限于对应子目录；涉及跨目录的公共改动（如 `.env.example`、`AGENTS.md`、根启动脚本）需在提交说明中写清影响范围。
 - 项目元数据保留在 `project.yaml`，README 说明用途、当前状态、安装、启动、验证命令及配置项。
@@ -33,6 +34,15 @@
 - 交付前执行验证命令：`python -m compileall python_backend`、`python skill-center/test_center.py`、`npm --prefix frontend run build`（改动前端时）。改了意图或执行链路时补跑 `python -m unittest python_backend.test_agent_gate python_backend.test_requirement_gate`。文档修改仅核对与现有目录和命令的一致性。未经明确要求，不移动或重构现有目录结构。
 - 本机没有可用的 MySQL，`import python_backend.fastapi_app` 会在 `PgVectorStore` 连接处抛 `Access denied`，所以整包导入失败不代表代码有问题。要验证路由与接口，用临时目录里的 store 单独装配 `api/routers/*` 的工厂函数（`create_*_router`）再打请求；测试用 `F:\Hotline\.venv\Scripts\python.exe` 运行。
 - 本机 8888 后端由两个进程组成：网关 `python -m uvicorn main:app --host 127.0.0.1 --port 8888` 与执行 Worker `python -m python_backend.modules.execution.worker`。Java 启动时会在「静态寻址 + 本机回环 + 端口空闲」条件下自动拉起这两个进程（`hotline.python.launch.*`，可用 `HOTLINE_PYTHON_AUTOSTART=false` 关闭），Java 退出时连同子进程一起回收；Python 已在运行时只复用不重复拉起。只起网关时 `/agent/*/stream` 返回 503（Worker 未运行），`/health/ready` 会显示 `executionWorker: unavailable`。
+
+## 规格驱动变更（spec）
+
+- 每次改动代码、接口或方案，都要在 `docs/spec/` 下留一份规格，命名 `YYYY-MM-DD-<短标题>.md`，编号 `S-001` 递增，并登记进 `docs/spec/index.md`。
+- 开工前先读 `docs/spec/index.md` 与相关规格正文：后续功能和接口改动以已生效规格为约束，规格没写清的行为不要自行发明。
+- 规格最少写清：背景与目标、非目标、数据模型变更、接口契约（字段级）、行为约定、验收标准、验证记录、已知限制；模板见 `docs/spec/_template.md`。
+- 顺序是先规格后实现：接口字段、事件格式、并发与作用域语义这类跨模块契约，先定规格再落代码；实现完成后回填验证记录并把状态改成「已实现」。
+- 纯文案、样式、注释、单个函数内的局部改动可以不写规格；涉及接口、表结构、事件格式、跨模块契约、并发与权限语义的改动必须写。
+- 规格与代码不一致时以代码为准，并当场把规格改回来；规格被新规格取代时标记「已废弃」并保留文件供追溯。
 
 ## 禁止外传的内容
 
