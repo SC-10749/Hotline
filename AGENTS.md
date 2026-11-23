@@ -68,3 +68,4 @@
 - 修改文档后至少核对路径、启动命令、端口、模块名称和验证命令；不复制 `.env`、真实服务地址或运行数据到文档。
 
 - 写或改简历类文档（`docs/简历.md`、`F:\简历\简历.md`）前，必须先读 `skills/resume-writing/SKILL.md`——该规范来自 GitHub 高星开源简历 skill（来源、许可与刷新记录见同目录 `PROVENANCE.md`）。按其中的 X-Y-Z / STAR 句式、量化规则、强动词、ATS 硬约束与篇幅规则来写，用 `skills/resume-writing/fetch_upstream.py` 刷新上游规范；不得自创格式或凭印象写。
+- 个人简历（`docs/简历.md`，以及仓库外的 `F:\简历\简历.md`）属个人材料，**不入库**：`.gitignore` 已排除，禁止 `git add -f`、提交或推送；需要发给别人时本地导出后私下发送。
