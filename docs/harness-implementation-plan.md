@@ -481,7 +481,7 @@ Harness 设置：超时、重试、隔离、审批超时、审计保留、产物
 | 安排任务 | 空壳，按钮禁用 | `harness_scheduled_task` 表 + `/harness/schedules` 五个接口 + 调度线程，到点自动提交运行 |
 | 插件 | 空壳 | 技能列表真实读 `/skill/list`，启停与删除走真实接口 |
 | 虚拟桌宠 | 只有一个禁用开关 | 开关与形象存本机 localStorage，右下角真的渲染桌宠 |
-| 轻量机器人 | 「规划中」占位 | `harness_bot` + `harness_bot_session` 两张表 + `/harness/bots` 六个接口；人设按会话绑定并进入模型系统提示词 |
+| bot | 「规划中」占位 | `harness_bot` + `harness_bot_session` 两张表 + `/harness/bots` 六个接口；人设按会话绑定并进入模型系统提示词 |
 | 个人中心 · 基础信息 | disabled 表单 | `GET/PUT /harness/profile`，昵称与简介真实落库 |
 | 个人中心 · API Key | disabled 表单 | `GET/PUT/DELETE /harness/profile/credentials` 与 `POST .../test`，凭证存本机 data 目录，接口只回掩码 |
 | 个人中心 · 个性化 | disabled 表单 | 回答风格写进系统提示词；界面主题用 `data-theme` 切换，新增 `frontend/src/theme.css` 为 style/chat/harness 三套调色板统一提供暗色 token |

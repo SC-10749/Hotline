@@ -515,7 +515,8 @@ def session_detail(conversation_id: str):
         {
             "conversationId": conversation_id,
             "workspaceId": scope['workspace_id'] if scope else '',
-            "agentType": rows[0].agentType,
+            # 会话当前处在哪个助手类型看最后一条：中途切到技能助手要认得出来。
+            "agentType": rows[-1].agentType,
             "fileid": rows[0].fileid,
             "messages": [row.to_dict() for row in rows],
         }

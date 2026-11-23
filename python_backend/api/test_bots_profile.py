@@ -1,4 +1,4 @@
-"""轻量机器人、个人偏好与模型凭证的存储和接口测试。"""
+"""机器人（bot）、个人偏好与模型凭证的存储和接口测试。"""
 
 from __future__ import annotations
 
@@ -67,21 +67,27 @@ class BotProfileTests(unittest.TestCase):
         response = self.client.post('/harness/bots', json={'name': '   '})
         self.assertEqual(response.status_code, 422)
 
-    def test_session_binding_drives_persona(self):
-        bot = self.client.post('/harness/bots', json={
+    def test_enabled_bot_applies_to_every_session(self):
+        self.client.post('/harness/bots', json={
             'name': '客服机器人', 'instruction': '你是客服机器人', 'skills': ['skill-a'],
-        }).json()['bot']
+        })
         self.client.put('/harness/profile', json={'answerStyle': 'concise'})
-        bound = self.client.post(f"/harness/bots/{bot['bot_id']}/sessions", json={'conversationId': 'conv-1'})
-        self.assertEqual(bound.status_code, 200)
 
         persona = load_persona(self.root, 'conv-1')
         self.assertEqual(persona['instruction'], '你是客服机器人')
         self.assertEqual(persona['skills'], ['skill-a'])
         self.assertIn('简洁', persona['style'])
 
-        # 未绑定会话拿不到人设
-        self.assertEqual(load_persona(self.root, 'conv-none')['instruction'], '')
+        # 开启的机器人对所有会话生效
+        self.assertEqual(load_persona(self.root, 'conv-none')['instruction'], '你是客服机器人')
+
+    def test_enabling_another_bot_replaces_the_current_one(self):
+        first = self.client.post('/harness/bots', json={'name': '机器人甲', 'instruction': '甲'}).json()['bot']
+        second = self.client.post('/harness/bots', json={'name': '机器人乙', 'instruction': '乙'}).json()['bot']
+        listed = {item['bot_id']: item for item in self.client.get('/harness/bots').json()['items']}
+        self.assertFalse(listed[first['bot_id']]['enabled'])
+        self.assertTrue(listed[second['bot_id']]['enabled'])
+        self.assertEqual(load_persona(self.root, 'conv-1')['instruction'], '乙')
 
     def test_disabled_bot_keeps_only_personal_style(self):
         bot = self.client.post('/harness/bots', json={

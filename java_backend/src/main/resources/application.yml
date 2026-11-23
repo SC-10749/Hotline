@@ -35,3 +35,8 @@ hotline:
     service-name: ${HOTLINE_PYTHON_SERVICE_NAME:hotline-python-api}
     connect-timeout: ${HOTLINE_PYTHON_CONNECT_TIMEOUT:1s}
     read-timeout: ${HOTLINE_PYTHON_READ_TIMEOUT:60s}
+    launch:
+      enabled: ${HOTLINE_PYTHON_AUTOSTART:true}
+      executable: ${HOTLINE_PYTHON_EXECUTABLE:}
+      root: ${HOTLINE_PYTHON_ROOT:}
+      startup-timeout: ${HOTLINE_PYTHON_STARTUP_TIMEOUT:30s}

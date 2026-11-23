@@ -7,7 +7,9 @@ const unwrap = async (response) => {
   }
   if (!response.ok || (payload?.code && payload.code !== 200)) {
     const validationMessage = Array.isArray(payload?.detail) ? payload.detail.map(item => item.msg).join('；') : ''
-    throw new Error(payload?.message || (typeof payload?.detail === 'string' ? payload.detail : validationMessage) || `请求失败（HTTP ${response.status}）`)
+    const error = new Error(payload?.message || (typeof payload?.detail === 'string' ? payload.detail : validationMessage) || `请求失败（HTTP ${response.status}）`)
+    error.status = response.status
+    throw error
   }
   return payload?.data ?? payload
 }

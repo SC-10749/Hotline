@@ -9,11 +9,16 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Generator, Iterator
+from pathlib import Path
+
+from langchain_core.tools import BaseTool
 from typing import Any
 
 from python_backend.config import Settings
 from python_backend.llm import build_chat_model
 from python_backend.models import SessionMessage
+from python_backend.modules.execution.agent_tool import (MAX_SUMMARY_CHARS, agent_tools_from_dir,
+                                          collect_events)
 from python_backend.modules.execution.langchain_agent import run_agent
 from python_backend.modules.execution.tools import build_read_skill_tool
 from python_backend.modules.execution.trace import trace_preview
@@ -27,6 +32,7 @@ from python_backend.modules.intent import (ACTION_CATALOG, ClarifyRequest, Decis
                              ExampleVectorStore,
                              RETRIEVAL_CATALOG, build_clarify_request, classify,
                              decision_config_from_settings,
+                             build_requirement_clarify_request,
                              parse_retrieval_route, retrieval_candidates, retrieval_fallback,
                              retrieval_messages, route_label, vector_config_from_settings)
 from python_backend.llm import model_config, model_ready
@@ -36,6 +42,14 @@ from python_backend.modules.retrieval.vector_store import PgVectorStore
 
 # 门闸触发时写进会话记录的标记：下一轮若是这段追问的回答，就不再重复追问。
 CLARIFY_FLAG = '需要澄清'
+# 绑定了这个技能的机器人走需求分析流程：先判需求说不说不清，再谈产出。
+REQUIREMENT_SKILL = 'requirement-analysis'
+# 推荐项文案与目标技能由交接模块统一提供，模型层序列化历史数据时也用它。
+from python_backend.modules.skills.handoff import TDD_RECOMMENDATION, TDD_SKILL
+# 需求正文标记：写进会话记录的 thinking，交接时据此找到最近一次需求条目。
+REQUIREMENT_FLAG = '需求条目'
+# 交接给技能的需求正文长度上限：够放下验收条件，又不把提示撑爆。
+REQUIREMENT_BRIEF_CHARS = 8000
 
 
 class TaskManager:
@@ -539,6 +553,78 @@ class AgentEngine:
         return context_snapshot(stage, sanitize_value(messages), model_name=getattr(self.settings, 'model_name', ''),
                                 model_configured=model_ready(self.settings), sources=sources)
 
+    @staticmethod
+    def _is_tdd_handoff(query: str) -> bool:
+        """这条请求是不是「把需求交给 TDD 技能」的交接口令。"""
+        text = (query or '').strip()
+        return text == TDD_RECOMMENDATION or text.startswith(TDD_RECOMMENDATION)
+
+    def _requirement_brief(self, history) -> str:
+        """交接内容：最近一次需求分析助手产出的需求条目。"""
+        for row in reversed(list(history or [])):
+            thinking = str(getattr(row, 'thinking', '') or '')
+            if REQUIREMENT_FLAG not in thinking:
+                continue
+            answer = str(getattr(row, 'answer', '') or '').strip()
+            if answer:
+                return answer[:REQUIREMENT_BRIEF_CHARS]
+        return ''
+
+    def _requirement_mode(self, persona: dict[str, Any] | None) -> bool:
+        """机器人绑定了需求分析技能时，走需求分析流程而不是通用意图门闸。"""
+        if not persona or not self.skills:
+            return False
+        for skill_id in persona.get('skills') or []:
+            skill = self.skills.get(skill_id)
+            if skill and skill.name == REQUIREMENT_SKILL:
+                return True
+        return False
+
+    def _requirement_gate(self, agent: str, query: str, file_id: str | None,
+                          history: list[SessionMessage] | None,
+                          clarified: bool) -> ClarifyRequest | None:
+        """需求级门闸：需求本身说不清时先给三个理解方向，说得清就放行。
+
+        上一轮刚澄清过时不再拦：用户正在回答澄清问题，再拦一次就是同一件事追两遍。
+        """
+        if agent not in {'chat', 'deep'} or file_id or clarified:
+            return None
+        if not model_ready(self.settings):
+            return None
+        context = '\n'.join(f'用户：{row.question}\n助手：{row.answer}'
+                            for row in (history or [])[-2:])
+        return build_requirement_clarify_request(sanitize_text(query), self.model.chat, context)
+
+    def _agent_tools(self, task: threading.Event | None = None) -> list[BaseTool]:
+        """登记为 agent 的机器人工具；登记表不可用时返回空。"""
+        data_dir = Path(getattr(self.settings, 'data_dir', Path('data')))
+        return agent_tools_from_dir(
+            data_dir, lambda persona, query, clarification: self._run_agent_tool(persona, query, clarification, task))
+
+    def _run_agent_tool(self, persona: dict[str, Any], query: str, clarification: str,
+                        task: threading.Event | None = None) -> dict[str, Any]:
+        """用机器人人设跑一次对话，供 Agent 工具调用。
+
+        工具是同步的，澄清不能阻塞：需求说不清时把三个方向作为结果返回，
+        由调用方转述给用户；用户作答后带着澄清答案再调一次。
+        """
+        text = (clarification or '').strip()
+        composed = f'原问题：{query}\n我想要的是：{text}' if text else query
+        events, outcome = collect_events(self._fallback(
+            'chat', composed, None, [], persona=persona, emit_text=False,
+            task=task, clarified=bool(text)))
+        clarify = next((event.get('content') for event in events if event.get('type') == 'clarify'), None)
+        failure = next((str(event.get('content') or '') for event in events if event.get('type') == 'error'), '')
+        answer = outcome[0] if isinstance(outcome, tuple) and outcome else ''
+        if clarify:
+            return {'status': 'needs_clarification', 'summary': '', 'clarification': clarify}
+        if failure:
+            return {'status': 'error', 'summary': '', 'error': failure}
+        summary = str(answer or '').strip()
+        if len(summary) > MAX_SUMMARY_CHARS:
+            summary = summary[:MAX_SUMMARY_CHARS] + '…（已截断）'
+        return {'status': 'ok', 'summary': summary}
+
     def _intent_gate(self, agent: str, query: str, file_id: str | None) -> tuple[ClarifyRequest, tuple[str, ...]] | None:
         """门闸：意图不够确定时，返回一次需求澄清；确定时返回 None。
 
@@ -566,7 +652,8 @@ class AgentEngine:
                   emit_text: bool = False,
                   task: threading.Event | None = None,
                   conversation_id: str = '', source_id: str = '',
-                  workspace_rules: str = '', workspace_id: str = '') -> Generator[dict[str, Any], None, tuple[str, list[dict[str, str]], bool]]:
+                  workspace_rules: str = '', workspace_id: str = '',
+                  clarified: bool = False) -> Generator[dict[str, Any], None, tuple[str, list[dict[str, str]], bool]]:
         context = ""
         grounded = False
         route = ""
@@ -579,9 +666,17 @@ class AgentEngine:
                 context = "\n\n".join(hits)
                 grounded = True
                 route = "workspace"
+        # 需求分析机器人先判需求说不说不清：说不清就先给三个理解方向。
+        requirement_mode = self._requirement_mode(persona)
+        requirement = (self._requirement_gate(agent, query, file_id, history, clarified)
+                       if requirement_mode else None)
+        if requirement is not None:
+            yield self.step('clarify', '需求信息不足，先确认方向', status='completed')
+            yield self.event('clarify', requirement.to_dict(), stage='clarify')
+            return "", [], True
         # Gate: when the intent is not confident enough, ask the user to clarify
         # instead of answering the wrong question.
-        gate = self._intent_gate(agent, sanitize_text(query), file_id)
+        gate = None if requirement_mode else self._intent_gate(agent, sanitize_text(query), file_id)
         if gate is not None:
             request, candidates = gate
             yield self.step('clarify', '需要确认需求方向', status='completed')
@@ -591,7 +686,8 @@ class AgentEngine:
         # A file-grounded answer must not fall through to web search, otherwise an
         # ambiguous follow-up gets answered with unrelated search results.
         # Same for a matched skill: the SKILL.md definitions govern the answer.
-        web_agent = agent in {"chat", "deep"} or (agent == "skills" and not skill)
+        web_agent = ((agent in {"chat", "deep"} and not requirement_mode)
+                     or (agent == "skills" and not skill))
         refs = []
         if not context and web_agent and not grounded:
             if self.settings.tavily_api_key:
@@ -693,8 +789,14 @@ class AgentEngine:
             model = build_chat_model(self.settings)
             if workspace_rules:
                 prompt += '\n\n当前工作区规则\n' + workspace_rules
+            brief = self._requirement_brief(history)
+            if brief:
+                prompt += ('\n\n本会话最近一次需求分析助手产出的需求条目（交接内容，可能是未定稿草稿）：\n' + brief +
+                           '\n条目里若还有未决问题，就基于条目内容列出这些未决点，不要说没有拿到需求。')
             tool = build_read_skill_tool(session.read_skill, session.descriptors)
             tools = [tool]
+            # 登记为 agent 的机器人也能被技能智能体当工具调用。
+            tools.extend(self._agent_tools(task))
             if self.context and conversation_id:
                 tools.extend(build_context_tools(self.context, conversation_id, self.workspace_source_reader,
                                                  self._workspace_evidence))
@@ -760,26 +862,35 @@ class AgentEngine:
 
     def stream(self, agent: str, conversation_id: str, query: str, file_id: str | None = None,
                *, workspace_id: str = '', run_id: str = '') -> Iterator[dict[str, Any]]:
+        if agent == 'chat' and self._is_tdd_handoff(query):
+            # 交接口令只由后端认定：前端漏切模式时，这一轮照样按技能流执行。
+            agent = 'skills'
         task = self.tasks.register(conversation_id)
         persona = self._persona(conversation_id)
         row_id = self.storage.save_question(conversation_id, query, agent, file_id)
         thinking: list[str] = []
         try:
+            # 告诉前端这一轮实际跑的是哪个助手：前端据此切模式，底部输入区跟着换形态。
+            yield self.event('agent', agent)
             yield self.event('thinking', '正在理解问题', stage='understanding', status='running')
             if task.is_set():
                 yield self.event("error", "任务已停止")
                 return
             workspace_rules = self.workspace_rules_reader(workspace_id) if self.workspace_rules_reader else ''
-            if agent == 'skills' and self.context is None:
-                yield from self._stream_skills(query, row_id, task, workspace_rules=workspace_rules,
-                                               workspace_id=workspace_id, file_id=file_id)
-                return
-            if not file_id and agent != 'ppt':
-                file_id = self.storage.conversation_file_id(conversation_id)
             messages = (self.storage.context_messages(conversation_id) if self.context and isinstance(self.storage, Storage)
                         else self.storage.session_messages(conversation_id))
             history = [row for row in messages
                        if row.id != row_id and row.answer]
+            if agent == 'skills' and self.context is None:
+                yield from self._stream_skills(query, row_id, task, conversation_id, history,
+                                               workspace_rules=workspace_rules,
+                                               workspace_id=workspace_id, file_id=file_id)
+                return
+            if not file_id and agent != 'ppt':
+                file_id = self.storage.conversation_file_id(conversation_id)
+            # 上一轮是澄清门闸时，本轮是用户在回答澄清，不再重复追问同一件事。
+            previous = next((row for row in reversed(messages) if row.id != row_id), None)
+            clarified = bool(previous) and CLARIFY_FLAG in str(getattr(previous, 'thinking', '') or '')
             if self.context:
                 self.context.begin(conversation_id, workspace_id, str(row_id), query, history)
             else:
@@ -801,7 +912,8 @@ class AgentEngine:
             answer, refs, gated = yield from self._fallback(
                 agent, query, file_id, history, persona=persona, emit_text=True,
                 task=task, conversation_id=conversation_id, source_id=str(row_id),
-                workspace_rules=workspace_rules, workspace_id=workspace_id)
+                workspace_rules=workspace_rules, workspace_id=workspace_id,
+                clarified=clarified)
             if task.is_set():
                 yield self.event("error", "任务已停止")
                 return
@@ -813,8 +925,15 @@ class AgentEngine:
             if refs:
                 yield self.event("reference", refs, count=len(refs))
             recommendations = [f"请进一步解释：{query}", "给出一个实际案例"]
+            requirement_mode = self._requirement_mode(persona)
+            if requirement_mode:
+                # 结构化推荐项：前端按 skill 字段切到技能助手，标签文案只由后端定义。
+                recommendations.append({'label': TDD_RECOMMENDATION, 'skill': TDD_SKILL})
             yield self.event("recommend", recommendations)
-            self.storage.update_answer(row_id, answer, "\n".join(thinking), "", refs, recommendations)
+            record = "\n".join(thinking)
+            if requirement_mode:
+                record = f"{record}\n{REQUIREMENT_FLAG}"
+            self.storage.update_answer(row_id, answer, record, "", refs, recommendations)
             memory_event = self._remember_answer(conversation_id, str(row_id), query, answer)
             if memory_event:
                 yield memory_event

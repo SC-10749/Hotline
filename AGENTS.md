@@ -13,10 +13,23 @@
 - `python_backend/modules/` 与 `frontend/src/modules/` 是能力边界目录。新增模块先建立接口与验证，再迁移旧实现；模块之间不得直接读取彼此的数据库细节。
 - 模块命名保持前后端对应：`memory`、`retrieval`、`storage`、`context_engineering`、`skills`、`mcp`、`execution`、`workspaces`、`artifacts`、`intent`；`execution` 统一承载脚本、EXE 和后台任务执行能力；`intent` 统一承载意图目录与意图分类（关键词粗筛 → embedding 向量召回 → 大模型判定的三级级联，含置信度分级）；配置决策模型后该层改走 System One 协议（`modules/intent/decision.py`，阿里云百炼 decision-model-preview，与 TypeSafe Jev 同接口），一次前向同时给出意图与诉求歧义度，门闸按歧义度判断是否澄清；置信度不足时由门闸转成需求澄清，用户作答后作为新一轮对话重新进入级联。
 - 运行数据及生成文件统一保存在被 Git 忽略的 `data/` 目录；真实配置遵循下方私密信息规则。
+- 仓库根 `skills/<技能名>/` 存放技能包（`SKILL.md` + 可选 `references/`），技能正文控制在 8000 字符内；机器人只能绑定 `data/skills/` 里已安装的技能（`SkillRegistry.install_from_dir` 或 `/skill/upload`），机器人记录落在 `data/harness-bots.db`。`python -m python_backend.seed_bots` 是本地数据种子入口：把仓库技能（`requirement-analysis`、`hotline-tdd`）包装进 `data/skills/` 并登记「需求分析助手」机器人，可重复执行。
+- 需求级澄清门闸落在 `modules/intent/requirement.py`：绑定 `requirement-analysis` 技能的机器人先判需求说不说不清，说不清就发 `clarify` 事件（三个理解方向 + 自由输入），上一轮刚澄清过时不再追问；用户在回答助手上一轮提问时也不重复澄清；通用意图门闸保持原有行为。
+- 机器人绑定需求分析技能时，聊天推荐项里始终带一条「按 TDD 把这些需求写成测试」，从第一轮提问起就给。推荐项是结构化的 `{"label": ..., "skill": ...}`：标签文案只由 `modules/execution/engine.py` 定义，前端按 `skill` 字段切到技能助手（`frontend/src/modules/requirement/handoff.js`），两端不再各写一份同一句话。
+- 需求正文随会话交接，不靠前端传：需求助手产出的那轮回答在 `thinking` 里打上 `需求条目` 标记，技能流按标记取最近一次需求正文注入提示（`engine.py` 的 `_requirement_brief`），技能助手因此能直接看到 FR/NFR 与验收条件。
+- 两端需求契约一致：需求助手每一轮都用最终格式编号输出（`FR-001`/`NFR-001`/`SC-001` + Given/When/Then），没定的部分在同一条里标 `[NEEDS CLARIFICATION: ...]`，不写「待定稿后编号」这类占位说法；TDD 技能接受带 `NEEDS CLARIFICATION` 的草稿，已定稿条目照常出测试清单，未定稿条目单列「待确认」，不自己补默认值、也不因为是草稿就说没拿到需求。交接提示里明说草稿状态（`engine.py` 的交接段），避免助手否认已收到。
+- 技能助手（TDD）阶段不另起输入框：底部对话框整块由技能接手——候选答案面板与输入框都留在底部那块区域，顶部加 `.skill-bar` 标识、输入框占位改成「在这里回复技能助手…」，文案集中在 `frontend/src/modules/skills/composer.js`；模式条保留以便切回普通对话，其余模式底部输入区不变。候选答案面板抽成 `frontend/src/modules/requirement/OptionPanel.vue`。
+- 底部输入区容器不铺背景：`.composer-area` 背景透明、无阴影，只有输入框（`.composer-box`）和候选面板自己带底色，消息流直接透过，不要把输入区容器扩成一大块。
+- 交接口令由后端认定：`engine.stream` 开头用 `_is_tdd_handoff` 判定 query 是「按 TDD 把这些需求写成测试」时把本轮 agent 置为 `skills`，前端漏切模式也照走技能流；同时用 SSE `agent` 事件把本轮实际助手类型告诉前端，前端据此切模式条、换底部输入区形态。会话列表与详情的 `agentType` 取**最后一条**消息（标题仍取第一条），否则「先澄清后进 TDD」的会话重开会被标成对话助手。
+- 推荐项在会话历史里存的是字符串：后端序列化时统一升级成结构化项（`python_backend/modules/skills/handoff.py`），这样旧会话点「按 TDD 把这些需求写成测试」同样能切到技能助手。
+- 助手正文里「编号问题 + 其下候选答案」的候选答案会被前端抽走（`frontend/src/modules/requirement/question-options.js`），正文只留问题，普通列表原样保留；抽出的候选显示在输入框上方的多选面板（每题从 A 重新编号，可跨题多选），点「发送所选」切到技能助手，把 `<问题>——<字母>. <候选>` 直接交给 `hotline-tdd` 继续追问（不再拼前缀文案）；面板只跟随最新一轮回答，用户发消息即清空。
+- 需求分析技能包在 `skills/requirement-analysis/`：正文按“状态诊断（R0 只有方案没有问题 → R1 方案先行 → R2 需求含糊 → R3 隐藏约束 → R4 范围蔓延）+ 四阶段提问（问题发现 → 需求澄清 → 约束发现 → 范围定义）”组织，正文控制在 8000 字符内，深度内容放 `references/`（diagnosis.md、templates.md、checklist.md）；升级后仍要过 `catalog.validate` 与 `security_scan`。
+- 机器人作为工具登记在 `harness_tool`（`source='agent'`，`input_schema.agent.bot_id` 指向机器人），由 `modules/execution/agent_tool.py` 装配成工具并挂到技能智能体的工具列表；调用复用 `prepare_tool_call` 的白名单、参数校验与审批链。子会话不落库，澄清答案由调用方带 `clarification` 参数回传。设计与实现记录见 `docs/agent-as-tool-design.md`。
+- 机器人的开关是全局语义：`BotStore.enabled_bot()` 返回当前开启的机器人，同一时间只留一个（开启新的会在 `update`/`create` 里关掉其余），开启后所有会话都复用它的人设与技能，会话绑定只作为没有开启机器人时的回退。机器人页左侧栏列出机器人并各带一个开关；列表和详情都不展示角色指令，只有编辑表单里能改。
 - 不擅自创建嵌套 Git 仓库或子模块。历史嵌套仓库 `projects/ai/dodo-agent` 已并入本仓库，其提交历史备份在 `data/dodo-agent-history.bundle`（Git 忽略，仅供恢复参考）。
-- 交付前执行验证命令：`python -m compileall python_backend`、`python skill-center/test_center.py`、`npm --prefix frontend run build`（改动前端时）。文档修改仅核对与现有目录和命令的一致性。未经明确要求，不移动或重构现有目录结构。
+- 交付前执行验证命令：`python -m compileall python_backend`、`python skill-center/test_center.py`、`npm --prefix frontend run build`（改动前端时）。改了意图或执行链路时补跑 `python -m unittest python_backend.test_agent_gate python_backend.test_requirement_gate`。文档修改仅核对与现有目录和命令的一致性。未经明确要求，不移动或重构现有目录结构。
 - 本机没有可用的 MySQL，`import python_backend.fastapi_app` 会在 `PgVectorStore` 连接处抛 `Access denied`，所以整包导入失败不代表代码有问题。要验证路由与接口，用临时目录里的 store 单独装配 `api/routers/*` 的工厂函数（`create_*_router`）再打请求；测试用 `F:\Hotline\.venv\Scripts\python.exe` 运行。
-- 本机 8888 后端由两个进程组成：网关 `python -m uvicorn main:app --host 127.0.0.1 --port 8888` 与执行 Worker `python -m python_backend.modules.execution.worker`。只起网关时 `/agent/*/stream` 返回 503（Worker 未运行），`/health/ready` 会显示 `executionWorker: unavailable`。
+- 本机 8888 后端由两个进程组成：网关 `python -m uvicorn main:app --host 127.0.0.1 --port 8888` 与执行 Worker `python -m python_backend.modules.execution.worker`。Java 启动时会在「静态寻址 + 本机回环 + 端口空闲」条件下自动拉起这两个进程（`hotline.python.launch.*`，可用 `HOTLINE_PYTHON_AUTOSTART=false` 关闭），Java 退出时连同子进程一起回收；Python 已在运行时只复用不重复拉起。只起网关时 `/agent/*/stream` 返回 503（Worker 未运行），`/health/ready` 会显示 `executionWorker: unavailable`。
 
 ## 禁止外传的内容
 

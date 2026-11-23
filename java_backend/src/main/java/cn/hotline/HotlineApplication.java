@@ -1,12 +1,13 @@
 package cn.hotline;
 
+import cn.hotline.infrastructure.config.PythonLaunchProperties;
 import cn.hotline.infrastructure.config.PythonServiceProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 @SpringBootApplication
-@EnableConfigurationProperties(PythonServiceProperties.class)
+@EnableConfigurationProperties({PythonServiceProperties.class, PythonLaunchProperties.class})
 public class HotlineApplication {
     public static void main(String[] args) {
         SpringApplication.run(HotlineApplication.class, args);

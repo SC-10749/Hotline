@@ -24,12 +24,18 @@ import {
   UserRound, KeyRound, Palette, Smile, Headset, CircleUserRound, CalendarClock,
   LibraryBig, GitBranch, History, MessagesSquare, ShieldCheck, Upload, Map as MapIcon,
 } from 'lucide-vue-next'
-import { apiUrl, bindBotSession, compensateDocuments, createBot, createSchedule, deleteBot, deleteCredential, deleteSchedule, getAllSessions, getBots, getCredential, getDocumentPreview, getDocumentVersions, getDocuments, getProfile, getSchedules, getSession, getSessions, getSkills, removeDocument, removeSession, removeSkill, runSchedule, saveCredential, saveProfile, setSkillEnabled, stopAgent, streamUrl, testBackend, testCredential, updateBot, updateSchedule, uploadDocument, uploadFile, uploadSkill, vectorizeDocument } from './api'
+import { apiUrl, compensateDocuments, createBot, createSchedule, deleteBot, deleteCredential, deleteSchedule, getAllSessions, getBots, getCredential, getDocumentPreview, getDocumentVersions, getDocuments, getProfile, getSchedules, getSession, getSessions, getSkills, removeDocument, removeSession, removeSkill, runSchedule, saveCredential, saveProfile, setSkillEnabled, stopAgent, streamUrl, testBackend, testCredential, updateBot, updateSchedule, uploadDocument, uploadFile, uploadSkill, vectorizeDocument } from './api'
 import HarnessApp from './HarnessApp.vue'
+import botRequirementAvatar from './assets/bot-requirement-analysis-avatar.jpg'
+import hotlineAvatar from './assets/hotline-avatar.jpg'
 import CodeMapPage from './modules/artifacts/CodeMapPage.vue'
 import { getHarnessWorkspaces, getWorkspaceFiles, importWorkspace, updateHarnessWorkspace } from './api'
 import { workspacePathAllowed } from './modules/workspaces/paths'
 import { appendProgressEvent, finishProgress, progressEntryLabel, progressLabel } from './modules/execution/progress'
+import { buildOptionPanel, composeOptionAnswer, extractQuestionOptions } from './modules/requirement/question-options'
+import { handoffFor, recommendationLabel } from './modules/requirement/handoff'
+import OptionPanel from './modules/requirement/OptionPanel.vue'
+import { skillComposerCopy } from './modules/skills/composer'
 
 marked.setOptions({ breaks: true, gfm: true })
 Object.entries({ bash, css, java, javascript, json, markdown, python, sql, typescript, xml }).forEach(([name, language]) => hljs.registerLanguage(name, language))
@@ -99,6 +105,8 @@ const messageList = ref(null)
 // 用户主动上滑后不再强制回到底部，回到底部时自动恢复跟随
 const autoScroll = ref(true)
 const composer = ref(null)
+const composerArea = ref(null)
+let composerObserver = null
 const searchText = ref('')
 const searchOpen = ref(false)
 const busySettings = ref(false)
@@ -116,7 +124,13 @@ const scheduleDraft = ref({ name: '', prompt: '', agent: 'chat', intervalMinutes
 const bots = ref([])
 const botBusy = ref(false)
 const showBotForm = ref(false)
-const botDraft = ref({ botId: '', name: '', instruction: '', skills: [], enabled: true })
+const botDraft = ref({ botId: '', name: '', instruction: '', skills: [], enabled: false })
+const selectedBotId = ref('')
+const selectedBot = computed(() => bots.value.find(bot => bot.bot_id === selectedBotId.value) || null)
+const skillNameMap = computed(() => new Map(skills.value.map(skill => [skill.id, skill.name])))
+// 有头像的机器人用头像，没有的继续用 Lucide 机器人图标。
+const BOT_AVATARS = { '需求分析助手': botRequirementAvatar }
+const botAvatar = (bot) => BOT_AVATARS[bot?.name] || ''
 const profileDraft = ref({ nickname: '', bio: '', answerStyle: 'default', theme: 'system' })
 const profileBusy = ref(false)
 const credentialDraft = ref({ provider: '', baseUrl: '', model: '', apiKey: '' })
@@ -150,6 +164,7 @@ let pendingSkillFile = null
 let readerController = null
 let toastTimer
 let keydownHandler
+let visibilityHandler
 let docPollTimer
 
 const currentSession = computed(() => sessions.value.find((session) => session.id === activeId.value) || null)
@@ -186,6 +201,8 @@ const visibleSessions = computed(() => sessions.value.filter((session) => !sessi
 const runningItem = computed(() => (sending.value && currentSession.value && !currentSession.value.isDraft ? [currentSession.value] : []))
 const recentList = computed(() => visibleSessions.value.filter((session) => !runningItem.value.includes(session)))
 const canSend = computed(() => !sending.value && !uploadBusy.value && (input.value.trim() || uploadedFileId.value))
+// 技能助手（TDD）阶段：底部对话框整块被技能接手，不再是普通聊天输入区。
+const skillCopy = computed(() => skillComposerCopy(activeMode.value))
 const activeModeInfo = computed(() => modes.find((mode) => mode.id === activeMode.value) || modes[0])
 const draftSessions = () => sessions.value.filter((session) => session.isDraft)
 const enabledSkills = computed(() => skills.value.filter((skill) => skill.enabled))
@@ -292,7 +309,7 @@ function newSession() {
   if (existing) {
     activeId.value = existing.id
   } else {
-    const session = { id: makeId(), title: '新对话', messages: [], isDraft: true, updatedAt: Date.now() }
+    const session = { id: makeId(), title: '新对话', messages: [], isDraft: true, updatedAt: Date.now(), optionPanel: [], optionSelection: [] }
     sessions.value.unshift(session)
     activeId.value = session.id
   }
@@ -340,6 +357,7 @@ function openBotPage() {
   showWorkspacePanel.value = false
   mobileSidebarOpen.value = false
   refreshBots()
+  refreshSkills()
 }
 
 function openDocsPage() {
@@ -672,6 +690,8 @@ async function refreshSessions() {
         updatedAt: item.createTime ? new Date(item.createTime).getTime() : 0,
         messages: previous.get(item.conversationId)?.messages || [],
         loaded: previous.get(item.conversationId)?.loaded || false,
+        optionPanel: previous.get(item.conversationId)?.optionPanel || [],
+        optionSelection: previous.get(item.conversationId)?.optionSelection || [],
       })),
     ]
     connectionState.value = 'online'
@@ -723,15 +743,20 @@ async function selectSession(id) {
     for (const row of detail.messages || []) {
       if (row.question) history.push({ id: `user-${row.id}`, role: 'user', content: row.question, fileName: row.fileid ? '已上传文件' : '', createdAt: row.createTime })
       if (row.answer || row.thinking) {
-        history.push({
+        const message = {
           id: `assistant-${row.id}`, role: 'assistant', content: normalizeBrandText(row.answer), done: true,
           timeline: row.thinking ? [{ type: 'thinking', content: normalizeBrandText(row.thinking) }] : [],
           references: normalizeReferences(row.reference), recommend: parseArray(row.recommend),
           showTimeline: false, showReferences: false, createdAt: row.createTime,
-        })
+        }
+        applyQuestionOptions(message)
+        history.push(message)
       }
     }
     session.messages = history
+    const lastAnswer = [...history].reverse().find(item => item.role === 'assistant' && item.questionOptions?.length)
+    session.optionPanel = buildOptionPanel(lastAnswer?.questionOptions || [])
+    session.optionSelection = []
     session.workspaceId = detail.workspaceId || session.workspaceId || ''
     selectedProjectId.value = session.workspaceId
     selectedProjectName.value = projectGroups.value.find(item => item.id === session.workspaceId)?.name || ''
@@ -739,7 +764,15 @@ async function selectSession(id) {
     session.agentType = detail.agentType || session.agentType
     activeMode.value = ['chat', 'file', 'ppt', 'deep', 'skills'].includes(session.agentType) ? session.agentType : 'chat'
   } catch (error) {
-    showToast(error.message || '会话记录加载失败')
+    if (error.status === 404) {
+      // 服务端已经没有这条会话（别处删过），列表里的旧条目要自己消失，否则点了永远进不去
+      sessions.value = sessions.value.filter((item) => item.id !== id)
+      if (activeId.value === id) newSession()
+      showToast('该会话已不存在，已从列表移除')
+      await refreshSessions()
+    } else {
+      showToast(error.message || '会话记录加载失败')
+    }
   } finally {
     loadingHistory.value = false
     await scrollToBottom()
@@ -866,6 +899,8 @@ function completeStreamMessage(message) {
   if (!message.done) {
     message.done = true
     message.showTimeline = false
+    applyQuestionOptions(message)
+    syncOptionPanel(message)
   }
   scrollToBottom()
 }
@@ -891,6 +926,10 @@ function appendStreamEvent(data, message) {
       try { references = JSON.parse(references) } catch { references = [] }
     }
     message.references = normalizeReferences(references)
+  } else if (data.type === 'agent') {
+    // 后端说这一轮实际跑的是哪个助手：技能助手就把输入区切过去。
+    const mode = String(content || '')
+    if (['chat', 'file', 'ppt', 'deep', 'skills'].includes(mode)) activeMode.value = mode
   } else if (data.type === 'recommend') {
     message.recommend = parseArray(content)
   } else if (data.type === 'clarify') {
@@ -937,6 +976,8 @@ async function sendMessage() {
   session.workspaceId = workspaceId
   session.isDraft = false
   session.loaded = true
+  session.optionPanel = []
+  session.optionSelection = []
   session.agentType = activeMode.value === 'skills' ? 'skills' : (fileId ? 'file' : activeMode.value)
   session.messages.push({ id: makeId(), role: 'user', content: text, fileName, createdAt: new Date().toISOString() })
   if (session.messages.filter((message) => message.role === 'user').length === 1) session.title = titleFor(text)
@@ -1039,8 +1080,54 @@ function highlightCode(event) {
 
 const vHighlight = { mounted: highlightCode, updated: highlightCode }
 
-function sendRecommendation(question) {
-  input.value = question
+// 需求问答里的候选答案从正文抽出来，正文只留问题，候选挪到输入框上方做选择面板。
+function applyQuestionOptions(message) {
+  const parsed = extractQuestionOptions(normalizeBrandText(message.content || ''))
+  message.bodyText = parsed.text
+  message.questionOptions = parsed.groups
+}
+
+// 选择面板只跟随最新一轮回答：换了问题就换面板，选项可多选。
+function syncOptionPanel(message) {
+  const session = currentSession.value
+  if (!session) return
+  session.optionPanel = buildOptionPanel(message.questionOptions || [])
+  session.optionSelection = []
+}
+
+function messageBody(message) {
+  if (!message) return ''
+  return message.bodyText ?? normalizeBrandText(message.content || '')
+}
+
+const optionPanel = computed(() => currentSession.value?.optionPanel || [])
+const optionSelection = computed(() => currentSession.value?.optionSelection || [])
+
+function toggleOption(key) {
+  const session = currentSession.value
+  if (!session) return
+  const selected = session.optionSelection || (session.optionSelection = [])
+  const index = selected.indexOf(key)
+  if (index >= 0) selected.splice(index, 1)
+  else selected.push(key)
+}
+
+// 选好的候选答案交给 TDD 技能继续追问，需求分析助手不再重复问同一件事。
+function sendSelectedOptions() {
+  const session = currentSession.value
+  if (!session || !session.optionSelection?.length) return
+  const text = composeOptionAnswer(session.optionPanel || [], session.optionSelection)
+  if (!text) return
+  activeMode.value = 'skills'
+  input.value = text
+  sendMessage()
+}
+
+function sendRecommendation(item) {
+  // 结构化推荐项带目标技能：切到技能助手，把标签原样作为请求发过去。
+  const handoff = handoffFor(item)
+  if (handoff) activeMode.value = handoff.mode
+  input.value = handoff ? handoff.query : String(item || '')
   sendMessage()
 }
 
@@ -1203,12 +1290,25 @@ async function refreshBots() {
   } catch (error) {
     bots.value = []
   }
+  // 不自动选中：右侧详情只在用户点左侧列表项时出现。
+  if (!bots.value.some(bot => bot.bot_id === selectedBotId.value)) {
+    selectedBotId.value = ''
+  }
+}
+
+function selectBot(bot) {
+  selectedBotId.value = bot.bot_id
+}
+
+function botSkillNames(bot) {
+  const ids = bot?.skills || []
+  return ids.length ? ids.map(id => skillNameMap.value.get(id) || id).join('、') : '未绑定'
 }
 
 function openBotForm(bot) {
   botDraft.value = bot
     ? { botId: bot.bot_id, name: bot.name, instruction: bot.instruction || '', skills: [...(bot.skills || [])], enabled: bot.enabled }
-    : { botId: '', name: '', instruction: '', skills: [], enabled: true }
+    : { botId: '', name: '', instruction: '', skills: [], enabled: false }
   showBotForm.value = true
 }
 
@@ -1226,9 +1326,11 @@ async function submitBot() {
     enabled: botDraft.value.enabled,
   }
   try {
-    if (botDraft.value.botId) await updateBot(backendUrl.value, botDraft.value.botId, payload)
-    else await createBot(backendUrl.value, payload)
+    const saved = botDraft.value.botId
+      ? await updateBot(backendUrl.value, botDraft.value.botId, payload)
+      : await createBot(backendUrl.value, payload)
     showBotForm.value = false
+    if (saved?.bot_id) selectedBotId.value = saved.bot_id
     await refreshBots()
     showToast('机器人已保存')
   } catch (error) {
@@ -1249,6 +1351,7 @@ async function toggleBot(bot) {
       enabled: !bot.enabled,
     })
     await refreshBots()
+    showToast(bot.enabled ? `已关闭 ${bot.name}` : `已开启 ${bot.name}，所有会话都会复用它`)
   } catch (error) {
     showToast(`更新失败：${error.message || '机器人服务不可用'}`)
   } finally {
@@ -1260,20 +1363,11 @@ async function removeBot(bot) {
   if (!window.confirm(`删除机器人 ${bot.name}？`)) return
   try {
     await deleteBot(backendUrl.value, bot.bot_id)
+    if (selectedBotId.value === bot.bot_id) selectedBotId.value = ''
     await refreshBots()
     showToast(`已删除 ${bot.name}`)
   } catch (error) {
     showToast(`删除失败：${error.message || '机器人服务不可用'}`)
-  }
-}
-
-async function bindBot(bot, conversationId) {
-  if (!conversationId) return
-  try {
-    await bindBotSession(backendUrl.value, bot.bot_id, conversationId)
-    showToast('已绑定会话，该会话的回答会使用这个人设')
-  } catch (error) {
-    showToast(`绑定失败：${error.message || '机器人服务不可用'}`)
   }
 }
 
@@ -1676,10 +1770,18 @@ function toggleSearch() {
 watch(() => currentSession.value?.messages.length, () => scrollToBottom())
 watch([input, composer], async () => {
   await nextTick()
-  if (composer.value) {
-    composer.value.style.height = 'auto'
-    composer.value.style.height = `${Math.min(composer.value.scrollHeight, 180)}px`
-  }
+  const field = composer.value
+  if (!field) return
+  const max = parseFloat(getComputedStyle(field).maxHeight) || 150
+  const current = field.getBoundingClientRect().height
+  // 量内容高度必须先关掉过渡：开着过渡时 height:auto 会被动画值挡住，量到的还是旧高度
+  field.style.transition = 'none'
+  field.style.height = 'auto'
+  const content = field.scrollHeight
+  field.style.height = `${current}px`
+  void field.offsetHeight
+  field.style.transition = ''
+  field.style.height = `${Math.min(Math.max(content, 26), max)}px`
 })
 
 onMounted(() => {
@@ -1709,6 +1811,9 @@ onMounted(() => {
     if (event.key === 'Escape') mobileSidebarOpen.value = false
   }
   window.addEventListener('keydown', keydownHandler)
+  // 回到前台时重新对齐会话列表：会话可能在别的窗口或后端被删掉
+  visibilityHandler = () => { if (document.visibilityState === 'visible') refreshSessions() }
+  document.addEventListener('visibilitychange', visibilityHandler)
   const restoredMode = activeMode.value
   newSession()
   activeMode.value = restoredMode
@@ -1718,10 +1823,22 @@ onMounted(() => {
   refreshProfile()
   if (activePage.value === 'automation') refreshSchedules()
   if (activePage.value === 'bot') refreshBots()
+  // 输入区悬浮在底部，消息流要按它的高度留出底部空间
+  if (composerArea.value) {
+    composerObserver = new ResizeObserver(() => {
+      document.documentElement.style.setProperty('--composer-height', `${composerArea.value.offsetHeight}px`)
+      // 消息流高度变了，滚动位置要重新贴底，否则最后一条会掉到可视区外
+      requestAnimationFrame(() => { if (autoScroll.value) scrollToBottom() })
+    })
+    composerObserver.observe(composerArea.value)
+  }
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', keydownHandler)
+  document.removeEventListener('visibilitychange', visibilityHandler)
+  composerObserver?.disconnect()
+  composerObserver = null
   stopDocPolling()
 })
 </script>
@@ -1733,7 +1850,7 @@ onUnmounted(() => {
       <button class="rail-button" :class="{ active: activePage === 'home' }" type="button" aria-label="首页" title="首页" @click="openHome"><Home :size="20" fill="currentColor" /></button>
       <button class="rail-button" :class="{ active: activePage === 'automation' }" type="button" aria-label="自动化" title="自动化" @click="openAutomation"><CalendarClock :size="20" /></button>
       <button class="rail-button" :class="{ active: activePage === 'plugins' }" type="button" aria-label="插件" title="插件" @click="openPlugins"><Puzzle :size="20" /></button>
-      <button class="rail-button" :class="{ active: activePage === 'bot' }" type="button" aria-label="轻量机器人" title="轻量机器人" @click="openBotPage"><Bot :size="20" /></button>
+      <button class="rail-button" :class="{ active: activePage === 'bot' }" type="button" aria-label="bot" title="bot" @click="openBotPage"><Bot :size="20" /></button>
       <button class="rail-button" :class="{ active: activePage === 'docs' }" type="button" aria-label="文档库" title="文档库" @click="openDocsPage"><LibraryBig :size="20" /></button>
       <button class="rail-button" :class="{ active: activePage === 'harness' }" type="button" aria-label="Harness 工程" title="Harness 工程" @click="openHarnessPage"><Workflow :size="20" /></button>
       <button class="rail-button" :class="{ active: activePage === 'code-map' }" type="button" aria-label="代码地图" title="代码地图" @click="openCodeMapPage"><MapIcon :size="20" /></button>
@@ -1816,13 +1933,13 @@ onUnmounted(() => {
         <div v-if="loadingHistory" class="history-loading"><LoaderCircle :size="18" class="spin" /> 正在加载会话记录</div>
 
         <div v-if="isWelcome" class="welcome-state">
-          <div class="welcome-mark"><Headset :size="24" :stroke-width="1.6" /></div>
+          <div class="welcome-mark"><img :src="hotlineAvatar" alt="Hotline" /></div>
           <h1>你好，我是 Hotline</h1>
 
         </div>
 
         <div v-for="message in currentSession?.messages || []" :key="message.id" class="message-row" :class="`message-${message.role}`">
-          <div v-if="message.role === 'assistant'" class="assistant-avatar"><MessagesSquare :size="15" /></div>
+          <div v-if="message.role === 'assistant'" class="assistant-avatar"><img :src="hotlineAvatar" alt="Hotline" /></div>
           <div class="message-body">
             <div class="message-meta"><strong>{{ message.role === 'user' ? '你' : 'Hotline' }}</strong><time v-if="message.createdAt">{{ new Date(message.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</time><span v-if="message.role === 'assistant' && message.showTimeline && messageIsStreaming(message)" class="stream-status" role="status" aria-live="polite"><span class="status-dot"></span>{{ progressLabel(message) }}</span></div>
             <div v-if="message.fileName" class="message-attachment"><File :size="15" /><span>{{ message.fileName }}</span></div>
@@ -1845,7 +1962,7 @@ onUnmounted(() => {
               </div>
             </section>
 
-            <div v-if="message.content" v-highlight class="markdown-content" v-html="renderMarkdown(normalizeBrandText(message.content))"></div>
+            <div v-if="message.content" v-highlight class="markdown-content" v-html="renderMarkdown(messageBody(message))"></div>
             <div v-else-if="message.role === 'assistant' && messageIsStreaming(message) && !message.timeline?.length" class="thinking-placeholder"><span></span><span></span><span></span></div>
 
             <section v-if="message.role === 'assistant' && message.clarify" class="clarify-card" aria-label="需求澄清">
@@ -1871,15 +1988,17 @@ onUnmounted(() => {
             </section>
 
             <a v-if="message.pptFile" class="download-link" :href="downloadHref(message.pptFile)" download><Download :size="16" /> 下载生成的 PPT</a>
-            <div v-if="message.role === 'assistant' && message.recommend?.length" class="recommendations"><span class="recommend-label">接下来可以</span><button v-for="(question, index) in message.recommend" :key="index" type="button" @click="sendRecommendation(question)">{{ question }}<ArrowUp :size="13" /></button></div>
+            <div v-if="message.role === 'assistant' && message.recommend?.length" class="recommendations"><span class="recommend-label">接下来可以</span><button v-for="(question, index) in message.recommend" :key="index" type="button" @click="sendRecommendation(question)">{{ recommendationLabel(question) }}<ArrowUp :size="13" /></button></div>
             <button v-if="message.role === 'assistant' && message.content" class="copy-message icon-button" type="button" aria-label="复制回答" title="复制回答" @click="copyText(normalizeBrandText(message.content))"><Copy :size="14" /></button>
           </div>
           <div v-if="message.role === 'user'" class="user-avatar">你</div>
         </div>
       </section>
 
-      <footer class="composer-area">
+      <footer ref="composerArea" class="composer-area">
         <div class="composer-wrap">
+          <div v-if="skillCopy" class="skill-bar" role="status">{{ skillCopy.bar }}</div>
+          <OptionPanel :panel="optionPanel" :selection="optionSelection" :sending="sending" @toggle="toggleOption" @send="sendSelectedOptions" />
           <div class="mode-strip" role="tablist" aria-label="助手模式">
             <button v-for="mode in modes" :key="mode.id" class="mode-option" :class="{ selected: activeMode === mode.id }" role="tab" :aria-selected="activeMode === mode.id" type="button" :disabled="sending" @click="chooseMode(mode.id)">
               <component :is="mode.icon" :size="16" /><span>{{ mode.label }}</span><Check v-if="activeMode === mode.id" :size="13" class="mode-check" />
@@ -1889,12 +2008,13 @@ onUnmounted(() => {
           <div class="composer-box" :class="{ 'composer-focused': input.length > 0 || selectedFile || docSource, 'composer-disabled': uploadBusy }">
             <div v-if="selectedFile" class="attachment-chip"><div class="attachment-icon"><FileText :size="16" /></div><div class="attachment-info"><strong>{{ selectedFile.name }}</strong><small>{{ uploadBusy ? '正在上传并解析' : `${formatBytes(selectedFile.size)} · 已就绪` }}</small></div><LoaderCircle v-if="uploadBusy" :size="16" class="spin attachment-spinner" /><button v-else class="icon-button" type="button" aria-label="移除文件" @click="removeSelectedFile"><X :size="16" /></button></div>
             <div v-else-if="docSource" class="attachment-chip"><div class="attachment-icon"><FileText :size="16" /></div><div class="attachment-info"><strong>{{ docSource.fileName }}</strong><small>文档库 · {{ docSource.charCount }} 字 · 按父子分段检索</small></div><button class="icon-button" type="button" aria-label="移除文档来源" @click="docSource = null"><X :size="16" /></button></div>
-            <textarea ref="composer" v-model="input" rows="1" :disabled="sending || uploadBusy" :placeholder="docSource ? `想问《${docSource.fileName}》里的什么？` : selectedFile ? '描述你想了解文件的什么内容…' : activeMode === 'ppt' ? '描述你想制作的演示文稿…' : '给 Hotline 发消息…'" aria-label="输入消息" @keydown="submitFromKeyboard" />
+            <textarea ref="composer" v-model="input" rows="1" :disabled="sending || uploadBusy" :placeholder="docSource ? `想问《${docSource.fileName}》里的什么？` : selectedFile ? '描述你想了解文件的什么内容…' : activeMode === 'ppt' ? '描述你想制作的演示文稿…' : skillCopy ? skillCopy.placeholder : '给 Hotline 发消息…'" aria-label="输入消息" @keydown="submitFromKeyboard" />
             <div class="composer-bottom">
               <div class="composer-tools">
                 <input ref="fileInput" class="visually-hidden" type="file" accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg" @change="onFilePicked" />
                 <button class="attach-button icon-button" type="button" :disabled="uploadBusy || sending" aria-label="上传文件" title="上传文件" @click="openFilePicker"><Paperclip :size="17" /></button>
-                <span class="composer-hint"><kbd>Enter</kbd> 发送 <span class="hint-divider"></span><kbd>Shift Enter</kbd> 换行</span>
+                <span v-if="skillCopy" class="composer-hint">{{ skillCopy.hintLabel }} · <kbd>{{ skillCopy.hintKey }}</kbd> 发送</span>
+                <span v-else class="composer-hint"><kbd>Enter</kbd> 发送 <span class="hint-divider"></span><kbd>Shift Enter</kbd> 换行</span>
               </div>
               <div class="send-actions">
                 <span v-if="input.length" class="char-count">{{ input.length }}</span>
@@ -1949,7 +2069,7 @@ onUnmounted(() => {
       <section v-else class="standalone-page" :aria-labelledby="`${activePage}-page-title`">
         <aside class="page-sidebar">
           <header class="page-sidebar-header">
-            <h2>{{ activePage === 'profile' ? '个人中心' : ({ automation: '自动化', plugins: '插件', bot: '轻量机器人', docs: '文档库', harness: 'Harness 工程', export: '历史聊天' })[activePage] }}</h2>
+            <h2>{{ activePage === 'profile' ? '个人中心' : ({ automation: '自动化', plugins: '插件', bot: 'bot', docs: '文档库', harness: 'Harness 工程', export: '历史聊天' })[activePage] }}</h2>
             <div v-if="activePage !== 'profile'" class="page-sidebar-actions"><button class="icon-button" type="button" aria-label="搜索"><Search :size="17" /></button><button class="icon-button" type="button" aria-label="筛选"><MoreHorizontal :size="17" /></button></div>
           </header>
           <nav v-if="activePage === 'profile'" class="profile-settings-nav" aria-label="个人设置">
@@ -1960,7 +2080,16 @@ onUnmounted(() => {
           </nav>
           <button v-else-if="activePage === 'automation'" class="page-create" type="button" disabled><Plus :size="18" />新建任务</button>
           <button v-else-if="activePage === 'plugins'" class="page-subitem active" type="button" @click="openSkills"><Puzzle :size="16" />技能<span>{{ skills.length }}</span></button>
-          <button v-else-if="activePage === 'bot'" class="page-subitem active" type="button"><Bot :size="16" />轻量机器人<span>{{ bots.length }}</span></button>
+          <div v-else-if="activePage === 'bot'" class="bot-sidebar">
+            <button class="page-create" type="button" @click="openBotForm()"><Plus :size="18" />新建机器人</button>
+            <nav class="bot-nav" aria-label="机器人列表">
+              <div v-for="bot in bots" :key="bot.bot_id" class="bot-nav-row" :class="{ active: selectedBotId === bot.bot_id }">
+                <button type="button" class="bot-nav-name" @click="selectBot(bot)"><img v-if="botAvatar(bot)" class="bot-avatar" :src="botAvatar(bot)" alt="" /><Bot v-else :size="16" /><span>{{ bot.name }}</span></button>
+                <label class="switch switch-pill" :title="bot.enabled ? '已开启：所有会话都复用它' : '已关闭'"><input type="checkbox" :checked="bot.enabled" @change="toggleBot(bot)" /><span class="switch-track" aria-hidden="true"></span></label>
+              </div>
+            </nav>
+            <p v-if="!bots.length" class="bot-nav-empty">还没有机器人</p>
+          </div>
           <button v-else-if="activePage === 'docs'" class="page-create" type="button" @click="openDocs"><Plus :size="18" />上传文档</button>
           <button v-else-if="activePage === 'harness'" class="page-subitem active" type="button" @click="openHarnessPage"><Workflow :size="16" />Harness 控制面<span>已接入</span></button>
           <button v-else class="page-create" type="button" :disabled="exportingHistory" @click="exportChatHistory"><LoaderCircle v-if="exportingHistory" :size="18" class="spin" /><Download v-else :size="18" />导出全部聊天</button>
@@ -1970,7 +2099,7 @@ onUnmounted(() => {
         <div class="page-main">
           <header v-if="activePage !== 'harness'" class="standalone-header">
             <div>
-              <h1 :id="`${activePage}-page-title`">{{ activePage === 'profile' ? ({ basics: '基础信息', api: 'API Key', personalization: '个性化', pet: '虚拟桌宠' })[profileSection] : ({ automation: '安排任务', plugins: '插件', bot: '轻量机器人', docs: '文档库', harness: 'Harness 工程', export: '导出历史聊天' })[activePage] }}</h1>
+              <h1 :id="`${activePage}-page-title`">{{ activePage === 'profile' ? ({ basics: '基础信息', api: 'API Key', personalization: '个性化', pet: '虚拟桌宠' })[profileSection] : ({ automation: '安排任务', plugins: '插件', bot: 'bot', docs: '文档库', harness: 'Harness 工程', export: '导出历史聊天' })[activePage] }}</h1>
             </div>
             <button class="icon-button" type="button" aria-label="回到首页" title="回到首页" @click="openHome"><Home :size="18" /></button>
           </header>
@@ -2002,7 +2131,7 @@ onUnmounted(() => {
             </template>
             <template v-else>
               <div class="pet-preview"><component :is="petIcon" :size="38" /><strong>{{ petLabel }}</strong></div>
-              <div class="preference-row"><div><strong>桌宠状态</strong><small>开启后可在页面右下角显示虚拟伙伴</small></div><label class="switch"><input type="checkbox" :checked="petEnabled" @change="togglePet" /></label></div>
+              <div class="preference-row"><div><strong>桌宠状态</strong><small>开启后可在页面右下角显示虚拟伙伴</small></div><label class="switch switch-pill"><input type="checkbox" :checked="petEnabled" @change="togglePet" /><span class="switch-track" aria-hidden="true"></span></label></div>
               <div class="pet-options"><button v-for="option in petOptions" :key="option.id" type="button" class="pet-option" :class="{ active: petChoice === option.id }" @click="choosePet(option.id)"><component :is="option.icon" :size="18" /><span>{{ option.label }}</span></button></div>
             </template>
           </section>
@@ -2040,24 +2169,25 @@ onUnmounted(() => {
             <div v-else class="page-empty-state"><div class="page-empty-icon"><Puzzle :size="44" /></div><h2>管理插件</h2><p>暂无已安装技能</p><button class="primary-button" type="button" @click="openSkills"><Plus :size="15" />上传技能包</button></div>
           </section>
           <section v-else-if="activePage === 'bot'" class="plugins-page">
-            <div class="settings-section-copy"><Bot :size="22" /><div><h2>轻量机器人</h2></div><button class="primary-button" type="button" @click="openBotForm()"><Plus :size="15" />新建机器人</button></div>
+            <div class="settings-section-copy"><Bot :size="22" /><div><h2>bot</h2></div><button class="primary-button" type="button" @click="openBotForm()"><Plus :size="15" />新建机器人</button></div>
             <form v-if="showBotForm" class="schedule-form" @submit.prevent="submitBot">
               <label>机器人名称<input v-model="botDraft.name" placeholder="例如：值班客服" /></label>
               <label>角色指令<textarea v-model="botDraft.instruction" rows="3" placeholder="你是一位只回答售后问题的客服，结论先行、语气克制"></textarea></label>
               <label>绑定技能<select v-model="botDraft.skills" multiple size="4"><option v-for="skill in skills" :key="skill.id" :value="skill.id">{{ skill.name }}</option></select></label>
               <div class="dialog-actions"><button class="secondary-button" type="button" @click="showBotForm = false">取消</button><button class="primary-button" type="submit" :disabled="botBusy">{{ botBusy ? '保存中…' : '保存机器人' }}</button></div>
             </form>
-            <div v-if="bots.length" class="plugin-list">
-              <div v-for="bot in bots" :key="bot.bot_id" class="bot-row">
-                <div><strong>{{ bot.name }}</strong><small>{{ bot.instruction || '未设置角色指令' }}</small><small>技能：{{ bot.skills.length ? bot.skills.join('、') : '未绑定' }}</small></div>
-                <span class="plugin-state">{{ bot.enabled ? '已启用' : '已停用' }}</span>
-                <select class="bot-session-select" value="" @change="bindBot(bot, $event.target.value)"><option value="">绑定会话…</option><option v-for="session in visibleSessions" :key="session.id" :value="session.id">{{ session.title }}</option></select>
-                <button class="text-action" type="button" :disabled="botBusy" @click="toggleBot(bot)">{{ bot.enabled ? '停用' : '启用' }}</button>
-                <button class="text-action" type="button" :disabled="botBusy" @click="openBotForm(bot)">编辑</button>
-                <button class="text-action danger" type="button" @click="removeBot(bot)">删除</button>
+            <div v-if="selectedBot" class="plugin-list">
+              <div class="bot-row">
+                <img v-if="botAvatar(selectedBot)" class="bot-avatar-lg" :src="botAvatar(selectedBot)" alt="" />
+                <Bot v-else :size="22" />
+                <div><strong>{{ selectedBot.name }}</strong><small>技能：{{ botSkillNames(selectedBot) }}</small><small>{{ selectedBot.enabled ? '已开启：所有会话都会复用这个助手' : '已关闭：不作用于任何会话' }}</small></div>
+                <span class="plugin-state">{{ selectedBot.enabled ? '已开启' : '已关闭' }}</span>
+                <button class="text-action" type="button" :disabled="botBusy" @click="toggleBot(selectedBot)">{{ selectedBot.enabled ? '关闭' : '开启' }}</button>
+                <button class="text-action" type="button" :disabled="botBusy" @click="openBotForm(selectedBot)">编辑</button>
+                <button class="text-action danger" type="button" @click="removeBot(selectedBot)">删除</button>
               </div>
             </div>
-            <div v-else class="page-empty-state"><div class="page-empty-icon"><Bot :size="44" /></div><h2>轻量机器人</h2><p>暂无机器人</p><button class="primary-button" type="button" @click="openBotForm()"><Plus :size="15" />新建机器人</button></div>
+            <div v-else class="page-empty-state"><div class="page-empty-icon"><Bot :size="44" /></div><h2>bot</h2><p>从左侧选择一个机器人，或新建一个</p><button class="primary-button" type="button" @click="openBotForm()"><Plus :size="15" />新建机器人</button></div>
           </section>
           <div v-else-if="activePage === 'docs' || activePage === 'export'" class="page-empty-state">
             <div class="page-empty-icon"><FileText v-if="activePage === 'docs'" :size="44" /><Archive v-else :size="44" /></div>

@@ -1,4 +1,4 @@
-"""轻量机器人存储：bot 页写入的真实数据。
+"""bot 存储：机器人页写入的真实数据。
 
 机器人 = 名称 + 角色指令 + 绑定技能；与具体会话的绑定单独一张表，
 这样 Worker 只需要会话编号就能取到对应人设。
@@ -87,6 +87,8 @@ class BotStore:
                  json.dumps(payload.get('skills') or [], ensure_ascii=False),
                  1 if payload.get('enabled', True) else 0, now, now),
             )
+            if payload.get('enabled', True):
+                self._disable_others(db, bot_id)
             db.commit()
         return self.get(bot_id) or {}
 
@@ -107,6 +109,8 @@ class BotStore:
         params.extend([self._now(), bot_id])
         with self._db() as db:
             db.execute(f"UPDATE harness_bot SET {','.join(fields)}, updated_at=? WHERE bot_id=?", params)
+            if payload.get('enabled'):
+                self._disable_others(db, bot_id)
             db.commit()
         return self.get(bot_id)
 
@@ -126,6 +130,19 @@ class BotStore:
                 (conversation_id, bot_id, self._now()))
             db.commit()
         return True
+
+    @staticmethod
+    def _disable_others(db: sqlite3.Connection, bot_id: str) -> None:
+        """同一时间只留一个开启的机器人：开启一个，其余自动关闭。"""
+        db.execute("UPDATE harness_bot SET enabled=0 WHERE bot_id<>?", (bot_id,))
+
+    def enabled_bot(self) -> dict[str, Any] | None:
+        """当前开启的机器人；开启即对所有会话生效。"""
+        with self._db() as db:
+            row = db.execute(
+                "SELECT * FROM harness_bot WHERE enabled=1 ORDER BY updated_at DESC, rowid DESC LIMIT 1"
+            ).fetchone()
+        return self._view(row) if row else None
 
     def session_bot(self, conversation_id: str) -> dict[str, Any] | None:
         with self._db() as db:

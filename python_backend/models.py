@@ -4,6 +4,8 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+from python_backend.modules.skills.handoff import normalize_recommendations_json
+
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -70,6 +72,6 @@ class SessionMessage:
             "reference": self.reference,
             "agentType": self.agentType,
             "fileid": self.fileid,
-            "recommend": self.recommend,
+            "recommend": normalize_recommendations_json(self.recommend),
             "createTime": self.createTime,
         }

@@ -24,13 +24,17 @@ STYLE_PROMPTS = {
 
 
 def load_persona(data_dir: Path, conversation_id: str) -> dict[str, Any]:
-    """读取会话绑定的人设；机器人未启用时只保留个人回答风格。"""
+    """读取人设：开启的机器人对所有会话生效，没有开启的才回退到会话绑定。
+
+    机器人未启用时只保留个人回答风格。
+    """
     persona: dict[str, Any] = {'instruction': '', 'skills': [], 'style': ''}
-    if not conversation_id:
-        return persona
     root = Path(data_dir)
     try:
-        bot = BotStore(root / BOT_DB_NAME).session_bot(conversation_id)
+        store = BotStore(root / BOT_DB_NAME)
+        bot = store.enabled_bot()
+        if bot is None and conversation_id:
+            bot = store.session_bot(conversation_id)
     except Exception:
         bot = None
     if bot and bot.get('enabled'):
