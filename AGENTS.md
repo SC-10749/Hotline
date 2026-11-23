@@ -67,3 +67,4 @@
 - 规划内容只保留在根 README 的规划小节或明确标注为草案的文档中；功能完成后及时删除过时规划，避免与代码重复描述。
 - 修改文档后至少核对路径、启动命令、端口、模块名称和验证命令；不复制 `.env`、真实服务地址或运行数据到文档。
 
+- 写或改简历类文档（`docs/简历.md`、`F:\简历\简历.md`）前，必须先读 `skills/resume-writing/SKILL.md`——该规范来自 GitHub 高星开源简历 skill（来源、许可与刷新记录见同目录 `PROVENANCE.md`）。按其中的 X-Y-Z / STAR 句式、量化规则、强动词、ATS 硬约束与篇幅规则来写，用 `skills/resume-writing/fetch_upstream.py` 刷新上游规范；不得自创格式或凭印象写。
