@@ -82,11 +82,15 @@ public class PythonProcessLauncher {
             Process gateway = spawn(root, command,
                     List.of("-m", "uvicorn", "main:app", "--host", host, "--port", String.valueOf(port)));
             spawned.add(gateway);
-            Process worker = spawn(root, command,
-                    List.of("-m", "python_backend.modules.execution.worker"));
-            spawned.add(worker);
+            // 执行 Worker 数量可配：队列用 SQLite 抢占式领取，多进程即可并行跑多个运行。
+            int workers = Math.max(1, launch.workerInstances());
+            for (int index = 0; index < workers; index++) {
+                Process worker = spawn(root, command,
+                        List.of("-m", "python_backend.modules.execution.worker"));
+                spawned.add(worker);
+            }
             if (awaitPort(host, port, launch.startupTimeout())) {
-                log.info("Python 网关与执行 Worker 已就绪（{}:{}）。", host, port);
+                log.info("Python 网关与 {} 个执行 Worker 已就绪（{}:{}）。", workers, host, port);
             } else {
                 log.error("Python 网关在 {} 内未就绪，请检查 {} 的依赖与启动日志。", launch.startupTimeout(), root);
             }

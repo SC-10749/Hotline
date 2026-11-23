@@ -40,3 +40,4 @@ hotline:
       executable: ${HOTLINE_PYTHON_EXECUTABLE:}
       root: ${HOTLINE_PYTHON_ROOT:}
       startup-timeout: ${HOTLINE_PYTHON_STARTUP_TIMEOUT:30s}
+      worker-instances: ${HOTLINE_PYTHON_WORKER_INSTANCES:2}

@@ -23,6 +23,19 @@ class ExecutionCreatePayload(BaseModel):
     workspaceId: str | None = None
 
 
+class ParallelTaskPayload(BaseModel):
+    agent: str = "chat"
+    query: str
+    agentId: str | None = None
+    workspaceId: str | None = None
+
+
+class ParallelCreatePayload(BaseModel):
+    conversationId: str
+    parentRunId: str | None = None
+    tasks: list[ParallelTaskPayload] = []
+
+
 def create_execution_router(
     service: ExecutionApplicationService,
     file_exists: Callable[[str], bool],
@@ -54,6 +67,30 @@ def create_execution_router(
             if status in {"completed", "failed", "cancelled", None}:
                 yield (f"event: done\ndata: {json.dumps({'status': status})}\n\n"
                        if envelope else "data: [DONE]\n\n")
+                return
+            if time.monotonic() - heartbeat_at >= 15:
+                yield ": keep-alive\n\n"
+                heartbeat_at = time.monotonic()
+            await asyncio.sleep(0.08)
+
+    async def parallel_event_stream(run_ids: list[str], last_event_id: int = 0):
+        """把多个子运行的事件合并成一条流：每条事件带上自己的 runId 与游标。"""
+        cursors = {run_id: 0 for run_id in run_ids}
+        heartbeat_at = time.monotonic()
+        while True:
+            pending = False
+            for run_id in run_ids:
+                run = service.get_run(run_id)
+                status = run['status'] if run else None
+                for item in service.get_events(run_id, cursors[run_id]):
+                    cursors[run_id] = item['event_id']
+                    payload = {'runId': run_id, 'eventId': item['event_id'], 'event': item['event']}
+                    yield f"id: {run_id}:{item['event_id']}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                    heartbeat_at = time.monotonic()
+                if status not in {'completed', 'failed', 'cancelled', None}:
+                    pending = True
+            if not pending:
+                yield f"event: done\ndata: {json.dumps({'status': 'done'})}\n\n"
                 return
             if time.monotonic() - heartbeat_at >= 15:
                 yield ": keep-alive\n\n"
@@ -121,6 +158,58 @@ def create_execution_router(
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         except ActiveExecutionError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @router.post("/execution/runs/parallel")
+    def create_parallel_runs(payload: ParallelCreatePayload):
+        """一次派发多个子任务：每个子任务一个 slot，同一会话下并行不互斥。"""
+        conversation_id = payload.conversationId.strip()
+        if not conversation_id:
+            raise HTTPException(status_code=400, detail='会话标识不能为空')
+        if not payload.tasks:
+            raise HTTPException(status_code=400, detail='至少需要一个子任务')
+        if len(payload.tasks) > 16:
+            raise HTTPException(status_code=400, detail='一次最多派发 16 个子任务')
+        tasks = []
+        for task in payload.tasks:
+            workspace_id = (task.workspaceId or '').strip()
+            if workspace_id and (len(workspace_id) > 255 or (workspace_exists and not workspace_exists(workspace_id))):
+                raise HTTPException(404, '工作区不存在')
+            tasks.append({
+                'agent': task.agent.strip() or 'chat',
+                'query': task.query.strip(),
+                'agent_id': (task.agentId or '').strip(),
+                'workspace_id': workspace_id,
+            })
+        try:
+            runs = service.create_parallel(conversation_id, tasks, (payload.parentRunId or '').strip())
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+        except WorkerUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except ActiveExecutionError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {"runs": runs}
+
+    @router.get("/execution/parallel/stream")
+    def stream_parallel_runs(runIds: str = Query(...), request: Request = None):
+        """合并流：一次 SSE 输出多个子运行的事件，避开浏览器同源连接数上限。"""
+        run_ids = [item.strip() for item in runIds.split(',') if item.strip()]
+        if not run_ids:
+            raise HTTPException(status_code=400, detail='缺少运行标识')
+        for run_id in run_ids:
+            if not service.get_run(run_id):
+                raise HTTPException(status_code=404, detail='运行不存在')
+        cursor = 0
+        if request is not None:
+            try:
+                cursor = int(request.headers.get('last-event-id', '0'))
+            except ValueError:
+                cursor = 0
+        return StreamingResponse(
+            parallel_event_stream(run_ids, cursor),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     @router.get("/execution/runs")
     def list_runs(

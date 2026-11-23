@@ -1,18 +1,20 @@
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import re
 import threading
 import time
 import urllib.error
+from uuid import uuid4
 import urllib.parse
 import urllib.request
 from collections.abc import Generator, Iterator
 from pathlib import Path
 
 from langchain_core.tools import BaseTool
-from typing import Any
+from typing import Any, Callable
 
 from python_backend.config import Settings
 from python_backend.llm import build_chat_model
@@ -420,6 +422,27 @@ class AgentEngine:
             return "", True, route
         return "\n\n".join(self._merge_hits(hits, workspace_hits, query)), True, route
 
+    def _read_workspace_rules(self, workspace_id: str, root: str = '') -> str:
+        """读取工作区规则：子任务用自己的隔离目录，读取器只接受一个参数时按原样调用。"""
+        reader = self.workspace_rules_reader
+        if not reader or not workspace_id:
+            return ''
+        if root and self._reader_accepts_root(reader):
+            return reader(workspace_id, root)
+        return reader(workspace_id)
+
+    @staticmethod
+    def _reader_accepts_root(reader: Callable[..., Any]) -> bool:
+        try:
+            parameters = inspect.signature(reader).parameters
+        except (TypeError, ValueError):
+            return False
+        if any(item.kind == item.VAR_POSITIONAL for item in parameters.values()):
+            return True
+        positional = [item for item in parameters.values()
+                      if item.kind in (item.POSITIONAL_ONLY, item.POSITIONAL_OR_KEYWORD)]
+        return len(positional) >= 2
+
     def _workspace_hits(self, workspace_id: str, query: str, source_id: str = '') -> tuple[list[str], list[str]]:
         """工作区级召回：返回 (词面证据, 语义证据)。"""
         if not workspace_id or not callable(self.workspace_recall):
@@ -653,7 +676,7 @@ class AgentEngine:
                   task: threading.Event | None = None,
                   conversation_id: str = '', source_id: str = '',
                   workspace_rules: str = '', workspace_id: str = '',
-                  clarified: bool = False) -> Generator[dict[str, Any], None, tuple[str, list[dict[str, str]], bool]]:
+                  clarified: bool = False, scope_key: str = '') -> Generator[dict[str, Any], None, tuple[str, list[dict[str, str]], bool]]:
         context = ""
         grounded = False
         route = ""
@@ -720,8 +743,8 @@ class AgentEngine:
                 preparation_events.append(self._context('context-preparation', inputs))
                 return self.model.chat(inputs)
             if model_ready(self.settings):
-                self.context.extract_state(conversation_id, source_id, prepare_chat)
-            self.context.checkpoint(conversation_id, history or [], prepare_chat if model_ready(self.settings) else None)
+                self.context.extract_state(scope_key or conversation_id, source_id, prepare_chat)
+            self.context.checkpoint(scope_key or conversation_id, history or [], prepare_chat if model_ready(self.settings) else None)
             yield from preparation_events
             older_matches = (self.storage.search_session_messages(conversation_id, query)
                              if isinstance(self.storage, Storage) else [])
@@ -729,7 +752,7 @@ class AgentEngine:
             if refs:
                 evidence += '\n' + '\n'.join(f"{item['title']}\n{item['content']}" for item in refs)
             yield self.step('context', '正在恢复任务状态、召回记忆并检查输入预算', status='running')
-            messages, manifest = self.context.prepare(conversation_id, system, query, (history or [])[-4:],
+            messages, manifest = self.context.prepare(scope_key or conversation_id, system, query, (history or [])[-4:],
                                                        evidence, extra_history=older_matches)
             yield self.step('context', '上下文装配完成', **manifest)
         yield self.step('llm', '正在组织回答', status='running')
@@ -861,13 +884,22 @@ class AgentEngine:
         return self.step('memory_write', '已保存本轮任务上下文')
 
     def stream(self, agent: str, conversation_id: str, query: str, file_id: str | None = None,
-               *, workspace_id: str = '', run_id: str = '') -> Iterator[dict[str, Any]]:
+               *, workspace_id: str = '', run_id: str = '', workspace_root: str = '',
+               task_key: str = '', persist_history: bool = True) -> Iterator[dict[str, Any]]:
         if agent == 'chat' and self._is_tdd_handoff(query):
             # 交接口令只由后端认定：前端漏切模式时，这一轮照样按技能流执行。
             agent = 'skills'
-        task = self.tasks.register(conversation_id)
+        # 子任务用独立任务键注册：同一会话的多个子任务不共用一把锁。
+        task = self.tasks.register(task_key or conversation_id)
+        # 上下文与记忆按任务键隔离：子任务不写父会话的记忆状态，
+        # 也不会因为共用会话作用域而撞上乐观锁。
+        scope_key = task_key or conversation_id
         persona = self._persona(conversation_id)
-        row_id = self.storage.save_question(conversation_id, query, agent, file_id)
+        if persist_history:
+            row_id = self.storage.save_question(conversation_id, query, agent, file_id)
+        else:
+            # 子任务不写会话历史：父会话保持干净，产出只进事件流与记忆。
+            row_id = f"sub-{run_id or uuid4().hex[:12]}"
         thinking: list[str] = []
         try:
             # 告诉前端这一轮实际跑的是哪个助手：前端据此切模式，底部输入区跟着换形态。
@@ -876,13 +908,13 @@ class AgentEngine:
             if task.is_set():
                 yield self.event("error", "任务已停止")
                 return
-            workspace_rules = self.workspace_rules_reader(workspace_id) if self.workspace_rules_reader else ''
+            workspace_rules = self._read_workspace_rules(workspace_id, workspace_root)
             messages = (self.storage.context_messages(conversation_id) if self.context and isinstance(self.storage, Storage)
                         else self.storage.session_messages(conversation_id))
             history = [row for row in messages
                        if row.id != row_id and row.answer]
             if agent == 'skills' and self.context is None:
-                yield from self._stream_skills(query, row_id, task, conversation_id, history,
+                yield from self._stream_skills(query, row_id, task, scope_key, history,
                                                workspace_rules=workspace_rules,
                                                workspace_id=workspace_id, file_id=file_id)
                 return
@@ -892,11 +924,11 @@ class AgentEngine:
             previous = next((row for row in reversed(messages) if row.id != row_id), None)
             clarified = bool(previous) and CLARIFY_FLAG in str(getattr(previous, 'thinking', '') or '')
             if self.context:
-                self.context.begin(conversation_id, workspace_id, str(row_id), query, history)
+                self.context.begin(scope_key, workspace_id, str(row_id), query, history)
             else:
                 history = history[-self.HISTORY_TURNS:]
             if agent == 'skills':
-                yield from self._stream_skills(query, row_id, task, conversation_id, history, workspace_rules,
+                yield from self._stream_skills(query, row_id, task, scope_key, history, workspace_rules,
                                                workspace_id=workspace_id, file_id=file_id)
                 return
             if agent == "deep":
@@ -913,7 +945,7 @@ class AgentEngine:
                 agent, query, file_id, history, persona=persona, emit_text=True,
                 task=task, conversation_id=conversation_id, source_id=str(row_id),
                 workspace_rules=workspace_rules, workspace_id=workspace_id,
-                clarified=clarified)
+                clarified=clarified, scope_key=scope_key)
             if task.is_set():
                 yield self.event("error", "任务已停止")
                 return
@@ -934,7 +966,7 @@ class AgentEngine:
             if requirement_mode:
                 record = f"{record}\n{REQUIREMENT_FLAG}"
             self.storage.update_answer(row_id, answer, record, "", refs, recommendations)
-            memory_event = self._remember_answer(conversation_id, str(row_id), query, answer)
+            memory_event = self._remember_answer(scope_key, str(row_id), query, answer)
             if memory_event:
                 yield memory_event
             yield self.event("complete", "")

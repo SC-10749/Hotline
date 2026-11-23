@@ -11,11 +11,15 @@ public record PythonLaunchProperties(
         boolean enabled,
         String executable,
         String root,
-        Duration startupTimeout) {
+        Duration startupTimeout,
+        int workerInstances) {
 
     public PythonLaunchProperties {
         if (startupTimeout != null && !startupTimeout.isPositive()) {
             throw new IllegalArgumentException("Python startup timeout must be positive");
+        }
+        if (workerInstances <= 0) {
+            workerInstances = 1;
         }
     }
 }

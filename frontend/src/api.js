@@ -154,6 +154,15 @@ export async function createExecutionRun(base, payload) {
   return unwrap(response)
 }
 
+export async function createParallelRuns(base, payload) {
+  return unwrap(await fetch(apiUrl(base, '/execution/runs/parallel'), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  }))
+}
+export function parallelStreamUrl(base, runIds) {
+  return apiUrl(base, `/execution/parallel/stream?runIds=${encodeURIComponent(runIds.join(','))}`)
+}
+
 export async function getExecutionRun(base, runId) {
   const response = await fetch(apiUrl(base, `/execution/runs/${encodeURIComponent(runId)}`), { signal: AbortSignal.timeout(8000) })
   return unwrap(response)

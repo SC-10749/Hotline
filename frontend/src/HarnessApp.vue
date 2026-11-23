@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { usePageState } from './composables/usePageState'
 import ExecutionRunDetails from './modules/execution/ExecutionRunDetails.vue'
+import ParallelPanel from './modules/execution/ParallelPanel.vue'
 import ArtifactList from './modules/artifacts/ArtifactList.vue'
 import BenchmarkPanel from './modules/evaluation/BenchmarkPanel.vue'
 import { useRunEvents } from './modules/execution/useRunEvents'
@@ -42,6 +43,7 @@ const runPageSize = 25
 const runSubmitBusy = ref(false)
 let runListGeneration = 0
 const showRunDialog = ref(false)
+const showParallelPanel = ref(false)
 const runDraft = ref({ conversationId: '', agent: 'chat', query: '', fileId: '', agentId: '', workspaceId: '' })
 let executionRefreshTimer
 const sectionMode = computed(() => activeSection.value === 'artifacts' ? 'live' : activeSection.value === 'skills' ? ((skillDirectoryTab.value === 'catalog' ? catalogConnected.value : skillsConnected.value) ? 'live' : 'demo') : activeSection.value === 'models' ? (modelsConnected.value ? 'live' : 'demo') : activeSection.value === 'tools' ? (toolsConnected.value ? 'live' : 'demo') : ['overview', 'runs'].includes(activeSection.value) && executionConnected.value ? 'live' : activeSection.value === 'evaluations' && evaluationConnected.value ? 'live' : activeSection.value === 'releases' && releaseConnected.value ? 'live' : (activeSection.value === 'agents' ? agentsConnected.value : activeSection.value === 'workspaces' && workspacesConnected.value) ? 'live' : activeSection.value === 'settings' && settingsConnected.value ? 'live' : ['overview', 'runs', 'evaluations', 'releases', 'settings'].includes(activeSection.value) ? 'demo' : 'planned')
@@ -1925,9 +1927,10 @@ onUnmounted(() => {
           <p v-if="activeSection === 'overview'">下列汇总指标与节点表为演示数据，实际运行请进入执行任务。</p>
           <section v-if="activeSection === 'overview'" class="overview-strip" aria-label="今日运行指标"><div class="overview-stat"><span>活动运行</span><strong>{{ overviewStats ? overviewStats.activeRuns : '—' }}</strong><small><i class="status-inline"></i>排队与执行中</small></div><div class="overview-stat"><span>今日完成</span><strong>{{ overviewStats ? overviewStats.completedToday : '—' }}</strong><small class="positive"><Check :size="12" />失败 {{ overviewStats?.failedToday ?? '—' }} · 取消 {{ overviewStats?.cancelledToday ?? '—' }}</small></div><div class="overview-stat"><span>待人工审批</span><strong class="stat-warn">{{ overviewStats ? overviewStats.pendingApprovals : '—' }}</strong><small>来自真实审批队列</small></div><div class="overview-stat"><span>今日模型用量</span><strong>{{ overviewStats ? formatTokenCount(overviewStats.tokensToday) : '—' }}</strong><small>Tokens · 工具调用 {{ overviewStats?.toolCallsToday ?? '—' }}</small></div><div class="overview-stat stat-runtime"><span>运行时节点</span><strong>{{ onlineWorkerCount }} <em>/ {{ machineRows.length }}</em></strong><small>在线节点</small></div></section>
 
+          <ParallelPanel v-if="showParallelPanel" :api-base="props.apiBase" />
           <section v-if="activeSection === 'runs'" class="run-workbench execution-live">
             <div class="run-list-panel">
-              <div class="panel-heading"><div><h2>执行任务</h2><span>共 {{ executionTotal }} 条匹配记录 · 每页 {{ runPageSize }} 条</span></div></div>
+              <div class="panel-heading"><div><h2>执行任务</h2><span>共 {{ executionTotal }} 条匹配记录 · 每页 {{ runPageSize }} 条</span></div><button class="button button-subtle" @click="showParallelPanel = !showParallelPanel">{{ showParallelPanel ? '收起并行派发' : '并行派发' }}</button></div>
               <div class="run-list-tools"><select v-model="filter" aria-label="任务状态"><option v-for="option in ['全部任务', ...Object.keys(statusFilters)]" :key="option">{{ option }}</option></select><label class="run-search"><Search :size="14" /><input ref="searchField" v-model="search" placeholder="搜索任务" /></label></div>
               <div class="run-list" :aria-busy="executionLoading"><button v-for="run in runs" :key="run.id" class="run-row" :class="{ selected: selectedRun?.id === run.id }" @click="selectRun(run.id)"><strong>{{ run.title }}</strong><div class="run-row-meta">{{ run.id }}</div><div class="run-row-bottom"><span>{{ run.agent }}</span><span>{{ statusLabels[run.status] || run.status }}</span></div></button>
                 <div v-if="!runs.length" class="empty-runs"><span>{{ executionLoading ? '正在读取任务…' : executionLoaded ? '没有匹配的运行记录' : '等待运行服务连接' }}</span><button v-if="search || filter !== '全部任务'" @click="search = ''; filter = '全部任务'">清除筛选</button></div>

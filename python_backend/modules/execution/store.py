@@ -82,10 +82,11 @@ class ExecutionStore:
                     lease_until REAL,
                     error TEXT,
                     agent_id TEXT NOT NULL DEFAULT '',
-                    workspace_id TEXT NOT NULL DEFAULT ''
+                    workspace_id TEXT NOT NULL DEFAULT '',
+                    parent_run_id TEXT NOT NULL DEFAULT '',
+                    slot TEXT NOT NULL DEFAULT '',
+                    workspace_root TEXT NOT NULL DEFAULT ''
                 );
-                CREATE UNIQUE INDEX IF NOT EXISTS uq_execution_active_conversation
-                    ON execution_run(conversation_id) WHERE status IN ('queued', 'running');
                 CREATE INDEX IF NOT EXISTS idx_execution_run_status_created
                     ON execution_run(status, created_at);
                 CREATE TABLE IF NOT EXISTS execution_event (
@@ -110,12 +111,20 @@ class ExecutionStore:
             self._ensure_columns(db, "execution_run", {
                 "agent_id": "TEXT NOT NULL DEFAULT ''",
                 "workspace_id": "TEXT NOT NULL DEFAULT ''",
+                "parent_run_id": "TEXT NOT NULL DEFAULT ''",
+                "slot": "TEXT NOT NULL DEFAULT ''",
+                "workspace_root": "TEXT NOT NULL DEFAULT ''",
             })
             self._ensure_columns(db, "execution_worker", {
                 "capacity": "INTEGER NOT NULL DEFAULT 1",
                 "runtime_version": "TEXT NOT NULL DEFAULT ''",
                 "state": "TEXT NOT NULL DEFAULT 'online'",
             })
+            # 唯一索引依赖 slot 列，必须等补列之后再建。
+            db.execute("DROP INDEX IF EXISTS uq_execution_active_conversation")
+            db.execute("""CREATE UNIQUE INDEX IF NOT EXISTS uq_execution_active_slot
+                          ON execution_run(conversation_id, slot)
+                          WHERE status IN ('queued', 'running')""")
 
     @staticmethod
     def _ensure_columns(db: sqlite3.Connection, table: str, columns: dict[str, str]) -> None:
@@ -133,13 +142,14 @@ class ExecutionStore:
         return dict(row)
 
     def enqueue(self, conversation_id: str, agent: str, query: str, file_id: str | None,
-                agent_id: str = "", workspace_id: str = "") -> dict[str, Any]:
+                agent_id: str = "", workspace_id: str = "", slot: str = "",
+                parent_run_id: str = "", workspace_root: str = "") -> dict[str, Any]:
         db = self._connect()
         try:
             db.execute("BEGIN IMMEDIATE")
             active = db.execute(
-                "SELECT * FROM execution_run WHERE conversation_id=? AND status IN ('queued','running')",
-                (conversation_id,),
+                "SELECT * FROM execution_run WHERE conversation_id=? AND slot=? AND status IN ('queued','running')",
+                (conversation_id, slot),
             ).fetchone()
             if active:
                 if (active["agent"], active["query"], active["file_id"], active["workspace_id"], active["agent_id"]) == (agent, query, file_id, workspace_id, agent_id):
@@ -150,9 +160,11 @@ class ExecutionStore:
             run_id = uuid4().hex
             db.execute(
                 """INSERT INTO execution_run
-                   (run_id,conversation_id,agent,query,file_id,status,created_at,agent_id,workspace_id)
-                   VALUES (?,?,?,?,?,'queued',?,?,?)""",
-                (run_id, conversation_id, agent, query, file_id, self._now_iso(), agent_id, workspace_id),
+                   (run_id,conversation_id,agent,query,file_id,status,created_at,agent_id,workspace_id,
+                    parent_run_id,slot,workspace_root)
+                   VALUES (?,?,?,?,?,'queued',?,?,?,?,?,?)""",
+                (run_id, conversation_id, agent, query, file_id, self._now_iso(), agent_id, workspace_id,
+                 parent_run_id, slot, workspace_root),
             )
             row = db.execute("SELECT * FROM execution_run WHERE run_id=?", (run_id,)).fetchone()
             db.commit()
@@ -163,22 +175,88 @@ class ExecutionStore:
         finally:
             db.close()
 
+    def enqueue_parallel(self, conversation_id: str, tasks: list[dict[str, Any]],
+                         parent_run_id: str = "") -> list[dict[str, Any]]:
+        """一次事务批量入队子任务：每个任务占一个 slot，同会话下互不阻塞。"""
+        if not tasks:
+            raise ValueError("至少需要一个子任务")
+        prepared = []
+        for index, task in enumerate(tasks):
+            query = str(task.get("query") or "").strip()
+            if not query:
+                raise ValueError(f"第 {index + 1} 个子任务缺少内容")
+            prepared.append({
+                "agent": str(task.get("agent") or "chat").strip() or "chat",
+                "query": query,
+                "file_id": (str(task.get("file_id") or "")).strip() or None,
+                "agent_id": str(task.get("agent_id") or "").strip(),
+                "workspace_id": str(task.get("workspace_id") or "").strip(),
+                "workspace_root": str(task.get("workspace_root") or "").strip(),
+                # slot 会拼进目录名，不能带冒号等非法路径字符。
+                "slot": f"sub-{index}",
+            })
+        db = self._connect()
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            created: list[dict[str, Any]] = []
+            for item in prepared:
+                active = db.execute(
+                    "SELECT run_id FROM execution_run WHERE conversation_id=? AND slot=? "
+                    "AND status IN ('queued','running')",
+                    (conversation_id, item["slot"]),
+                ).fetchone()
+                if active:
+                    raise ActiveExecutionError("该会话正在执行中，请稍后再试")
+                run_id = uuid4().hex
+                db.execute(
+                    """INSERT INTO execution_run
+                       (run_id,conversation_id,agent,query,file_id,status,created_at,agent_id,workspace_id,
+                        parent_run_id,slot,workspace_root)
+                       VALUES (?,?,?,?,?,'queued',?,?,?,?,?,?)""",
+                    (run_id, conversation_id, item["agent"], item["query"], item["file_id"],
+                     self._now_iso(), item["agent_id"], item["workspace_id"], parent_run_id,
+                     item["slot"], item["workspace_root"]),
+                )
+                row = db.execute("SELECT * FROM execution_run WHERE run_id=?", (run_id,)).fetchone()
+                created.append(self._run_dict(row))
+            db.commit()
+            return created
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    def list_children(self, parent_run_id: str) -> list[dict[str, Any]]:
+        """按父运行列出子任务，顺序与派发顺序一致。"""
+        if not parent_run_id:
+            return []
+        with self._db() as db:
+            rows = db.execute(
+                "SELECT * FROM execution_run WHERE parent_run_id=? ORDER BY slot, created_at",
+                (parent_run_id,),
+            ).fetchall()
+        return [self._run_dict(row) for row in rows]
+
     def retry_run(self, run_id: str) -> dict[str, Any] | None:
         db = self._connect()
         try:
             db.execute("BEGIN IMMEDIATE")
-            source = db.execute("SELECT conversation_id,agent,query,file_id,status,agent_id,workspace_id FROM execution_run WHERE run_id=?", (run_id,)).fetchone()
+            source = db.execute("SELECT conversation_id,agent,query,file_id,status,agent_id,workspace_id,slot,parent_run_id,workspace_root FROM execution_run WHERE run_id=?", (run_id,)).fetchone()
             if not source or source["status"] not in TERMINAL_STATUSES:
                 db.commit()
                 return None
-            active = db.execute("SELECT run_id FROM execution_run WHERE conversation_id=? AND status IN ('queued','running')", (source["conversation_id"],)).fetchone()
+            active = db.execute("SELECT run_id FROM execution_run WHERE conversation_id=? AND slot=? AND status IN ('queued','running')", (source["conversation_id"], source["slot"])).fetchone()
             if active:
                 raise ActiveExecutionError("该会话正在执行中，请稍后再试")
             new_run_id = uuid4().hex
+            # 重试必须带上 slot 与父运行：否则子任务重试后会退化成同会话的普通运行。
             db.execute(
-                "INSERT INTO execution_run(run_id,conversation_id,agent,query,file_id,status,created_at,agent_id,workspace_id) VALUES(?,?,?,?,?,'queued',?,?,?)",
+                "INSERT INTO execution_run(run_id,conversation_id,agent,query,file_id,status,created_at,"
+                "agent_id,workspace_id,parent_run_id,slot,workspace_root) VALUES(?,?,?,?,?,'queued',?,?,?,?,?,?)",
                 (new_run_id, source["conversation_id"], source["agent"], source["query"], source["file_id"],
-                 self._now_iso(), source["agent_id"], source["workspace_id"]),
+                 self._now_iso(), source["agent_id"], source["workspace_id"], source["parent_run_id"],
+                 source["slot"], source["workspace_root"]),
             )
             row = db.execute("SELECT * FROM execution_run WHERE run_id=?", (new_run_id,)).fetchone()
             db.commit()
@@ -365,6 +443,12 @@ class ExecutionStore:
                 stats["toolCallsToday"] += 1
         return stats
 
+    def set_workspace_root(self, run_id: str, workspace_root: str) -> None:
+        """登记子任务的隔离工作目录。"""
+        with self._db() as db:
+            db.execute("UPDATE execution_run SET workspace_root=? WHERE run_id=?",
+                       (str(workspace_root or ''), run_id))
+
     def get_events(self, run_id: str, event_id: int = 0, **filters: Any) -> list[dict[str, Any]]:
         return self.events_after(run_id, event_id, **filters)
 
@@ -372,21 +456,23 @@ class ExecutionStore:
         db = self._connect()
         try:
             db.execute("BEGIN IMMEDIATE")
-            row = db.execute(
+            rows = db.execute(
                 "SELECT run_id,status FROM execution_run WHERE conversation_id=? AND status IN ('queued','running')",
                 (conversation_id,),
-            ).fetchone()
-            if not row:
+            ).fetchall()
+            if not rows:
                 db.commit()
                 return False
-            if row["status"] == "queued":
-                self._append_event(db, row["run_id"], {"type": "error", "content": "任务已停止"})
-                db.execute(
-                    "UPDATE execution_run SET status='cancelled',cancel_requested=1,finished_at=? WHERE run_id=?",
-                    (self._now_iso(), row["run_id"]),
-                )
-            else:
-                db.execute("UPDATE execution_run SET cancel_requested=1 WHERE run_id=?", (row["run_id"],))
+            # 并发子任务各占一个 slot：取消会话时要停掉这一批里的全部运行。
+            for row in rows:
+                if row["status"] == "queued":
+                    self._append_event(db, row["run_id"], {"type": "error", "content": "任务已停止"})
+                    db.execute(
+                        "UPDATE execution_run SET status='cancelled',cancel_requested=1,finished_at=? WHERE run_id=?",
+                        (self._now_iso(), row["run_id"]),
+                    )
+                else:
+                    db.execute("UPDATE execution_run SET cancel_requested=1 WHERE run_id=?", (row["run_id"],))
             db.commit()
             return True
         except Exception:

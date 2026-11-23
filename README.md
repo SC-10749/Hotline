@@ -158,6 +158,18 @@ sequenceDiagram
 
 Worker 离线时，就绪检查返回 503，新的 Agent 运行会被拒绝。事件保存在 `data/execution.db`，支持按游标恢复与事件回放。Java 保留上游 HTTP 状态、内容类型和 SSE 事件，使用虚拟线程处理流式转发。
 
+### 并行子任务
+
+同一会话可以一次派发多个子任务，各占一个 `slot` 并行执行：
+
+- 入口：控制台「执行任务 → 并行派发」，或 `POST /execution/runs/parallel`（单次最多 16 个）。
+- 队列：`execution_run` 增加 `parent_run_id`、`slot`、`workspace_root`；活跃唯一索引从 `(conversation_id)` 改为 `(conversation_id, slot)`，普通对话的 `slot` 为空串，「同会话只允许一个活跃运行」的语义不变。
+- 隔离：每个子任务分配独立目录 `data/parallel/<父运行或会话>/<slot>/`——git 工作区用独立 worktree 检出，普通目录复制一份，失败时降级为只有独立产物目录。隔离目录写入运行的 `workspace_root`，工作区规则（AGENTS.md）取自隔离副本。
+- 流式：所有子任务共用一条 SSE（`GET /execution/parallel/stream?runIds=...`），避开浏览器同源连接数上限。
+- 并发度取决于 Worker 进程数：`HOTLINE_PYTHON_WORKER_INSTANCES`（默认 2）。SQLite 队列用事务抢占，多个 Worker 会各自领取不同运行。
+
+当前限制：子任务读父会话历史作为上下文，但不写回父会话历史，也不共享彼此的对话上下文；工作区文件召回仍走共享索引，只有规则与产物目录做了隔离；执行链路目前没有写文件/脚本工具，接入这类工具时应把 `workspace_root` 作为其工作目录。
+
 ### 意图三级级联与澄清门闸
 
 ```mermaid
@@ -545,6 +557,8 @@ node --test frontend/src/modules/workspaces/paths.test.js frontend/src/modules/e
 | `SKILLS_DIRECTORY` | 原技能安装目录，默认 `data/skills/`，与仓库技能目录分别管理 |
 | `DODO_DEV_FRONTEND_PORT` / `HOTLINE_JAVA_PORT` / `DODO_PORT` | 前端 / Java / Python 端口，默认 5180 / 8080 / 8888 |
 | `HOTLINE_PYTHON_AUTOSTART` / `HOTLINE_PYTHON_EXECUTABLE` / `HOTLINE_PYTHON_ROOT` | Java 启动时是否自动拉起本地 Python、解释器路径、项目根目录 |
+| `HOTLINE_PYTHON_WORKER_INSTANCES` | Java 启动时拉起的执行 Worker 进程数，默认 2；决定并行执行的运行数上限 |
+| `DODO_REDIS_ENABLED` / `DODO_REDIS_HOST` / `DODO_REDIS_PORT` | 任务锁与停止广播走 Redis，默认仅在存储后端为 MySQL 时开启；本地可用 `DODO_REDIS_ENABLED=true` 验证分布式任务锁 |
 
 完整清单见 [.env.example](./.env.example)。
 

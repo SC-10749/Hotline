@@ -12,6 +12,9 @@
 - 根目录 `DESIGN.md` 是前端视觉唯一事实源；不要在 `frontend/` 或模块目录维护第二份设计锚。
 - `python_backend/modules/` 与 `frontend/src/modules/` 是能力边界目录。新增模块先建立接口与验证，再迁移旧实现；模块之间不得直接读取彼此的数据库细节。
 - 模块命名保持前后端对应：`memory`、`retrieval`、`storage`、`context_engineering`、`skills`、`mcp`、`execution`、`workspaces`、`artifacts`、`intent`；`execution` 统一承载脚本、EXE 和后台任务执行能力；`intent` 统一承载意图目录与意图分类（关键词粗筛 → embedding 向量召回 → 大模型判定的三级级联，含置信度分级）；配置决策模型后该层改走 System One 协议（`modules/intent/decision.py`，阿里云百炼 decision-model-preview，与 TypeSafe Jev 同接口），一次前向同时给出意图与诉求歧义度，门闸按歧义度判断是否澄清；置信度不足时由门闸转成需求澄清，用户作答后作为新一轮对话重新进入级联。
+- 并发子任务走 `POST /execution/runs/parallel`：同一会话的子任务各占一个 `slot`（`sub-0`、`sub-1`…），活跃唯一索引是 `(conversation_id, slot)`，普通对话 `slot` 为空串、语义不变。子任务隔离目录由 `modules/execution/parallel.py` 分配（git 工作区用 worktree、普通目录复制、失败降级为独立产物目录），落在 `data/parallel/<父运行或会话>/<slot>/`，运行记录的 `workspace_root` 指向隔离目录。工具运行态（run_id、工具白名单）按线程隔离，不要再放回模块全局变量；同一进程内并发执行前必须确认这一点。
+- 子任务在执行层也必须与父会话解耦：`engine.stream` 的 `task_key` 让子任务用 `{conversation_id}#{slot}` 注册任务锁（`TaskManager` 按会话独占，Redis 模式下同一会话第二个子任务会被直接拒绝），`persist_history=False` 让子任务不写父会话的 `ai_session` 历史（产出只进事件流与记忆）。新增子任务形态时沿用这两个开关，不要直接复用父 `conversation_id` 注册任务。
+- 子任务的上下文与记忆作用域同样按任务键隔离（`engine.stream` 内的 `scope_key`，`context.begin`/`prepare`/`complete` 必须用同一个键）：共用父会话作用域会撞上记忆乐观锁报 `MemoryConflict`，只改一半会出现「会话范围不存在」。Worker 释放任务锁也必须用同一个任务键（`modules/execution/parallel.py` 的 `task_key_for`），否则 Redis 锁会残留到 TTL 过期，同 slot 无法再次派发。
 - 运行数据及生成文件统一保存在被 Git 忽略的 `data/` 目录；真实配置遵循下方私密信息规则。
 - 仓库根 `skills/<技能名>/` 存放技能包（`SKILL.md` + 可选 `references/`），技能正文控制在 8000 字符内；机器人只能绑定 `data/skills/` 里已安装的技能（`SkillRegistry.install_from_dir` 或 `/skill/upload`），机器人记录落在 `data/harness-bots.db`。`python -m python_backend.seed_bots` 是本地数据种子入口：把仓库技能（`requirement-analysis`、`hotline-tdd`）包装进 `data/skills/` 并登记「需求分析助手」机器人，可重复执行。
 - 需求级澄清门闸落在 `modules/intent/requirement.py`：绑定 `requirement-analysis` 技能的机器人先判需求说不说不清，说不清就发 `clarify` 事件（三个理解方向 + 自由输入），上一轮刚澄清过时不再追问；用户在回答助手上一轮提问时也不重复澄清；通用意图门闸保持原有行为。
