@@ -85,7 +85,7 @@ onUnmounted(() => {
     <div v-if="chat.state.isWelcome" class="welcome-state">
       <div class="welcome-mark"><img :src="hotlineAvatar" alt="Hotline" /></div>
       <h1>你好，我是 Hotline</h1>
-
+      <p class="welcome-note">选个模式，然后说说你想做什么</p>
     </div>
 
     <div v-for="message in chat.state.currentSession?.messages || []" :key="message.id" class="message-row" :class="`message-${message.role}`">
@@ -154,6 +154,7 @@ onUnmounted(() => {
           <component :is="mode.icon" :size="16" /><span>{{ mode.label }}</span><Check v-if="ctx.activeMode === mode.id" :size="13" class="mode-check" />
         </button>
       </div>
+      <p class="mode-hint">{{ chat.state.activeModeInfo.description }}</p>
 
       <div class="composer-box" :class="{ 'composer-focused': chat.state.input.length > 0 || chat.state.selectedFile || chat.state.docSource, 'composer-disabled': chat.state.uploadBusy }">
         <div v-if="chat.state.selectedFile" class="attachment-chip"><div class="attachment-icon"><FileText :size="16" /></div><div class="attachment-info"><strong>{{ chat.state.selectedFile.name }}</strong><small>{{ chat.state.uploadBusy ? '正在上传并解析' : `${formatBytes(chat.state.selectedFile.size)} · 已就绪` }}</small></div><LoaderCircle v-if="chat.state.uploadBusy" :size="16" class="spin attachment-spinner" /><button v-else class="icon-button" type="button" aria-label="移除文件" @click="chat.actions.removeSelectedFile"><X :size="16" /></button></div>

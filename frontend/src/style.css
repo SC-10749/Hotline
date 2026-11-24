@@ -792,12 +792,6 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
 .topbar .icon-button { width: 34px; height: 34px; }
 .breadcrumb { font-size: 16px; }
 .message-list { padding: 30px 34px 42px; }
-.welcome-mark { width: 58px; height: 58px; }
-.welcome-mark svg { width: 30px; height: 30px; }
-.welcome-state h1 { margin-top: 10px; font-size: 28px; }
-.quick-prompts { gap: 8px; margin-top: 24px; }
-.quick-prompt { height: 40px; gap: 9px; padding-inline: 12px; font-size: 12px; }
-.quick-prompt > svg:first-child { width: 17px; height: 17px; }
 .message-row { gap: 10px; margin-top: 24px; }
 .message-row + .message-row { margin-top: 22px; }
 .assistant-avatar, .user-avatar { width: 28px; height: 28px; }
@@ -808,9 +802,6 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
 .markdown-content h2 { font-size: 21px; }
 .markdown-content h3 { font-size: 18px; }
 .markdown-content pre code { font-size: 13px; }
-.mode-strip { gap: 6px; padding-bottom: 10px; }
-.mode-option { height: 36px; gap: 7px; padding-inline: 12px; font-size: 12px; }
-.mode-option > svg:first-child { width: 17px; height: 17px; }
 .composer-area { padding: 16px 34px 20px; }
 .composer-box { min-height: 60px; padding: 9px 14px 8px; border-radius: 18px; }
 .composer-box textarea { min-height: 26px; font-size: 15px; }
@@ -836,7 +827,6 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
   .composer-area { padding: 8px 10px max(7px, env(safe-area-inset-bottom)); }
   .composer-box { min-height: 60px; padding: 7px 9px 6px 10px; }
   .composer-box textarea { min-height: 26px; font-size: 14px; }
-  .mode-option { height: 34px; gap: 6px; padding-inline: 9px; font-size: 11px; }
   .page-sidebar { padding: 16px; }
   .page-main { padding: 18px 14px; }
   .page-empty-state h2 { font-size: 25px; }
@@ -848,11 +838,6 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
   .breadcrumb { gap: 5px; font-size: 13px; }
   .breadcrumb > strong { max-width: 150px; }
   .message-list { padding: 22px 13px 28px; }
-  .welcome-state { padding: 6px 0 22px; }
-  .welcome-mark { width: 50px; height: 50px; }
-  .welcome-state h1 { font-size: 24px; }
-  .quick-prompts { display: grid; width: min(100%, 340px); grid-template-columns: 1fr; gap: 7px; margin-top: 20px; }
-  .quick-prompt { width: 100%; height: 40px; justify-content: flex-start; font-size: 12px; }
   .prompt-arrow { margin-left: auto; }
   .message-row { gap: 8px; margin-top: 22px; }
   .assistant-avatar, .user-avatar { width: 25px; height: 25px; }
@@ -861,9 +846,6 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
   .markdown-content pre { padding: 10px; }
   .markdown-content pre code { font-size: 11px; }
   .composer-area { padding: 8px 10px max(7px, env(safe-area-inset-bottom)); }
-  .mode-strip { gap: 3px; padding-bottom: 7px; }
-  .mode-option { height: 34px; gap: 5px; padding-inline: 8px; font-size: 10px; }
-  .mode-option > svg:first-child { width: 14px; height: 14px; }
   .composer-box { min-height: 58px; padding: 6px 8px 6px 10px; }
   .composer-box textarea { min-height: 24px; font-size: 13px; }
   .composer-hint { font-size: 8px; }
@@ -880,12 +862,6 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
 .app-shell:not(.standalone-page-active) .message-list,
 .app-shell:not(.standalone-page-active) .topbar { background: var(--surface); }
 .app-shell:not(.standalone-page-active) .composer-area { border-top: 0; background: transparent; }
-.app-shell:not(.standalone-page-active) .mode-option { color: var(--text-secondary); }
-.app-shell:not(.standalone-page-active) .mode-option:hover:not(:disabled) { color: var(--text-secondary); background: var(--accent-dark); }
-.app-shell:not(.standalone-page-active) .mode-option.selected { border-color: var(--line); color: var(--accent); background: var(--accent-dark); }
-.app-shell:not(.standalone-page-active) .mode-option > svg:first-child { color: var(--muted); }
-.app-shell:not(.standalone-page-active) .mode-option.selected > svg:first-child,
-.app-shell:not(.standalone-page-active) .mode-check { color: var(--accent); }
 
 /* Workspaces are user-added folders; the row action creates a task. */
 .project-nav-heading { display: flex; align-items: center; justify-content: space-between; }
@@ -899,9 +875,7 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
 
 /* Hotline identity uses round service marks while preserving the current palette. */
 .brand-mark { border: 0; border-radius: 50%; }
-.welcome-mark { border-radius: 50%; box-shadow: 0 0 0 5px var(--surface-subtle); }
 .assistant-avatar { border-radius: 50%; }
-.quick-prompt { border-radius: 999px; }
 
 
 /* Harness control-plane surfaces shared with the Vue Harness app. */
