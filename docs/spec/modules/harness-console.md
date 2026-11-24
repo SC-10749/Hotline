@@ -47,7 +47,7 @@
 - `python_backend/api/routers/ci_workflow.py:create_ci_workflow_router` —— 读状态与启停工作流的路由
 - `python_backend/infrastructure/github_workflow.py:GitHubWorkflowClient` —— GitHub Actions 工作流客户端（stdlib urllib，不引入新依赖）
 - `GET /harness/ci-workflow`、`POST /harness/ci-workflow`（请求体 `{"enabled": true|false}`）
-- 前端：`frontend/src/modules/bots/BotPage.vue` 顶部的「CI 工作流」开关；`frontend/src/modules/bots/api.js` 的 `getCiWorkflow/setCiWorkflow`
+- 前端：`frontend/src/modules/bots/BotSidebar.vue` 左侧栏机器人列表下方的「CI 工作流」开关；`frontend/src/modules/bots/api.js` 的 `getCiWorkflow/setCiWorkflow`
 ### 行为
 - 开关直接调用 GitHub 的 `PUT /repos/{owner}/{repo}/actions/workflows/{workflow}/enable|disable`，关闭后推送与 PR 不再触发该工作流。
 - 凭据只从本机环境变量读：`HOTLINE_GITHUB_TOKEN`、`HOTLINE_GITHUB_REPOSITORY`、`HOTLINE_GITHUB_CI_WORKFLOW`（默认 `ci.yml`）；不进数据库、不写日志、不随请求外传。
