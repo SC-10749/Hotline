@@ -38,3 +38,9 @@ test('a failing switch surfaces the backend message', async () => {
   await assert.rejects(() => setCiWorkflow('http://127.0.0.1:8888', true),
     /未配置 GitHub Token/)
 })
+
+test('a timed out request surfaces a readable chinese message', async () => {
+  globalThis.fetch = async () => { throw new Error('signal timed out') }
+
+  await assert.rejects(() => getCiWorkflow('http://127.0.0.1:8888'), /请求超时/)
+})
