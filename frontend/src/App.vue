@@ -2,8 +2,8 @@
 import { computed, nextTick, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import {
   AlertCircle, Bot, CalendarClock, CheckCircle2, CircleUserRound, Download, FolderOpen,
-  History, Home, LibraryBig, LoaderCircle, Map as MapIcon, MoreHorizontal, PanelLeft,
-  Plus, Puzzle, Search, Settings2, Workflow,
+  History, Home, LibraryBig, LoaderCircle, Map as MapIcon, PanelLeft,
+  Plus, Puzzle, Settings2, Workflow,
 } from 'lucide-vue-next'
 import HarnessApp from './HarnessApp.vue'
 import CodeMapPage from './modules/artifacts/CodeMapPage.vue'
@@ -273,11 +273,10 @@ onUnmounted(() => {
         <aside class="page-sidebar">
           <header class="page-sidebar-header">
             <h2>{{ ctx.activePage === 'profile' ? '个人中心' : ({ automation: '自动化', plugins: '插件', bot: '机器人', docs: '文档库', harness: 'Harness 工程', export: '历史聊天' })[ctx.activePage] }}</h2>
-            <div v-if="ctx.activePage !== 'profile'" class="page-sidebar-actions"><button class="icon-button" type="button" aria-label="搜索"><Search :size="17" /></button><button class="icon-button" type="button" aria-label="筛选"><MoreHorizontal :size="17" /></button></div>
           </header>
           <ProfileSidebar v-if="ctx.activePage === 'profile'" />
-          <button v-else-if="ctx.activePage === 'automation'" class="page-create" type="button" disabled><Plus :size="18" />新建任务</button>
-          <button v-else-if="ctx.activePage === 'plugins'" class="page-subitem active" type="button" @click="skills.actions.openSkills"><Puzzle :size="16" />技能<span>{{ skills.state.skills.length }}</span></button>
+          <button v-else-if="ctx.activePage === 'automation'" class="page-create" type="button" @click="automation.actions.openScheduleForm"><Plus :size="18" />新建任务</button>
+          <button v-else-if="ctx.activePage === 'plugins'" class="page-create" type="button" @click="skills.actions.openSkills"><Puzzle :size="18" />上传技能包</button>
           <BotSidebar v-else-if="ctx.activePage === 'bot'" />
           <button v-else-if="ctx.activePage === 'docs'" class="page-create" type="button" @click="documents.actions.openDocs"><Plus :size="18" />上传文档</button>
           <button v-else-if="ctx.activePage === 'harness'" class="page-subitem active" type="button" @click="openHarnessPage"><Workflow :size="16" />Harness 控制面<span>已接入</span></button>

@@ -48,14 +48,10 @@ textarea.text-field { height: auto; min-height: 96px; padding-block: 10px; line-
 .preference-row { flex-wrap: wrap; padding-block: 12px; gap: 12px; }
 .preference-row > div { min-width: 0; }
 .plugins-page { align-content: start; }
-.plugin-row { grid-template-columns: minmax(0, 1fr) repeat(3, auto); }
 .text-action { display: inline-flex; min-height: 34px; align-items: center; justify-content: center; gap: 5px; padding: 0 8px; border: 0; border-radius: var(--control-radius); color: var(--text-secondary); background: transparent; font-size: 12px; cursor: pointer; }
 .text-action:hover:not(:disabled) { background: var(--surface-hover); }
 .plugin-state { color: var(--success); }
 .profile-settings-content { min-width: 0; }
-.settings-section-copy { flex-wrap: wrap; }
-.settings-section-copy > div { min-width: 0; flex: 1 1 220px; }
-.settings-section-copy > .primary-button { flex: 0 0 auto; }
 .settings-actions { margin-top: 4px; }
 
 .modal-backdrop { overflow-y: auto; background: var(--backdrop); }
@@ -82,9 +78,8 @@ textarea.text-field { height: auto; min-height: 96px; padding-block: 10px; line-
   .harness-shell .harness-sidebar { height: calc(100dvh - 52px - env(safe-area-inset-bottom)); }
 }
 @media (max-width: 700px) {
-  .plugin-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-  .plugin-row > div { grid-column: 1 / -1; }
-  .plugin-row .secondary-button { width: 100%; }
+  .plugin-row { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .plugin-row-actions { flex-wrap: wrap; }
   .standalone-header { gap: 12px; flex-wrap: wrap; }
   .profile-settings-content .dialog-actions { justify-content: flex-start; }
 }

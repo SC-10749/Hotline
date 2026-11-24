@@ -669,8 +669,6 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
 .profile-settings-nav button:hover { background: var(--surface-subtle); }
 .profile-settings-nav button.active { color: var(--text); background: var(--surface-hover); font-weight: 600; }
 .profile-settings-content { display: grid; width: min(100%, 680px); align-self: start; justify-self: start; align-content: start; gap: 30px; padding: 22px 0 0; }
-.settings-section-copy { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
-.settings-section-copy h2 { margin: 0; color: var(--text); font-size: 18px; font-weight: 600; }
 .profile-form { display: grid; max-width: 480px; gap: 18px; }
 .profile-form label, .api-key-field { display: grid; gap: 8px; color: var(--text-secondary); font-size: 14px; font-weight: 500; }
 .profile-form .text-field, .api-key-field .text-field { width: 100%; }
@@ -682,8 +680,6 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
 .settings-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .settings-actions .text-action { margin-left: auto; }
 .profile-settings-content .primary-button { width: fit-content; justify-content: center; }
-.settings-section-copy { align-items: flex-start; color: var(--text-secondary); }
-.settings-section-copy > svg { margin-top: 2px; }
 .api-key-field { max-width: 480px; }
 .settings-note { margin: 10px 0 22px; color: var(--muted); font-size: 13px; line-height: 1.55; }
 .preference-row { display: flex; max-width: 600px; min-height: 68px; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); }
@@ -888,12 +884,19 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
 /* 插件列表与虚拟桌宠：真实数据页面，替代原先的空壳占位 */
 .plugins-page { display: grid; gap: 16px; }
 .plugin-list { display: grid; gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-.plugin-row { display: grid; align-items: center; gap: 14px; padding: 14px 16px; border-top: 1px solid var(--line); }
+.plugin-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 13px 16px; border-top: 1px solid var(--line); transition: background-color 140ms var(--ease); }
+.plugin-row:hover { background: var(--surface-subtle); }
 .plugin-row:first-child { border-top: 0; }
-.plugin-row > div { display: grid; gap: 3px; min-width: 0; }
-.plugin-row strong { color: var(--text); font-size: 13px; }
-.plugin-row small { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
-.plugin-state { color: var(--success); font-size: 11px; white-space: nowrap; }
+.plugin-row-main { display: grid; min-width: 0; gap: 3px; }
+.plugin-row-title { display: flex; min-width: 0; align-items: center; gap: 8px; margin: 0; }
+.plugin-row-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 2px; }
+.plugin-row-title strong { overflow: hidden; color: var(--text); font-size: 13px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.plugin-row-desc, .plugin-row-meta { margin: 0; overflow: hidden; overflow-wrap: anywhere; }
+.plugin-row-desc { display: -webkit-box; color: var(--text-secondary); font-size: 12px; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.plugin-row-meta { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+
+.plugin-state { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; color: var(--success); background: var(--success-soft); font-size: 11px; white-space: nowrap; }
+.plugin-state.off { color: var(--muted); background: var(--surface-hover); }
 .pet-options { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
 .pet-option { display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
 .pet-option.active { border-color: var(--line); color: var(--success); background: var(--success-soft); }
@@ -913,7 +916,10 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
 .schedule-form { display: grid; gap: 12px; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
 .schedule-form label { display: grid; gap: 6px; color: var(--text-secondary); font-size: 12px; }
 .schedule-form input, .schedule-form textarea, .schedule-form select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: 13px; }
-.plugin-row { grid-template-columns: 1fr repeat(4, auto); }
+/* 工具页工具栏：页面标题由壳层承担，这里只放概览与主操作 */
+.tool-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.tool-summary { margin: 0; color: var(--text); font-size: 13px; font-weight: 550; }
+.tool-summary span { margin-left: 6px; color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
 
 /* bot 页：左侧按启用状态分组，右侧是启用名片 + 全部机器人网格 */
 .bot-page { gap: 20px; align-content: start; }

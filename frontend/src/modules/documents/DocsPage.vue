@@ -10,6 +10,7 @@ const documents = inject(DOCUMENTS_KEY)
   <div class="page-empty-state">
     <div class="page-empty-icon"><FileText :size="44" /></div>
     <h2>管理文档</h2>
+    <p>Markdown、PDF、Word 上传后转成 Markdown，向量化之后就能直接引用问答。</p>
     <button class="primary-button" type="button" @click="documents.actions.openDocs"><Plus :size="15" />上传文档</button>
   </div>
 </template>
