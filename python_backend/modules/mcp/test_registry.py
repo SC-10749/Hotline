@@ -480,11 +480,12 @@ class McpRouterTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.store = RegistryStore(self.root / 'registry.db')
+        self.governance = GovernanceStore(self.root / 'governance.db')
         self.pid_file = self.root / 'server.pid'
         self.script = _write_script(self.root, 'tool_server.py', FAKE_TOOL_SERVER)
         app = FastAPI()
         app.include_router(create_registry_router(self.store))
-        app.include_router(create_mcp_router(self.store))
+        app.include_router(create_mcp_router(self.store, self.governance))
         self.client = TestClient(app)
 
     def tearDown(self):

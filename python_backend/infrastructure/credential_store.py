@@ -4,25 +4,14 @@ from __future__ import annotations
 
 import sqlite3
 import time
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from .sqlite_base import SqliteStore
 
-class CredentialStore:
-    def __init__(self, path: Path):
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._initialize()
 
-    @contextmanager
-    def _db(self):
-        db = sqlite3.connect(self.path, timeout=10)
-        db.row_factory = sqlite3.Row
-        try:
-            yield db
-        finally:
-            db.close()
+class CredentialStore(SqliteStore):
+    timeout = 10
 
     def _initialize(self) -> None:
         with self._db() as db:

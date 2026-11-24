@@ -1,3 +1,5 @@
+> 方案草案：文中的差距、文件行号和运行拓扑是编写时的基线，不作为当前功能清单。当前实现与 Java/Python 迁移进度见 [主 README](../README.md)。
+
 # Hotline 性能测量与并发压测方案（含系统优化清单）
 
 状态：草案。本文回答两个问题——**这个系统还能优化什么**，以及**怎么系统性地测出每个环节的耗时、性能与并发**。
@@ -37,7 +39,6 @@
 | --- | --- | --- |
 | 网关 | 根目录 `main.py:15` → `python_backend/fastapi_app.py:128`（FastAPI + uvicorn） | `npm start` 走 `start-services.mjs:61` 的 `uvicorn main:app` |
 | 执行 Worker | `python_backend/modules/execution/worker.py` | 独立进程，消费 SQLite 队列 |
-| 遗留入口 | `python_backend/main.py:290`（标准库 `ThreadingHTTPServer`） | 仍在仓库里，端口与网关相同，**不要同时启动** |
 
 真实网关是 FastAPI 应用（`python_backend/fastapi_app.py:128`），所有路由与压测目标都对着它。遗留入口只保留历史兼容。
 

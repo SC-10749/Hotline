@@ -12,7 +12,7 @@ from unittest.mock import Mock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from ...agents import AgentEngine
+from python_backend.modules.execution.engine import AgentEngine
 from ...api.routers.execution import create_execution_router
 from ...application.execution_service import ExecutionApplicationService
 from ...modules.execution.store import ExecutionStore

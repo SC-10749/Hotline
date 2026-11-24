@@ -68,7 +68,7 @@ class SemanticRecallTests(unittest.TestCase):
         from ...bootstrap import load_environment
         load_environment()
         from ...config import Settings
-        from ...vector_store import PgVectorStore
+        from python_backend.modules.retrieval.vector_store import PgVectorStore
         cls.settings = Settings()
         cls.vector_store = PgVectorStore(cls.settings)
 

@@ -20,7 +20,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import StructuredTool
 from pydantic import Field
 
-from ...agents import AgentEngine, TaskManager, ModelClient
+from python_backend.modules.execution.engine import AgentEngine, TaskManager, ModelClient
 from ...api.routers.context_engineering import create_context_router
 from ...api.routers.execution import create_execution_router
 from ...application.execution_service import ExecutionApplicationService
@@ -32,7 +32,7 @@ from ...modules.memory.tools import build_context_tools
 from ...modules.memory.store import MemoryConflict, MemoryStore
 from ...modules.retrieval.fusion import fuse_evidence
 from ...runtime import AgentEngineRuntime
-from ...storage import Storage
+from python_backend.modules.storage.relational import Storage
 from ...workers.execution_worker import ExecutionWorker, build_worker
 from ...infrastructure.resource_store import ResourceStore
 from ...modules.workspaces.context import load_workspace_rules
@@ -421,7 +421,7 @@ class ContextChainTests(unittest.TestCase):
         engine = AgentEngine(settings, storage, TaskManager(settings), skills=skills, context_service=self.service)
         engine.model.chat = Mock(return_value='{}')
         model = ScriptedModel(responses=[AIMessage(content='已恢复任务')])
-        with patch('python_backend.agents.build_chat_model', return_value=model):
+        with patch('python_backend.modules.execution.skill_flow.build_chat_model', return_value=model):
             events = list(engine.stream('skills', 'a', '继续这个项目', workspace_id='work-a'))
         self.assertEqual(events[-1]['type'], 'complete')
         self.assertIn('ALPHA123', repr(model.requests))

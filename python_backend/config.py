@@ -12,7 +12,9 @@ def _bool_env(name: str, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
-_storage_backend = os.getenv("DODO_STORAGE_BACKEND", "mysql").strip().lower()
+# 与 bootstrap.py 的兜底保持一致：直连 import config 的进程（单元测试等）
+# 也不该隐式依赖 MySQL / Redis / pgvector 这些外部服务。
+_storage_backend = os.getenv("DODO_STORAGE_BACKEND", "sqlite").strip().lower()
 
 
 @dataclass(frozen=True)
@@ -52,7 +54,8 @@ class Settings:
     mysql_pool_size: int = int(os.getenv("DODO_MYSQL_POOL_SIZE", "20"))
 
     # Redis backs the distributed agent task lock and stop broadcast.
-    redis_enabled: bool = _bool_env("DODO_REDIS_ENABLED", _storage_backend == "mysql")
+    # 分布式任务锁只在显式开启时启用；生产环境由 .env 显式置为 true。
+    redis_enabled: bool = _bool_env("DODO_REDIS_ENABLED", False)
     redis_host: str = os.getenv("DODO_REDIS_HOST", "127.0.0.1")
     redis_port: int = int(os.getenv("DODO_REDIS_PORT", "6379"))
     redis_database: int = int(os.getenv("DODO_REDIS_DATABASE", "0"))
@@ -68,7 +71,7 @@ class Settings:
     minio_public_read: bool = _bool_env("DODO_MINIO_PUBLIC_READ", True)
 
     # pgvector settings mirror embeddings.store and DynamicPgVectorStoreFactory.
-    vector_enabled: bool = _bool_env("DODO_VECTOR_ENABLED", _storage_backend == "mysql")
+    vector_enabled: bool = _bool_env("DODO_VECTOR_ENABLED", False)
     vector_host: str = os.getenv("DODO_VECTOR_HOST", "127.0.0.1")
     vector_port: int = int(os.getenv("DODO_VECTOR_PORT", "5432"))
     vector_database: str = os.getenv("DODO_VECTOR_DATABASE", "vector_store")
@@ -132,6 +135,18 @@ class Settings:
     )
     decision_model: str = os.getenv("DODO_DECISION_MODEL", "decision-model-preview")
     tavily_api_key: str = os.getenv("TAVILY_API_KEY", "")
+
+    # 共享密钥：为空表示不启用鉴权，行为与启用前完全一致。
+    api_token: str = os.getenv('HOTLINE_API_TOKEN', '').strip()
+
+    # SSE 保护：同时打开的流上限（0 表示不限制）与空闲超时秒数（0 表示不启用）。
+    sse_limit: int = int(os.getenv('HOTLINE_SSE_LIMIT', '0'))
+    sse_idle_timeout: float = float(os.getenv('HOTLINE_SSE_IDLE_TIMEOUT', '0'))
+
+    # GitHub Actions 工作流开关：凭据只从本机环境变量读，不入库、不写日志。
+    github_token: str = os.getenv('HOTLINE_GITHUB_TOKEN', '').strip()
+    github_repository: str = os.getenv('HOTLINE_GITHUB_REPOSITORY', '').strip()
+    github_ci_workflow: str = os.getenv('HOTLINE_GITHUB_CI_WORKFLOW', 'ci.yml').strip()
 
     context_enabled: bool = _bool_env('HOTLINE_CONTEXT_ENABLED', True)
     context_window: int = int(os.getenv('HOTLINE_CONTEXT_WINDOW', '128000'))

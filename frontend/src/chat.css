@@ -16,7 +16,7 @@
 }
 
 .chat-page.sidebar-collapsed { grid-template-columns: 52px 0 minmax(0, 1fr); }
-.app-shell.chat-page :is(.workspace, .message-list, .topbar, .composer-area) { background: var(--canvas); }
+.app-shell.chat-page :is(.workspace, .message-list, .topbar) { background: var(--canvas); }
 .chat-page ::selection { color: var(--text); background: var(--selection); }
 .chat-page :is(input, textarea) { caret-color: var(--text); }
 .chat-page :is(button, input, textarea, a):focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
@@ -52,7 +52,7 @@
 .chat-page .project-task { color: var(--muted); }
 .chat-page :is(.project-task:hover, .project-add-task:hover:not(:disabled)) { color: var(--text); background: var(--surface-hover); }
 .chat-page .session-search { margin-top: 12px; border-color: var(--line); }
-.chat-page .session-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 20px; scrollbar-color: var(--scrollbar) transparent; }
+.chat-page .session-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 20px; }
 .chat-page .session-heading { min-height: 34px; padding: 10px 7px 6px; color: var(--muted); font-size: 11px; font-weight: 500; }
 .chat-page .recent-heading { gap: 5px; }
 .chat-page .recent-heading > svg { width: 12px; height: 12px; }
@@ -73,22 +73,26 @@
 .chat-page .session-delete:hover { color: var(--error); background: var(--error-soft); }
 .chat-page .session-empty { padding: 14px 7px; color: var(--muted); font-size: 12px; text-align: left; }
 
-.chat-page .workspace { height: 100dvh; min-height: 0; grid-template-rows: 54px minmax(0, 1fr) auto; overflow: hidden; border: 0; border-radius: 0; background: var(--surface); }
+.chat-page .workspace { position: relative; height: 100dvh; min-height: 0; grid-template-rows: 54px minmax(0, 1fr) auto; overflow: hidden; border: 0; border-radius: 0; background: var(--surface); }
+/* 输入区（含候选面板）悬浮在消息流底部，消息滚动时从它下面穿过；
+   消息流底部留出 --composer-height，避免最后几条被压在输入区下面看不见。 */
+.chat-page .workspace:not(.workspace-welcome):not(.workspace-panel-open) .composer-area { position: absolute; z-index: 4; right: 0; bottom: 0; left: 0; }
 .chat-page .topbar { height: 54px; padding: 0 22px; border: 0; }
 .chat-page .topbar-title { color: var(--text-secondary); font-size: 13px; }
 .chat-page .breadcrumb { font-size: 13px; }
 .chat-page .breadcrumb > strong { color: var(--text); font-weight: 500; }
 .chat-page .breadcrumb > svg { width: 16px; height: 16px; color: var(--muted); }
-.chat-page .message-list { min-height: 0; padding: 24px 36px 32px; scrollbar-color: var(--scrollbar) transparent; }
+.chat-page .message-list { min-height: 0; margin-bottom: var(--composer-height, 96px); padding: 24px 36px 24px; }
 .chat-page .message-list > * { width: min(100%, 760px); }
 .chat-page .workspace-welcome { grid-template-rows: 54px minmax(20px, 1fr) auto auto minmax(32px, 1.15fr); }
-.chat-page .workspace-welcome .message-list { grid-row: 3; padding: 0 28px 24px; overflow: visible; }
+.chat-page .workspace-welcome .message-list { grid-row: 3; margin-bottom: 0; padding: 0 28px 24px; overflow: visible; }
 .chat-page .workspace-welcome .composer-area { grid-row: 4; padding-top: 0; padding-bottom: 0; }
 .chat-page .welcome-state { min-height: 0; padding: 0; }
 .chat-page .welcome-mark { width: 42px; height: 42px; margin-bottom: 16px; border: 0; border-radius: 12px; color: var(--text); background: var(--surface-subtle); box-shadow: none; }
 .chat-page .welcome-mark svg { width: 24px; height: 24px; }
 .chat-page .welcome-state h1 { margin: 0; color: var(--text); font-size: 28px; font-weight: 500; line-height: 1.4; letter-spacing: -.035em; }
-.chat-page .composer-area { padding: 12px 36px 24px; border: 0; background: var(--surface); }
+/* 底部输入区不铺背景：只有输入框和候选面板自己带底色，消息流直接透过。 */
+.chat-page .composer-area { padding: 12px 36px 24px; border: 0; background: transparent; }
 .chat-page .composer-wrap { display: grid; width: min(100%, 760px); min-width: 0; gap: 8px; }
 .chat-page .mode-strip { display: flex; min-width: 0; gap: 3px; padding: 0; }
 .app-shell.chat-page .mode-option { height: 32px; gap: 6px; padding: 0 10px; border-color: transparent; border-radius: 7px; color: var(--muted); background: transparent; font-size: 11px; }
@@ -97,13 +101,16 @@
 .app-shell.chat-page .mode-option.selected { border-color: transparent; color: var(--text); background: var(--surface-hover); }
 .app-shell.chat-page .mode-option.selected > svg:first-child,
 .app-shell.chat-page .mode-check { color: var(--text-secondary); }
-.chat-page .composer-box { display: grid; min-width: 0; min-height: 116px; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 14px 14px 10px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: none; }
+.chat-page .composer-box { display: grid; min-width: 0; min-height: 60px; grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 9px 14px 8px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: none; }
 .chat-page .composer-focused { background: var(--surface); }
 .chat-page .composer-box:focus-within { border-color: var(--focus); }
-.chat-page .composer-box textarea { min-width: 0; min-height: 48px; max-height: min(180px, 28dvh); margin: 0; padding: 0 2px; overflow-y: auto; overscroll-behavior: contain; color: var(--text); font-size: 14px; line-height: 1.65; }
+.chat-page .composer-box textarea { min-width: 0; min-height: 26px; max-height: min(150px, 24dvh); margin: 0; padding: 0 2px; overflow-y: auto; overscroll-behavior: contain; color: var(--text); font-size: 14px; line-height: 1.65; transition: height 220ms ease-out; }
 .chat-page .composer-box textarea:focus-visible { outline: none; }
 .chat-page .composer-box textarea::placeholder { color: var(--text-secondary); }
-.chat-page .composer-bottom { min-width: 0; min-height: 34px; flex-wrap: wrap; gap: 8px; }
+.chat-page .composer-bottom { min-width: 0; min-height: 34px; flex-wrap: nowrap; gap: 8px; }
+
+/* 技能助手（TDD）阶段：底部对话框整块由技能接手。 */
+.chat-page .skill-bar { padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--control-radius); background: var(--surface-subtle); color: var(--text-secondary); font-size: 11px; }
 .chat-page .composer-tools { flex: 1; gap: 9px; }
 .chat-page .send-actions { flex: 0 0 auto; margin-left: auto; }
 .chat-page .attach-button { width: 32px; height: 32px; border: 0; border-radius: 8px; color: var(--text-secondary); }
@@ -176,7 +183,7 @@
 .workspace-dialog-theme .folder-import-card-copy { min-width: 0; }
 .workspace-dialog-theme .folder-import-card-copy strong { color: var(--text); font-size: 13px; line-height: 1.5; }
 .workspace-dialog-theme .folder-import-card-copy span { color: var(--muted); font-size: 11px; line-height: 1.6; }
-.workspace-dialog-theme .folder-import-files { flex: 0 1 auto; min-height: 34px; max-height: 280px; overflow-y: auto; margin: 18px 24px 0; scrollbar-width: thin; scrollbar-color: var(--scrollbar) transparent; }
+.workspace-dialog-theme .folder-import-files { flex: 0 1 auto; min-height: 34px; max-height: 280px; overflow-y: auto; margin: 18px 24px 0; }
 .workspace-dialog-theme .folder-import-files-heading { position: sticky; top: 0; display: flex; min-height: 34px; align-items: center; gap: 10px; padding: 4px 0; color: var(--text-secondary); background: var(--surface); font-size: 12px; list-style: none; cursor: pointer; }
 .workspace-dialog-theme .folder-import-files-heading::-webkit-details-marker { display: none; }
 .workspace-dialog-theme .folder-import-files-heading > span:first-child { flex: 1; }
@@ -255,7 +262,7 @@
   .app-shell.chat-page .mode-option { height: 34px; padding-inline: 8px; font-size: 10px; }
   .app-shell.chat-page .mode-option > svg:first-child { width: 13px; height: 13px; }
   .chat-page .composer-area { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
-  .chat-page .composer-box { min-height: 112px; padding: 12px 12px 9px 14px; }
+  .chat-page .composer-box { min-height: 58px; padding: 8px 10px 7px 12px; }
   .chat-page .composer-hint { display: none; }
   .chat-page .quick-prompts { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 14px; }
   .chat-page .quick-prompt { width: min(100%, 280px); min-height: 36px; justify-content: flex-start; }
@@ -277,6 +284,7 @@
   .chat-page .workspace-welcome .message-list { grid-row: 2; overflow-y: auto; padding-top: 10px; }
   .chat-page .workspace-welcome .composer-area { grid-row: 3; padding-bottom: 10px; }
   .chat-page .workspace-welcome .quick-prompts { display: none; }
-  .chat-page .composer-box { min-height: 92px; }
-  .chat-page .composer-box textarea { min-height: 30px; }
+  .chat-page .composer-box { min-height: 54px; }
+  .chat-page .composer-box textarea { min-height: 24px; }
 }
+

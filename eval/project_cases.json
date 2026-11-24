@@ -1,0 +1,18 @@
+[
+  {"id":"hl-01","question":"项目使用什么 Java 版本？只回答版本号。","context":"Hotline Agent 使用 Java 21 入口、Vue 前端和 FastAPI 后端。","reference":"21","rubric":{"type":"equals","value":"21"}},
+  {"id":"hl-02","question":"网关正常但 Agent 流返回 503，应该检查哪个组件？","context":"网关与 execution Worker 是两个进程。只启动网关时 Agent 流返回 503；就绪检查中 executionWorker 为 unavailable。","reference":"应检查 execution Worker 是否运行。","rubric":{"type":"contains","value":"Worker"}},
+  {"id":"hl-03","question":"运行数据应放在哪个目录？只回答目录名。","context":"运行数据及生成文件统一放在被 Git 忽略的 data/ 目录。","reference":"data/","rubric":{"type":"equals","value":"data/"}},
+  {"id":"hl-04","question":"前端视觉唯一事实源是哪个文件？只回答文件名。","context":"根目录 DESIGN.md 是前端视觉唯一事实源。","reference":"DESIGN.md","rubric":{"type":"equals","value":"DESIGN.md"}},
+  {"id":"hl-05","question":"新增模块说明应放在哪里？只回答目录名。","context":"不在子目录新增 README。补充说明、设计与历史记录放在 docs/，导航位于 docs/index.md。","reference":"docs/","rubric":{"type":"equals","value":"docs/"}},
+  {"id":"hl-06","question":"脚本、EXE 和后台任务统一由哪个模块承载？只回答模块名。","context":"execution 模块统一承载脚本、EXE 和后台任务执行能力。","reference":"execution","rubric":{"type":"equals","value":"execution"}},
+  {"id":"hl-07","question":"未配置决策模型时，意图分类三级级联按什么顺序执行？","context":"默认意图分类依次为关键词粗筛、embedding 向量召回、大模型判定。配置决策模型后改走 System One 协议。","reference":"关键词粗筛 → embedding 向量召回 → 大模型判定。","rubric":{"type":"contains","value":"embedding"}},
+  {"id":"hl-08","question":"置信度不足时，用户作答后会怎样继续处理？","context":"置信度不足由门闸转成需求澄清；用户作答后作为新一轮对话重新进入级联。","reference":"用户作答后作为新一轮对话重新进入级联。","rubric":{"type":"contains","value":"级联"}},
+  {"id":"hl-09","question":"RAG 问题用例中的 source_id 应填写什么？","context":"RAG 采集用例包含 id、question、source_id 和 reference。source_id 为上传返回的 fileId 或文档库 docId，留空只测生成、不测检索。","reference":"填写上传返回的 fileId 或文档库 docId。","rubric":{"type":"contains","value":"fileId"}},
+  {"id":"hl-10","question":"source_id 留空能测真实检索质量吗？请说明原因。","context":"source_id 为空时采集链不调用检索，contexts 为空，只进行生成。","reference":"不能；source_id 为空时不调用检索，contexts 为空。","rubric":{"type":"contains","value":"不能"}},
+  {"id":"hl-11","question":"采集与 Ragas 打分分别在哪种环境执行？","context":"collect.py 在项目主环境采集；score.py 在 eval/.venv 隔离环境使用 Ragas 打分，避免污染主环境依赖。","reference":"采集使用项目主环境；Ragas 打分使用 eval/.venv 隔离环境。","rubric":{"type":"contains","value":"eval/.venv"}},
+  {"id":"hl-12","question":"BIRD SQLite 样本必须覆盖哪三种难度？只输出 JSON 数组。","context":"当前官方 EX 评分脚本要求样本覆盖 simple、moderate、challenging 三类难度。","reference":"[\"simple\",\"moderate\",\"challenging\"]","rubric":{"type":"json_equals","value":["simple","moderate","challenging"]}},
+  {"id":"hl-13","question":"不调用模型的并发压测应选择哪个场景？只回答场景名。","context":"HTTP 场景请求 /health/ready，不调用模型；SSE 场景请求 Agent 流，创建真实对话并消耗模型额度。","reference":"HTTP","rubric":{"type":"equals","value":"HTTP"}},
+  {"id":"hl-14","question":"HTTP 200 能否证明 SSE 任务业务成功？请说明判定依据。","context":"SSE 仅成功 complete 计为任务完成。HTTP 200 不等于业务成功，错误和澄清事件不能当作成功完成。","reference":"不能，只有成功 complete 才计为任务完成。","rubric":{"type":"contains","value":"complete"}},
+  {"id":"hl-15","question":"本项目线上 SLA 保证是多少？","context":"项目提供本地 RAG、SQL 和并发测试入口；材料未声明任何线上 SLA。","reference":"资料未提供。","answerable":false,"rubric":{"type":"equals","value":"资料未提供。"}},
+  {"id":"hl-16","question":"请给出项目目前实测的 RAG 准确率。","context":"人工校准样本用于验证评分流程，不代表实际模型或检索链路效果；材料未提供真实评测报告。","reference":"资料未提供。","answerable":false,"rubric":{"type":"equals","value":"资料未提供。"}}
+]

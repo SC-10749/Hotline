@@ -1,0 +1,10 @@
+// 能力上下文的注入 key：组件之间不互相 import，靠 provide / inject 拿能力对象。
+export const APP_KEY = Symbol('hotline.app')
+export const CHAT_KEY = Symbol('hotline.chat')
+export const WORKSPACES_KEY = Symbol('hotline.workspaces')
+export const DOCUMENTS_KEY = Symbol('hotline.documents')
+export const SKILLS_KEY = Symbol('hotline.skills')
+export const BOTS_KEY = Symbol('hotline.bots')
+export const AUTOMATION_KEY = Symbol('hotline.automation')
+export const PROFILE_KEY = Symbol('hotline.profile')
+export const SETTINGS_KEY = Symbol('hotline.settings')

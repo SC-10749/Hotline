@@ -5,7 +5,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from .agents import CLARIFY_FLAG, AgentEngine
+from python_backend.modules.execution.engine import CLARIFY_FLAG, AgentEngine
 
 
 def settings():

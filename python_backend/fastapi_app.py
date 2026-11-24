@@ -13,17 +13,19 @@ from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
-from .documents import DocumentError, DocumentService
+from .infrastructure.service_registry import NacosRegistry, RegistryConfig
+from python_backend.modules.documents.service import DocumentError, DocumentService
 from .models import DocumentRecord, FileInfo, now_iso
-from .object_store import ObjectStorage
-from .parser import parse_file
-from .skill_center import Catalog
-from .skills import SkillError, SkillRegistry
-from .storage import Storage
-from .vector_store import PgVectorStore
+from python_backend.modules.storage.objects import ObjectStorage
+from python_backend.modules.documents.parser import parse_file
+from python_backend.modules.skills.catalog import Catalog
+from python_backend.modules.skills.registry import SkillError, SkillRegistry
+from python_backend.modules.storage.relational import Storage
+from python_backend.modules.retrieval.vector_store import PgVectorStore
 from .application.execution_service import ExecutionApplicationService
 from .infrastructure.queue import SqliteExecutionQueue
-from .agents import ModelClient
+from python_backend.modules.execution.engine import ModelClient
+from .api.auth import build_auth_middleware
 from .api.routers.execution import create_execution_router
 from .api.routers.context_engineering import create_context_router
 from .modules.context_engineering.service import ContextService
@@ -46,6 +48,7 @@ from .modules.execution.scheduler import register_runner, stop_schedule_loop
 from .api.routers.settings import create_settings_router
 from .api.routers.schedules import create_schedule_runner, create_schedules_router
 from .api.routers.bots import create_bots_router
+from .api.routers.ci_workflow import create_ci_workflow_router
 from .api.routers.profile import create_profile_router
 from .llm import probe_credential
 from .infrastructure.evaluation_store import EvaluationStore
@@ -67,6 +70,7 @@ skills = SkillRegistry(settings)
 documents = DocumentService(settings, storage, object_store, vector_store)
 execution_store = SqliteExecutionQueue(settings.execution_db_path)
 execution_service = ExecutionApplicationService(execution_store)
+service_registry = NacosRegistry(RegistryConfig.from_environment(), settings.data_dir, execution_store.has_live_worker)
 context_service = ContextService(settings) if settings.context_enabled else None
 evaluation_store = EvaluationStore(settings.data_dir / "evaluation.db")
 resource_store = ResourceStore(settings.data_dir / "harness-resources.db")
@@ -107,6 +111,7 @@ CONSOLE_ACTIONS = {'save', 'bind', 'eval_case', 'eval_cases', 'evaluate', 'evolv
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    await service_registry.start()
     documents.start_sweeper()
     register_runner(create_schedule_runner(scheduled_store, execution_service))
     retention_stop = start_retention_loop(
@@ -117,15 +122,21 @@ async def lifespan(_: FastAPI):
         },
         settings_store.get,
     )
-    yield
-    retention_stop.set()
-    stop_schedule_loop()
-    stop_release_observation()
-    wait_for_background_runs(timeout=5)
-    documents.stop_sweeper()
+    try:
+        yield
+    finally:
+        await service_registry.stop()
+        retention_stop.set()
+        stop_schedule_loop()
+        stop_release_observation()
+        wait_for_background_runs(timeout=5)
+        evaluation_router.benchmark_service.close()
+        documents.stop_sweeper()
 
 
 app = FastAPI(title="Hotline Agent", version="1.0.0", lifespan=lifespan)
+# 共享密钥鉴权：配置为空时不启用，启用后所有非健康检查路由都需要该请求头。
+app.add_middleware(build_auth_middleware(settings.api_token))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -139,15 +150,18 @@ app.include_router(
         lambda file_id: bool(storage.get_file(file_id) or storage.get_document(file_id)),
         lambda: len(governance_store.list('pending')),
         workspace_exists=lambda workspace_id: resource_store.get_workspace(workspace_id) is not None,
+        sse_limit=settings.sse_limit,
+        sse_idle_timeout=settings.sse_idle_timeout,
     )
 )
-app.include_router(create_evaluation_router(evaluation_store, execution_service))
+evaluation_router = create_evaluation_router(evaluation_store, execution_service)
+app.include_router(evaluation_router)
 if context_service:
     app.include_router(create_context_router(context_service, storage.delete_session))
 app.include_router(create_resource_router(resource_store))
 app.include_router(create_workspace_import_router(resource_store, settings.data_dir / 'workspace-imports'))
 app.include_router(create_registry_router(registry_store))
-app.include_router(create_mcp_router(registry_store))
+app.include_router(create_mcp_router(registry_store, governance_store))
 app.include_router(create_governance_router(execution_store.list_workers, governance_store, execution_store.set_worker_state, settings_store.get, notification_store, execution_store.list_worker_errors))
 app.include_router(create_observability_router(execution_store.list_runs, execution_store.get_run, execution_store.get_events))
 app.include_router(create_artifact_router(artifact_store, object_store))
@@ -155,6 +169,7 @@ app.include_router(create_code_map_router(settings.data_dir / 'code-map' / 'hotl
 app.include_router(create_settings_router(settings_store))
 app.include_router(create_schedules_router(scheduled_store, execution_service))
 app.include_router(create_bots_router(bot_store))
+app.include_router(create_ci_workflow_router(settings))
 app.include_router(create_profile_router(profile_store, credential_store, model_probe=probe_credential))
 # 意图识别：第二层向量召回按 scope 各建一份缓存，未配置 embedding 时自动跳过。
 _intent_vector_config = vector_config_from_settings(settings)
@@ -180,10 +195,12 @@ def health():
 @app.get("/health/ready")
 def readiness():
     worker_available = execution_store.has_live_worker()
+    ready = worker_available and service_registry.available
     return JSONResponse(
-        {"status": "UP" if worker_available else "DEGRADED", "service": "hotline-agent",
-         "executionWorker": "available" if worker_available else "unavailable"},
-        status_code=200 if worker_available else 503,
+        {"status": "UP" if ready else "DEGRADED", "service": "hotline-agent",
+         "executionWorker": "available" if worker_available else "unavailable",
+         "serviceRegistry": "available" if service_registry.available else "unavailable"},
+        status_code=200 if ready else 503,
     )
 
 
@@ -505,7 +522,8 @@ def session_detail(conversation_id: str):
         {
             "conversationId": conversation_id,
             "workspaceId": scope['workspace_id'] if scope else '',
-            "agentType": rows[0].agentType,
+            # 会话当前处在哪个助手类型看最后一条：中途切到技能助手要认得出来。
+            "agentType": rows[-1].agentType,
             "fileid": rows[0].fileid,
             "messages": [row.to_dict() for row in rows],
         }

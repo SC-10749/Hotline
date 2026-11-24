@@ -14,6 +14,14 @@ import { fileURLToPath } from 'node:url';
 const port = process.env.DODO_HOT_PORT || '8888';
 const root = dirname(fileURLToPath(import.meta.url));
 const children = [];
+const javaChild = spawn(process.execPath, ['deploy/start-java.mjs'], {
+  cwd: root, windowsHide: true, stdio: 'inherit',
+  env: { ...process.env, HOTLINE_PYTHON_BASE_URL: process.env.HOTLINE_PYTHON_BASE_URL || `http://127.0.0.1:${port}` },
+});
+children.push(javaChild);
+javaChild.on('error', () => { console.error('Java 21 服务启动失败'); void shutdown(1); });
+javaChild.on('exit', code => { if (!closing) void shutdown(code || 1); });
+
 let closing = false;
 let backendChild = null;
 let workerChild = null;
@@ -181,7 +189,7 @@ let frontendBuilt = false;
 let backendReady = false;
 const reportAllReady = () => {
   if (frontendBuilt && backendReady) {
-    console.log(`\n全部就绪：打开 http://127.0.0.1:${port}/ 开始使用（改完代码稍等一两秒，页面会自动刷新）\n`);
+    console.log(`\n全部就绪：打开 http://127.0.0.1:${process.env.HOTLINE_JAVA_PORT || '8080'}/ 开始使用（改完代码稍等一两秒，页面会自动刷新）\n`);
   }
 };
 backendChild = startBackend();
@@ -213,7 +221,7 @@ const waitUntilReady = async (name, url, mark) => {
   }
   if (!closing) console.error(`✗ ${name}启动超时（${url}），请检查上方日志。`);
 };
-void waitUntilReady('后端', `http://127.0.0.1:${port}/health`, () => {
+void waitUntilReady('Java 与 Python 后端', `http://127.0.0.1:${process.env.HOTLINE_JAVA_PORT || '8080'}/health/ready`, () => {
   if (!backendChild || backendChild.exitCode !== null) return;
   backendReady = true;
   console.log(`✓ 后端启动完成  http://127.0.0.1:${port}/docs`);

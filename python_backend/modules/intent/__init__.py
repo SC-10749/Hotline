@@ -11,6 +11,8 @@ import re
 from .catalog import ACTION_CATALOG, RETRIEVAL_CATALOG, Intent, IntentCatalog
 from .clarify import (CLARIFY_OPTIONS, ClarifyOption, ClarifyRequest, build_clarify_prompt,
                       build_clarify_request, parse_clarify_reply)
+from .requirement import (REQUIREMENT_OPTIONS, build_requirement_clarify_request,
+                          build_requirement_prompt, parse_requirement_reply)
 from .classifier import (AMBIGUOUS, CONFIDENT, IntentResult, build_prompt, classify,
                          keyword_candidates, merge_candidates, parse_intent_reply,
                          parse_intent_sample, score_keywords)
@@ -22,10 +24,12 @@ __all__ = [
     'ACTION_CATALOG', 'AMBIGUOUS', 'AMBIGUITY_GATE', 'CLARIFY_OPTIONS', 'CONFIDENT',
     'ClarifyOption', 'ClarifyRequest', 'DecisionClient', 'DecisionConfig',
     'DecisionResult', 'ExampleVectorStore', 'Intent', 'IntentCatalog', 'IntentResult',
-    'RETRIEVAL_CATALOG', 'VectorConfig', 'build_clarify_prompt', 'build_clarify_request',
-    'build_prompt', 'build_questions', 'classify', 'cosine',
+    'REQUIREMENT_OPTIONS', 'RETRIEVAL_CATALOG', 'VectorConfig', 'build_clarify_prompt',
+    'build_clarify_request', 'build_prompt', 'build_questions',
+    'build_requirement_clarify_request', 'build_requirement_prompt', 'classify', 'cosine',
     'decision_config_from_settings', 'embed_text', 'keyword_candidates',
     'merge_candidates', 'parse_clarify_reply', 'parse_decision', 'parse_intent_reply',
+    'parse_requirement_reply',
     'parse_intent_sample', 'parse_retrieval_route',
     'retrieval_fallback', 'retrieval_messages', 'route_label', 'score_keywords',
     'vector_config_from_settings',

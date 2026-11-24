@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from ...infrastructure.settings_store import SettingsStore
 from ...modules.artifacts.store import ArtifactStore, artifact_metadata
-from ...object_store import ObjectStorage
+from python_backend.modules.storage.objects import ObjectStorage
 
 PREVIEW_CHAR_LIMIT = 20000
 PREVIEW_BYTE_LIMIT = PREVIEW_CHAR_LIMIT * 4 + 4
@@ -42,32 +42,36 @@ def _local_file(storage: ObjectStorage, record: dict) -> Path:
 
 
 def _owner_header_reader(storage: ObjectStorage,
-                            settings_reader: Callable[[], dict] | None = None) -> Callable[[], str]:
-    """Header name comes from the harness settings; missing store falls back to the default."""
-    if settings_reader is not None:
-        return lambda: str(settings_reader().get('artifactOwnerHeader') or '').strip() or DEFAULT_OWNER_HEADER
-    data_dir = getattr(getattr(storage, 'settings', None), 'data_dir', None)
-    if data_dir is None:
-        return lambda: DEFAULT_OWNER_HEADER
+                            settings_reader: Callable[[], dict] | None = None) -> Callable[[], list[str]]:
+    """归属请求头名：设置里配的名字优先，同时兼容默认名。"""
     holder: dict[str, SettingsStore] = {}
 
-    def read() -> str:
-        if 'store' not in holder:
-            holder['store'] = SettingsStore(Path(data_dir) / 'harness-settings.db')
-        return str(holder['store'].get().get('artifactOwnerHeader') or '').strip() or DEFAULT_OWNER_HEADER
+    def read() -> list[str]:
+        configured = ''
+        if settings_reader is not None:
+            configured = str(settings_reader().get('artifactOwnerHeader') or '').strip()
+        else:
+            data_dir = getattr(getattr(storage, 'settings', None), 'data_dir', None)
+            if data_dir is not None:
+                if 'store' not in holder:
+                    holder['store'] = SettingsStore(Path(data_dir) / 'harness-settings.db')
+                configured = str(holder['store'].get().get('artifactOwnerHeader') or '').strip()
+        return list(dict.fromkeys(name for name in (configured, DEFAULT_OWNER_HEADER) if name))
 
     return read
 
 
-def _check_owner(request: Request, record: dict, header_name: str) -> None:
-    """Ownership check for downloads: empty owner (legacy rows) is always allowed."""
-    owner = str(record.get('owner') or '')
+def _check_owner(request: Request, record: dict, header_names: list[str]) -> None:
+    """Ownership check: a record without an owner cannot be downloaded at all."""
+    owner = str(record.get('owner') or '').strip()
     if not owner:
-        return
-    supplied = request.headers.get(header_name)
-    if supplied is None or not supplied.strip():
-        raise HTTPException(status_code=403, detail=f'缺少归属身份请求头 {header_name}')
-    if supplied.strip() != owner:
+        raise HTTPException(status_code=403, detail='产物未登记归属，无法访问')
+    supplied = [str(request.headers.get(name) or '').strip() for name in header_names]
+    supplied.append(str(request.query_params.get('owner') or '').strip())
+    supplied = [value for value in supplied if value]
+    if not supplied:
+        raise HTTPException(status_code=403, detail=f'缺少归属身份请求头 {header_names[0]}')
+    if owner not in supplied:
         raise HTTPException(status_code=403, detail='产物归属身份不匹配')
 
 

@@ -6,7 +6,7 @@ import urllib.error
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from .agents import AgentEngine, ModelClient
+from python_backend.modules.execution.engine import AgentEngine, ModelClient
 
 
 class FakeResponse:

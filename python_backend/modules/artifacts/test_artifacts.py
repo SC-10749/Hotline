@@ -18,7 +18,7 @@ from ...api.routers.artifacts import create_artifact_router
 from ...api.routers.observability import create_observability_router
 from ...modules.execution.store import ExecutionStore
 from ...modules.execution.test_execution import FakeEngine, FakeTasks
-from ...object_store import ObjectStorage
+from python_backend.modules.storage.objects import ObjectStorage
 from ...workers.execution_worker import ExecutionWorker
 from .store import (ArtifactStore, legacy_run_id, register_generated_file,
                      register_legacy_artifact)
@@ -40,16 +40,26 @@ class ArtifactTests(unittest.TestCase):
     def client(self, storage=None):
         app = FastAPI()
         app.include_router(create_artifact_router(self.artifacts, storage or self.storage))
+        # 默认带上归属身份头：产物登记了归属才能下载。
+        return TestClient(app, headers=self.OWNER_HEADERS)
+
+    def plain_client(self, storage=None):
+        """不带归属身份头的客户端，用来看缺头时的拒绝行为。"""
+        app = FastAPI()
+        app.include_router(create_artifact_router(self.artifacts, storage or self.storage))
         return TestClient(app)
 
-    def register(self, run_id='run-A', key='run-A/result.txt', content=b'result', backend='local'):
+    def register(self, run_id='run-A', key='run-A/result.txt', content=b'result', backend='local',
+                 owner='tester'):
         if backend == 'local':
             target = self.generated / key
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(content)
         return self.artifacts.register(run_id=run_id, name=Path(key).name, size=len(content),
                                        sha256=hashlib.sha256(content).hexdigest(), content_type='text/plain',
-                                       storage_backend=backend, storage_key=key)
+                                       storage_backend=backend, storage_key=key, owner=owner)
+
+    OWNER_HEADERS = {'X-Harness-Owner': 'tester'}
 
     def test_index_filters_real_ownership_and_survives_reopen(self):
         (self.generated / 'unregistered.txt').write_text('legacy', encoding='utf-8')
@@ -82,10 +92,12 @@ class ArtifactTests(unittest.TestCase):
         for key in ('../outside.txt', '/absolute.txt', 'C:/file.txt', 'nested\\file.txt'):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 self.artifacts.register(run_id='run-A', name='test', size=1, sha256='a' * 64,
-                                        content_type='text/plain', storage_backend='local', storage_key=key)
+                                        content_type='text/plain', storage_backend='local', storage_key=key,
+                                        owner='tester')
         with self.assertRaises(ValueError):
             self.artifacts.register(**{key: record[key] for key in ('run_id', 'name', 'size', 'content_type',
-                                                                  'storage_backend', 'storage_key')}, sha256='b' * 64)
+                                                                  'storage_backend', 'storage_key')},
+                                     sha256='b' * 64, owner='tester')
         self.assertEqual(self.artifacts.get(record['artifact_id'])['sha256'], record['sha256'])
 
     def test_local_download_and_missing_or_outside_files(self):
@@ -188,7 +200,7 @@ class ArtifactTests(unittest.TestCase):
         self.assertEqual(self.artifacts.list(run['run_id'])[1], 0)
 
     def test_cancel_during_generation_retains_actual_artifact_without_success(self):
-        from ...ppt import generate_ppt
+        from python_backend.modules.documents.ppt import generate_ppt
         run = self.queue.enqueue('conversation', 'ppt', 'test', None)
 
         def generate_then_cancel(*args):
@@ -253,7 +265,7 @@ class ArtifactTests(unittest.TestCase):
         binary = self.artifacts.register(run_id='run-A', name='deck.pdf', size=3,
                                          sha256=hashlib.sha256(b'pdf').hexdigest(),
                                          content_type='application/pdf', storage_backend='local',
-                                         storage_key='run-A/deck.pdf')
+                                         storage_key='run-A/deck.pdf', owner='tester')
         self.assertEqual(client.get(f"/harness/artifacts/{binary['artifact_id']}/preview").status_code, 415)
 
         with self.artifacts._db() as db:
@@ -294,7 +306,7 @@ class ArtifactTests(unittest.TestCase):
         record = self.register(content=b'owned')
         with self.artifacts._db() as db:
             db.execute('UPDATE run_artifact SET owner=? WHERE artifact_id=?', ('alice', record['artifact_id']))
-        client = self.client()
+        client = self.plain_client()
         url = f"/harness/artifacts/{record['artifact_id']}/download"
         self.assertEqual(client.get(url).status_code, 403)
         self.assertIn('X-Harness-Owner', client.get(url).json()['detail'])
@@ -305,11 +317,13 @@ class ArtifactTests(unittest.TestCase):
         self.assertEqual(client.get(preview).status_code, 403)
         self.assertEqual(client.get(preview, headers={'X-Harness-Owner': 'alice'}).status_code, 200)
 
-    def test_empty_owner_keeps_legacy_download_open(self):
+    def test_record_without_owner_cannot_be_downloaded(self):
         record = self.register(content=b'legacy')
-        client = self.client()
-        self.assertEqual(record['owner'], '')
-        self.assertEqual(client.get(f"/harness/artifacts/{record['artifact_id']}/download").status_code, 200)
+        with self.artifacts._db() as db:
+            db.execute('UPDATE run_artifact SET owner=? WHERE artifact_id=?', ('', record['artifact_id']))
+        client = self.plain_client()
+        self.assertEqual(client.get(f"/harness/artifacts/{record['artifact_id']}/download").status_code, 403)
+        self.assertIn('未登记归属', client.get(f"/harness/artifacts/{record['artifact_id']}/download").json()['detail'])
 
     def test_owner_header_name_follows_harness_settings(self):
         record = self.register(content=b'owned')
@@ -320,9 +334,10 @@ class ArtifactTests(unittest.TestCase):
             self.artifacts, self.storage, settings_reader=lambda: {'artifactOwnerHeader': 'X-Team-Owner'}))
         client = TestClient(app)
         url = f"/harness/artifacts/{record['artifact_id']}/download"
-        self.assertEqual(client.get(url, headers={'X-Harness-Owner': 'alice'}).status_code, 403)
         self.assertIn('X-Team-Owner', client.get(url).json()['detail'])
         self.assertEqual(client.get(url, headers={'X-Team-Owner': 'alice'}).status_code, 200)
+        # 默认名仍然兼容：前端还没拿到设置时也能下载。
+        self.assertEqual(client.get(url, headers={'X-Harness-Owner': 'alice'}).status_code, 200)
 
     def test_list_filters_by_owner(self):
         first = self.register('run-A', 'run-A/one.txt')
@@ -361,7 +376,7 @@ class ArtifactTests(unittest.TestCase):
         target.write_bytes(b'pptx-bytes')
         record, failure = register_generated_file(
             self.artifacts, target, run_id='run-A', content_type='text/plain',
-            storage_backend='local', storage_key='deck.pptx')
+            storage_backend='local', storage_key='deck.pptx', owner='tester')
         self.assertEqual(failure, '')
         self.assertEqual(record['sha256'], hashlib.sha256(b'pptx-bytes').hexdigest())
         self.assertEqual(record['size'], len(b'pptx-bytes'))
@@ -371,7 +386,7 @@ class ArtifactTests(unittest.TestCase):
         missing = self.generated / 'missing.pptx'
         record, failure = register_generated_file(
             self.artifacts, missing, run_id='run-A', content_type='text/plain',
-            storage_backend='local', storage_key='missing.pptx')
+            storage_backend='local', storage_key='missing.pptx', owner='tester')
         self.assertIsNone(record)
         self.assertTrue(failure)
 
@@ -384,7 +399,8 @@ class ArtifactTests(unittest.TestCase):
         self.assertEqual(failure, '')
         self.assertEqual(record['run_id'], 'conversation-9')
         self.assertEqual(record['storage_key'], 'legacy.pptx')
-        self.assertEqual(record['owner'], '')
+        # 归属方就是产生它的会话。
+        self.assertEqual(record['owner'], 'session:conversation-9')
         self.assertEqual(record['sha256'], hashlib.sha256(b'legacy-deck').hexdigest())
         items, total = self.artifacts.list('conversation-9')
         self.assertEqual(total, 1)

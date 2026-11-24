@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "hotline-agent"
 version = "1.0.0"
@@ -16,8 +20,12 @@ dependencies = [
     "fastapi[standard]>=0.115.0",
     "uvicorn[standard]>=0.30.0",
     "python-multipart>=0.0.9",
+    "nacos-sdk-python==3.2.0",
 ]
+
+[tool.setuptools]
+# 顶层还有 main.py 与 skill-center/，包目录只有 python_backend。
+packages = ["python_backend"]
 
 [tool.uv]
 package = false
-

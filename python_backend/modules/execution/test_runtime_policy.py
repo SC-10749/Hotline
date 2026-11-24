@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-from ...agents import AgentEngine
+from python_backend.modules.execution.engine import AgentEngine
 from ...config import Settings
 from ...infrastructure.resource_store import ResourceStore
 from ...modules.execution import tools as tool_module

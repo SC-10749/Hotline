@@ -1,3 +1,5 @@
+> 方案草案：文中的差距、文件行号和运行拓扑是编写时的基线，不作为当前功能清单。当前实现与 Java/Python 迁移进度见 [主 README](../README.md)。
+
 # Hotline 第二阶段能力设计（检索、记忆与运营化）
 
 状态：草案 v2。本文承接 [上下文工程实现与验收](./context-engineering-design.md)，针对十项尚未落地的能力，给出业界做法、本仓库实证差距与可执行方案。
@@ -628,7 +630,7 @@ source marker 里带 embedding 模型名与维度。模型换了，marker 不匹
 - **无 trace/span 结构**：事件里没有 `trace_id` / `span_id` / `parent_id`，跨 run 无法串联（`execution_run` 只有 `run_id` / `conversation_id`）。
 - **无金额成本**：没有单价、模型归集、per-user / per-workspace 成本。
 - 无延迟分位（P95/P99）、无业务口径的成功率（一次问答算不算成功没有定义）。
-- 无 OpenTelemetry / Langfuse 依赖（`requirements.txt` 与 `pyproject.toml` 均无）。
+- 无 OpenTelemetry / Langfuse 依赖（`pyproject.toml` 无）。
 
 ### 建议方案
 

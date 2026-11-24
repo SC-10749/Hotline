@@ -8,7 +8,7 @@
 
 Worker 将 workspace_id 传到 AgentEngineRuntime 和 AgentEngine。普通回答、文件问答、深度回答、PPT 规划和技能分支使用同一上下文服务。技能分支同时召回工作区及所选文档证据。适用请求先经过意图级联，用户作答后的澄清请求重新分类。
 
-入口实现位于 `frontend/src/api.js`、`python_backend/api/routers/execution.py`、`python_backend/application/execution_service.py`、`python_backend/runtime/agent_runtime.py` 和 `python_backend/agents.py`。
+入口实现位于 `frontend/src/api.js`、`python_backend/api/routers/execution.py`、`python_backend/application/execution_service.py`、`python_backend/runtime/agent_runtime.py` 和 `python_backend/modules/execution/engine.py`。
 
 ## 工作区与私密文件边界
 

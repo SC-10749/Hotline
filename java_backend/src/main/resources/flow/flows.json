@@ -1,0 +1,40 @@
+{
+  "execution-submit": {
+    "validate-submission": {
+      "order": "0",
+      "fmap": "flow_1",
+      "maxQueryLength": "20000"
+    },
+    "submission-quota": {
+      "order": "0",
+      "fmap": "flow_2"
+    },
+    "create-run": {
+      "order": "1",
+      "fmap": "flow_3"
+    },
+    "submission-ledger": {
+      "order": "2",
+      "fmap": "flow_4",
+      "toggle": "1"
+    }
+  },
+  "capability-overview": {
+    "python-status": {
+      "order": "0",
+      "fmap": "flow_5"
+    },
+    "skill-catalog": {
+      "order": "0",
+      "fmap": "flow_6"
+    },
+    "harness-overview": {
+      "order": "0",
+      "fmap": "flow_7"
+    },
+    "overview-assembly": {
+      "order": "1",
+      "fmap": "flow_8"
+    }
+  }
+}

@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 
 from ...api.routers.resources import create_resource_router
 from ...infrastructure.resource_store import ResourceStore
-from ...skill_center import Catalog
+from python_backend.modules.skills.catalog import Catalog
 
 
 def _git(args: list[str], cwd: Path) -> None:
