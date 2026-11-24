@@ -35,4 +35,13 @@ if ($configProfile -eq 'remote') {
 
 Write-Host "Using Python: $python"
 Write-Host "Using environment: $envFile"
-& $python -m python_backend.main
+Push-Location $PSScriptRoot
+try {
+    $backendHost = if ($env:DODO_HOST) { $env:DODO_HOST } else { '0.0.0.0' }
+    $backendPort = if ($env:DODO_PORT) { $env:DODO_PORT } else { '8888' }
+    & $python -m uvicorn main:app --host $backendHost --port $backendPort
+    $backendExitCode = $LASTEXITCODE
+} finally {
+    Pop-Location
+}
+exit $backendExitCode

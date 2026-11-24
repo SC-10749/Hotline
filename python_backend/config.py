@@ -12,7 +12,9 @@ def _bool_env(name: str, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
-_storage_backend = os.getenv("DODO_STORAGE_BACKEND", "mysql").strip().lower()
+# 与 bootstrap.py 的兜底保持一致：直连 import config 的进程（单元测试等）
+# 也不该隐式依赖 MySQL / Redis / pgvector 这些外部服务。
+_storage_backend = os.getenv("DODO_STORAGE_BACKEND", "sqlite").strip().lower()
 
 
 @dataclass(frozen=True)
@@ -32,6 +34,7 @@ class Settings:
     upload_dir: Path = Path(os.getenv("DODO_UPLOAD_DIR", "data/uploads"))
     generated_dir: Path = Path(os.getenv("DODO_GENERATED_DIR", "data/generated"))
     skills_dir: Path = Path(os.getenv("SKILLS_DIRECTORY", "data/skills"))
+    repo_skills_dir: Path = Path(os.getenv("DODO_REPO_SKILLS_DIRECTORY", str(Path(__file__).resolve().parents[1] / "skills")))
     skill_catalog_db: Path = Path(os.getenv("DODO_SKILL_CATALOG_DB", "data/skill-center/catalog.db"))
     skill_project: str = os.getenv("DODO_SKILL_PROJECT", "hotline-agent")
     max_file_size: int = int(os.getenv("DODO_MAX_FILE_SIZE", str(50 * 1024 * 1024)))
@@ -51,7 +54,8 @@ class Settings:
     mysql_pool_size: int = int(os.getenv("DODO_MYSQL_POOL_SIZE", "20"))
 
     # Redis backs the distributed agent task lock and stop broadcast.
-    redis_enabled: bool = _bool_env("DODO_REDIS_ENABLED", _storage_backend == "mysql")
+    # 分布式任务锁只在显式开启时启用；生产环境由 .env 显式置为 true。
+    redis_enabled: bool = _bool_env("DODO_REDIS_ENABLED", False)
     redis_host: str = os.getenv("DODO_REDIS_HOST", "127.0.0.1")
     redis_port: int = int(os.getenv("DODO_REDIS_PORT", "6379"))
     redis_database: int = int(os.getenv("DODO_REDIS_DATABASE", "0"))
@@ -67,7 +71,7 @@ class Settings:
     minio_public_read: bool = _bool_env("DODO_MINIO_PUBLIC_READ", True)
 
     # pgvector settings mirror embeddings.store and DynamicPgVectorStoreFactory.
-    vector_enabled: bool = _bool_env("DODO_VECTOR_ENABLED", _storage_backend == "mysql")
+    vector_enabled: bool = _bool_env("DODO_VECTOR_ENABLED", False)
     vector_host: str = os.getenv("DODO_VECTOR_HOST", "127.0.0.1")
     vector_port: int = int(os.getenv("DODO_VECTOR_PORT", "5432"))
     vector_database: str = os.getenv("DODO_VECTOR_DATABASE", "vector_store")
@@ -118,7 +122,35 @@ class Settings:
         os.getenv("DODO_MULTIMODAL_API_KEY")
         or os.getenv("DASHSCOPE_API_KEY", "")
     )
+    # 决策模型（System One 协议，与 TypeSafe Jev 同接口）。未配置则不启用，
+    # 意图级联照旧走大模型判定。
+    decision_api_key: str = (
+        os.getenv("DODO_DECISION_API_KEY")
+        or os.getenv("DASHSCOPE_API_KEY", "")
+        or os.getenv("DODO_EMBEDDING_API_KEY", "")
+    )
+    decision_base_url: str = os.getenv(
+        "DODO_DECISION_BASE_URL",
+        "https://trial.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+    )
+    decision_model: str = os.getenv("DODO_DECISION_MODEL", "decision-model-preview")
     tavily_api_key: str = os.getenv("TAVILY_API_KEY", "")
+
+    # 共享密钥：为空表示不启用鉴权，行为与启用前完全一致。
+    api_token: str = os.getenv('HOTLINE_API_TOKEN', '').strip()
+
+    # SSE 保护：同时打开的流上限（0 表示不限制）与空闲超时秒数（0 表示不启用）。
+    sse_limit: int = int(os.getenv('HOTLINE_SSE_LIMIT', '0'))
+    sse_idle_timeout: float = float(os.getenv('HOTLINE_SSE_IDLE_TIMEOUT', '0'))
+
+    context_enabled: bool = _bool_env('HOTLINE_CONTEXT_ENABLED', True)
+    context_window: int = int(os.getenv('HOTLINE_CONTEXT_WINDOW', '128000'))
+    context_input_budget: int = int(os.getenv('HOTLINE_CONTEXT_INPUT_BUDGET', '64000'))
+    context_output_reserve: int = int(os.getenv('HOTLINE_CONTEXT_OUTPUT_RESERVE', '8192'))
+    context_safety_margin: int = int(os.getenv('HOTLINE_CONTEXT_SAFETY_MARGIN', '2048'))
+    openviking_url: str = os.getenv('HOTLINE_OPENVIKING_URL', '')
+    openviking_api_key: str = os.getenv('HOTLINE_OPENVIKING_API_KEY', '')
+    openviking_timeout: float = float(os.getenv('HOTLINE_OPENVIKING_TIMEOUT', '10'))
 
     @property
     def db_path(self) -> Path:

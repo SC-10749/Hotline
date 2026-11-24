@@ -1,0 +1,13 @@
+// Harness 控制台的跨组件上下文：壳与各 section 面板只通过 provide / inject 通信，面板之间互不 import。
+export const HARNESS_SHELL = Symbol('HARNESS_SHELL')
+export const HARNESS_RUNS = Symbol('HARNESS_RUNS')
+export const HARNESS_EVALUATIONS = Symbol('HARNESS_EVALUATIONS')
+export const HARNESS_RELEASES = Symbol('HARNESS_RELEASES')
+export const HARNESS_SETTINGS = Symbol('HARNESS_SETTINGS')
+export const HARNESS_AGENTS = Symbol('HARNESS_AGENTS')
+export const HARNESS_WORKSPACES = Symbol('HARNESS_WORKSPACES')
+export const HARNESS_TOOLS = Symbol('HARNESS_TOOLS')
+export const HARNESS_MODELS = Symbol('HARNESS_MODELS')
+export const HARNESS_SKILLS = Symbol('HARNESS_SKILLS')
+export const HARNESS_RESOURCES = Symbol('HARNESS_RESOURCES')
+export const HARNESS_TRACES = Symbol('HARNESS_TRACES')

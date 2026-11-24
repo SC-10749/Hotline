@@ -1,0 +1,32 @@
+{
+  "repo": "https://github.com/paramchoudhary/ResumeSkills",
+  "branch": "main",
+  "fetched_at": "2026-11-23T11:06:31",
+  "files": {
+    "resume-bullet-writer": {
+      "path": "references/bullet-writer.md",
+      "url": "https://raw.githubusercontent.com/paramchoudhary/ResumeSkills/main/skills/resume-bullet-writer/SKILL.md",
+      "bytes": 14305,
+      "sha256": "49ea6a533a72112cc4935c40924830d13979b86321e593892a45244fef0a14fb"
+    },
+    "tech-resume-optimizer": {
+      "path": "references/tech-resume-optimizer.md",
+      "url": "https://raw.githubusercontent.com/paramchoudhary/ResumeSkills/main/skills/tech-resume-optimizer/SKILL.md",
+      "bytes": 10556,
+      "sha256": "38cbc83d7d143ec3432be19e8179c5992b55b20765c478f575b0200ed357339a"
+    },
+    "resume-ats-optimizer": {
+      "path": "references/ats-optimizer.md",
+      "url": "https://raw.githubusercontent.com/paramchoudhary/ResumeSkills/main/skills/resume-ats-optimizer/SKILL.md",
+      "bytes": 9171,
+      "sha256": "03ad07d45afa209a41f8a0acdfc4286bc61ededd8371ced5242b5caf97d86702"
+    },
+    "resume-quantifier": {
+      "path": "references/quantifier.md",
+      "url": "https://raw.githubusercontent.com/paramchoudhary/ResumeSkills/main/skills/resume-quantifier/SKILL.md",
+      "bytes": 8453,
+      "sha256": "6cdf56f990ff1f67154ea99c256654d35eeb5048f13af76da396dcb3b9d2d68d"
+    }
+  },
+  "stars": "3.3k"
+}

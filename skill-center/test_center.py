@@ -16,6 +16,32 @@ PROJECT = 'hotline-agent'
 
 
 class CatalogTests(unittest.TestCase):
+    def test_runtime_metadata_keeps_gray_versions_and_reader_is_readonly(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'catalog.db'
+            catalog = Catalog(path)
+            try:
+                original = catalog.call('save', {'content': CONTENT})
+                candidate = catalog.call('save', {'content': CONTENT + '候选正文。'})
+                catalog.call('bind', {**candidate, 'project': PROJECT})
+                with catalog.db:
+                    catalog.db.execute('INSERT INTO rollouts VALUES(?,?,?,?,?,1)',
+                        (PROJECT, original['name'], candidate['version'], original['version'], 20))
+                for number in range(15):
+                    request_id = f'test-request-{number}'
+                    args = {'project': PROJECT, 'requestId': request_id}
+                    metadata = catalog.call('runtime_metadata', args)['skills'][0]
+                    legacy = catalog.call('runtime', args)['skills'][0]
+                    expected = candidate if int(hashlib.sha256(request_id.encode()).hexdigest()[:8], 16) % 100 < 20 else original
+                    self.assertEqual(metadata['version'], expected['version'])
+                    self.assertEqual(metadata['version'], legacy['version'])
+                    self.assertEqual(set(metadata), {'name', 'description', 'version'})
+            finally:
+                catalog.db.close()
+            with closing(Catalog.open_readonly(path).db) as database:
+                with self.assertRaises(sqlite3.OperationalError):
+                    database.execute('DELETE FROM bindings')
+
     def test_version_binding_and_agent_prompt(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temp, closing(Catalog(Path(temp) / 'catalog.db').db) as db:
             catalog = Catalog.__new__(Catalog)
