@@ -23,6 +23,8 @@
 - `python_backend/agents.py` 仍是兼容入口，仍等价于 `modules.execution.engine`。
 - mixin 只通过 `self` 访问已有协作者（模型、向量库、存储、文档），不直接依赖彼此。
 - 打桩路径随代码位置变化：技能流用 `python_backend.modules.execution.skill_flow.run_agent` 与 `...skill_flow.build_chat_model`，不再从 `engine` 打桩。
+- 技能流读会话历史只用于取需求正文（`gates.py:_requirement_brief`），其余历史不进入模型提示词；模型每轮只看到当前问题。
+- 每轮事件流的第一条事件固定是 `agent`（本轮实际助手类型），前端据此切模式条与底部输入区形态；技能流事件序列为 `agent → thinking → context_snapshot → text → recommend → complete`，工具调用轮再插入 `tool_start` / `tool_end`。
 
 ## 执行队列与幂等入队
 

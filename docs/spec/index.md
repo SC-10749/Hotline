@@ -37,6 +37,7 @@
 | [S-013](2026-11-23-工具治理与产物归属修复.md) | 2026-11-23 | 工具治理与产物归属修复（MCP 审批 · 归属默认拒绝 · 审批清理时间戳） | 已实现 | execution 工具治理、MCP 路由、产物存储与下载路由、retention 清理 |
 | [S-007](2026-11-23-分层拆分与目录治理.md) | 2026-11-23 | 前端与 AI 引擎分层拆分（接口层 / 应用层 / 表现层） | 已实现 | frontend/src 全量、python_backend/modules/execution、模块文档 |
 | [S-014](2026-11-23-二次元与像素头像素材集.md) | 2026-11-23 | 二次元与像素头像素材集（1 角色头像 + 14 页面贴图 + 侧边栏插画） | 已实现 | frontend/src/assets/generated 新增素材，未接入界面 |
+| [S-015](2026-11-24-CI校验修复.md) | 2026-11-24 | CI 校验修复（技能流历史契约 · agent 事件 · 注册取消挂死 · mvnw 可执行位） | 已实现 | skill-center 技能测试、service_registry 取消语义、java_backend/mvnw 权限位、execution 模块文档 |
 | S-XXX | — | 模板见 [_template.md](_template.md) | — | — |
 
 ## 写规格的最小要求

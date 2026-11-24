@@ -86,7 +86,10 @@ class NacosRegistry:
                 if self.client is None:
                     await self._connect()
                 # Refresh readiness metadata; SDK reconnects and re-registers ephemeral instances.
-                result = await asyncio.wait_for(self._publish(draining=not self.ready()), timeout=10)
+                # 用 asyncio.timeout 而不是 wait_for：3.11 的 wait_for 会把外部取消
+                # 换成内部异常，导致 stop() 取消后 await self.task 永远等不到。
+                async with asyncio.timeout(10):
+                    result = await self._publish(draining=not self.ready())
                 self.registered = bool(result)
             except asyncio.CancelledError:
                 raise
