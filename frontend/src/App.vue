@@ -246,7 +246,7 @@ onUnmounted(() => {
       <button class="rail-button" :class="{ active: ctx.activePage === 'home' }" type="button" aria-label="首页" title="首页" @click="openHome"><Home :size="20" fill="currentColor" /></button>
       <button class="rail-button" :class="{ active: ctx.activePage === 'automation' }" type="button" aria-label="自动化" title="自动化" @click="openAutomation"><CalendarClock :size="20" /></button>
       <button class="rail-button" :class="{ active: ctx.activePage === 'plugins' }" type="button" aria-label="插件" title="插件" @click="openPlugins"><Puzzle :size="20" /></button>
-      <button class="rail-button" :class="{ active: ctx.activePage === 'bot' }" type="button" aria-label="bot" title="bot" @click="openBotPage"><Bot :size="20" /></button>
+      <button class="rail-button" :class="{ active: ctx.activePage === 'bot' }" type="button" aria-label="机器人" title="机器人" @click="openBotPage"><Bot :size="20" /></button>
       <button class="rail-button" :class="{ active: ctx.activePage === 'docs' }" type="button" aria-label="文档库" title="文档库" @click="openDocsPage"><LibraryBig :size="20" /></button>
       <button class="rail-button" :class="{ active: ctx.activePage === 'harness' }" type="button" aria-label="Harness 工程" title="Harness 工程" @click="openHarnessPage"><Workflow :size="20" /></button>
       <button class="rail-button" :class="{ active: ctx.activePage === 'code-map' }" type="button" aria-label="代码地图" title="代码地图" @click="openCodeMapPage"><MapIcon :size="20" /></button>
@@ -272,7 +272,7 @@ onUnmounted(() => {
       <section v-else class="standalone-page" :aria-labelledby="`${ctx.activePage}-page-title`">
         <aside class="page-sidebar">
           <header class="page-sidebar-header">
-            <h2>{{ ctx.activePage === 'profile' ? '个人中心' : ({ automation: '自动化', plugins: '插件', bot: 'bot', docs: '文档库', harness: 'Harness 工程', export: '历史聊天' })[ctx.activePage] }}</h2>
+            <h2>{{ ctx.activePage === 'profile' ? '个人中心' : ({ automation: '自动化', plugins: '插件', bot: '机器人', docs: '文档库', harness: 'Harness 工程', export: '历史聊天' })[ctx.activePage] }}</h2>
             <div v-if="ctx.activePage !== 'profile'" class="page-sidebar-actions"><button class="icon-button" type="button" aria-label="搜索"><Search :size="17" /></button><button class="icon-button" type="button" aria-label="筛选"><MoreHorizontal :size="17" /></button></div>
           </header>
           <ProfileSidebar v-if="ctx.activePage === 'profile'" />
@@ -287,7 +287,7 @@ onUnmounted(() => {
         <div class="page-main">
           <header v-if="ctx.activePage !== 'harness'" class="standalone-header">
             <div>
-              <h1 :id="`${ctx.activePage}-page-title`">{{ ctx.activePage === 'profile' ? ({ basics: '基础信息', api: 'API Key', personalization: '个性化', pet: '虚拟桌宠' })[ctx.profileSection] : ({ automation: '安排任务', plugins: '插件', bot: 'bot', docs: '文档库', harness: 'Harness 工程', export: '导出历史聊天' })[ctx.activePage] }}</h1>
+              <h1 :id="`${ctx.activePage}-page-title`">{{ ctx.activePage === 'profile' ? ({ basics: '基础信息', api: 'API Key', personalization: '个性化', pet: '虚拟桌宠' })[ctx.profileSection] : ({ automation: '安排任务', plugins: '插件', bot: '机器人', docs: '文档库', harness: 'Harness 工程', export: '导出历史聊天' })[ctx.activePage] }}</h1>
             </div>
             <button class="icon-button" type="button" aria-label="回到首页" title="回到首页" @click="openHome"><Home :size="18" /></button>
           </header>

@@ -1,18 +1,24 @@
 import { computed, reactive, ref } from 'vue'
 import { Brain, Bug, ClipboardCheck, ClipboardList, Code, Server, Wrench } from 'lucide-vue-next'
 import { createBot, deleteBot, getBots, getCiWorkflow, setCiWorkflow, updateBot } from '../../api'
+import botAiAvatar from '../../assets/bot-ai-avatar.jpg'
+import botBackendAvatar from '../../assets/bot-backend-avatar.jpg'
+import botDevopsAvatar from '../../assets/bot-devops-avatar.jpg'
+import botFrontendAvatar from '../../assets/bot-frontend-avatar.jpg'
+import botPmAvatar from '../../assets/bot-pm-avatar.jpg'
+import botQaAvatar from '../../assets/bot-qa-avatar.jpg'
 import botRequirementAvatar from '../../assets/bot-requirement-analysis-avatar.jpg'
 
 // 角色机器人的头像与贴图角标：按机器人名称匹配，角标用 Lucide 图标 + 主题色。
-// 只有正在使用的角色才有头像图片；其余角色保留角标与配色，没有头像时回落成 Lucide 机器人图标。
+// 名称对不上（改名或自建机器人）时没有头像，回落成 Lucide 机器人图标。
 const BOT_META = {
   '需求分析助手': { avatar: botRequirementAvatar, icon: ClipboardCheck, accent: '#6366f1' },
-  '产品经理': { icon: ClipboardList, accent: '#f59e0b' },
-  '前端工程师': { icon: Code, accent: '#ec4899' },
-  '后端工程师': { icon: Server, accent: '#14b8a6' },
-  'AI 工程师': { icon: Brain, accent: '#8b5cf6' },
-  '运维工程师': { icon: Wrench, accent: '#f97316' },
-  '测试工程师': { icon: Bug, accent: '#84cc16' },
+  '产品经理': { avatar: botPmAvatar, icon: ClipboardList, accent: '#f59e0b' },
+  '前端工程师': { avatar: botFrontendAvatar, icon: Code, accent: '#ec4899' },
+  '后端工程师': { avatar: botBackendAvatar, icon: Server, accent: '#14b8a6' },
+  'AI 工程师': { avatar: botAiAvatar, icon: Brain, accent: '#8b5cf6' },
+  '运维工程师': { avatar: botDevopsAvatar, icon: Wrench, accent: '#f97316' },
+  '测试工程师': { avatar: botQaAvatar, icon: Bug, accent: '#84cc16' },
 }
 
 export function useBots(ctx, skills) {
@@ -81,9 +87,14 @@ export function useBots(ctx, skills) {
     selectedBotId.value = bot.bot_id
   }
 
+  // 技能名列表给详情页渲染成标签；botSkillNames 保留一行文本给列表摘要。
+  function botSkillList(bot) {
+    return (bot?.skills || []).map(id => skillNameMap.value.get(id) || id)
+  }
+
   function botSkillNames(bot) {
     const ids = bot?.skills || []
-    return ids.length ? ids.map(id => skillNameMap.value.get(id) || id).join('、') : '未绑定'
+    return ids.length ? ids.map(id => skillNameMap.value.get(id) || id).join('、') : '未绑定技能'
   }
 
   function openBotForm(bot) {
@@ -155,7 +166,7 @@ export function useBots(ctx, skills) {
   const state = reactive({ bots, botBusy, showBotForm, botDraft, selectedBotId, selectedBot, ciWorkflow, ciBusy })
 
   const actions = {
-    refreshBots, selectBot, botSkillNames, openBotForm, submitBot, toggleBot, removeBot,
+    refreshBots, selectBot, botSkillNames, botSkillList, openBotForm, submitBot, toggleBot, removeBot,
     botMeta, botAvatar, botAccent, refreshCiWorkflow, toggleCiWorkflow,
   }
 

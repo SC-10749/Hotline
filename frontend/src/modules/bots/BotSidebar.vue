@@ -5,6 +5,16 @@ import { BOTS_KEY } from '../app/keys'
 
 const bots = inject(BOTS_KEY)
 
+// 列表分组：同一时间只有一个机器人全局生效，把它单独抬到最上面，其余按序收纳。
+const botGroups = computed(() => {
+  const enabled = bots.state.bots.filter(bot => bot.enabled)
+  const rest = bots.state.bots.filter(bot => !bot.enabled)
+  const groups = []
+  if (enabled.length) groups.push({ key: 'enabled', title: '当前启用', items: enabled })
+  if (rest.length) groups.push({ key: 'rest', title: enabled.length ? '其他机器人' : '全部机器人', items: rest })
+  return groups
+})
+
 // CI 工作流开关：状态、目标与提示都来自后端，前端不自己猜仓库与工作流。
 // 后端查 GitHub 要几秒，读取期间显示"读取中"，别把没读到当成"未配置"。
 const ciLoading = computed(() => bots.state.ciWorkflow.enabled === null && !bots.state.ciWorkflow.message)
@@ -29,13 +39,23 @@ const ciHint = computed(() => {
 <template>
   <div class="bot-sidebar">
     <button class="page-create" type="button" @click="bots.actions.openBotForm()"><Plus :size="18" />新建机器人</button>
-    <nav class="bot-nav" aria-label="机器人列表">
-      <div v-for="bot in bots.state.bots" :key="bot.bot_id" class="bot-nav-row" :class="{ active: bots.state.selectedBotId === bot.bot_id }">
-        <button type="button" class="bot-nav-name" @click="bots.actions.selectBot(bot)"><img v-if="bots.actions.botAvatar(bot)" class="bot-avatar" :src="bots.actions.botAvatar(bot)" alt="" /><Bot v-else :size="16" /><span>{{ bot.name }}</span></button>
-        <label class="switch switch-pill" :title="bot.enabled ? '已开启：所有会话都复用它' : '已关闭'"><input type="checkbox" :checked="bot.enabled" @change="bots.actions.toggleBot(bot)" /><span class="switch-track" aria-hidden="true"></span></label>
-      </div>
-    </nav>
-    <p v-if="!bots.state.bots.length" class="bot-nav-empty">还没有机器人</p>
+    <div v-for="group in botGroups" :key="group.key" class="bot-nav-group">
+      <p class="bot-nav-heading">{{ group.title }}<span>{{ group.items.length }}</span></p>
+      <nav class="bot-nav" aria-label="机器人列表">
+        <div v-for="bot in group.items" :key="bot.bot_id" class="bot-nav-row" :class="{ active: bots.state.selectedBotId === bot.bot_id }">
+          <button type="button" class="bot-nav-name" @click="bots.actions.selectBot(bot)">
+            <img v-if="bots.actions.botAvatar(bot)" class="bot-avatar" :src="bots.actions.botAvatar(bot)" :style="bots.actions.botAccent(bot)" alt="" />
+            <Bot v-else :size="16" />
+            <span class="bot-nav-text">
+              <span class="bot-nav-title">{{ bot.name }}</span>
+              <span class="bot-nav-meta">{{ bots.actions.botSkillNames(bot) }}</span>
+            </span>
+          </button>
+          <label class="switch switch-pill" :title="bot.enabled ? '已开启：所有会话都复用它' : '已关闭：不作用于任何会话'"><input type="checkbox" :checked="bot.enabled" :disabled="bots.state.botBusy" @change="bots.actions.toggleBot(bot)" /><span class="switch-track" aria-hidden="true"></span></label>
+        </div>
+      </nav>
+    </div>
+    <p v-if="!bots.state.bots.length" class="bot-nav-empty">还没有机器人，先新建一个角色助手</p>
     <div class="bot-ci">
       <div class="bot-ci-head">
         <Workflow :size="15" />
