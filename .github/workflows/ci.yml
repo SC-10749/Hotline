@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # 仓库实际在 master 上合并，main 是同步目标；两个都监听，推哪个都跑校验。
+    branches: [main, master]
   pull_request:
     branches: [main]
   workflow_dispatch:
