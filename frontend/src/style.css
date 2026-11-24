@@ -950,6 +950,13 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
 .bot-nav-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bot-nav-row .switch { padding-right: 6px; }
 .bot-nav-empty { margin: 12px 0 0; padding: 0 8px; color: var(--muted); font-size: 12px; }
+/* bot 左侧栏底部的 CI 工作流开关 */
+.bot-ci { display: grid; gap: 5px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.bot-ci-head { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); }
+.bot-ci-head strong { flex: 1; color: var(--text); font-size: 13px; font-weight: 600; }
+.bot-ci-meta { margin: 0; color: var(--muted); font-size: 11px; }
+.bot-ci-hint { margin: 0; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.plugin-state.off { color: var(--muted); }
 /* 角色头像：圆形裁切 + 主题色描边，角标是贴在头像右下角的角色贴图 */
 .bot-avatar { width: 20px; height: 20px; flex: 0 0 auto; border-radius: 50%; object-fit: cover; object-position: center 32%; box-shadow: 0 0 0 1.5px var(--bot-accent, var(--line)); transition: transform .15s ease; }
 .bot-nav-name:hover .bot-avatar { transform: scale(1.08); }

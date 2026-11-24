@@ -1,37 +1,15 @@
 <script setup>
-import { computed, inject } from 'vue'
-import { Bot, Plus, Workflow } from 'lucide-vue-next'
+import { inject } from 'vue'
+import { Bot, Plus } from 'lucide-vue-next'
 import { BOTS_KEY, SKILLS_KEY } from '../app/keys'
 
 const bots = inject(BOTS_KEY)
 const skills = inject(SKILLS_KEY)
-
-// CI 工作流开关：状态与提示都来自后端，前端不自己猜仓库与工作流。
-const ciStateText = computed(() => {
-  const ci = bots.state.ciWorkflow
-  if (!ci.configured) return '未配置'
-  return ci.enabled ? '已开启' : '已关闭'
-})
-
-const ciHint = computed(() => {
-  const ci = bots.state.ciWorkflow
-  if (!ci.configured) return ci.message || '未配置 GitHub Token 与仓库地址，无法启停工作流'
-  const target = [ci.repository, ci.workflow].filter(Boolean).join(' · ')
-  return `${target}｜${ci.enabled ? '推送与 PR 会触发校验' : '已停用：推送与 PR 不再触发校验'}`
-})
 </script>
 
 <template>
   <section class="plugins-page">
     <div class="settings-section-copy"><Bot :size="22" /><div><h2>bot</h2></div><button class="primary-button" type="button" @click="bots.actions.openBotForm()"><Plus :size="15" />新建机器人</button></div>
-    <div class="plugin-list">
-      <div class="bot-row">
-        <Workflow :size="22" />
-        <div><strong>CI 工作流</strong><small>{{ ciHint }}</small></div>
-        <span class="plugin-state">{{ ciStateText }}</span>
-        <label class="switch switch-pill" :title="ciHint"><input type="checkbox" :checked="bots.state.ciWorkflow.enabled === true" :disabled="!bots.state.ciWorkflow.configured || bots.state.ciBusy" @change="bots.actions.toggleCiWorkflow" /><span class="switch-track" aria-hidden="true"></span></label>
-      </div>
-    </div>
     <form v-if="bots.state.showBotForm" class="schedule-form" @submit.prevent="bots.actions.submitBot">
       <label>机器人名称<input v-model="bots.state.botDraft.name" placeholder="例如：值班客服" /></label>
       <label>角色指令<textarea v-model="bots.state.botDraft.instruction" rows="3" placeholder="你是一位只回答售后问题的客服，结论先行、语气克制"></textarea></label>
