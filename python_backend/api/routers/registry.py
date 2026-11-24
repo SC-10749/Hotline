@@ -6,8 +6,11 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
 from ...config import settings
+from ...infrastructure.bot_store import BotStore
+from ...infrastructure.persona import BOT_DB_NAME
 from ...infrastructure.registry_store import RegistryConflictError, RegistryStore
 from ...llm import probe_model
+from ...modules.execution.agent_tool import AGENT_SOURCE, agent_bot_id
 from ...modules.execution.tools import find_builtin_tool
 from ...modules.mcp import probe_stdio_server
 
@@ -108,6 +111,14 @@ def create_registry_router(store: RegistryStore) -> APIRouter:
             schema = tool.get('input_schema') or {}
             config = schema.get('mcp') if isinstance(schema, dict) else None
             return probe_stdio_server(config)
+        if source == AGENT_SOURCE:
+            bot_id = agent_bot_id(tool)
+            bot = BotStore(settings.data_dir / BOT_DB_NAME).get(bot_id) if bot_id else None
+            if not bot:
+                return {'ok': False, 'message': '登记项指向的机器人不存在'}
+            enabled = bool(bot.get('enabled'))
+            return {'ok': enabled, 'message': '机器人可用' if enabled else '机器人已停用',
+                    'details': {'bot': bot.get('name'), 'enabled': enabled}}
         if source in {'', 'builtin'}:
             if find_builtin_tool(tool.get('name') or ''):
                 return {'ok': True, 'message': '连接正常', 'details': {'tool': tool.get('name'), 'kind': 'builtin'}}

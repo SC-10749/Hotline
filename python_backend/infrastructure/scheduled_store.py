@@ -6,32 +6,20 @@
 from __future__ import annotations
 
 import sqlite3
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
+
+from .sqlite_base import SqliteStore
 
 
 COLUMNS = ("task_id", "name", "agent", "prompt", "interval_minutes", "enabled",
            "last_run_at", "last_run_id", "created_at", "updated_at")
 
 
-class ScheduledStore:
+class ScheduledStore(SqliteStore):
     """User-level scheduled tasks; interval is in whole minutes."""
-
-    def __init__(self, path: Path):
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._initialize()
-
-    @contextmanager
-    def _db(self):
-        db = sqlite3.connect(self.path, timeout=10)
-        db.row_factory = sqlite3.Row
-        try:
-            yield db
-        finally:
-            db.close()
+    timeout = 10
 
     def _initialize(self) -> None:
         with self._db() as db:

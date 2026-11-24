@@ -36,12 +36,21 @@ spring:
           apiVersion: "1"
 
 hotline:
+  security:
+    # 共享密钥：为空时不启用鉴权，行为与启用前一致。
+    token: ${HOTLINE_API_TOKEN:}
   python:
     mode: ${HOTLINE_PYTHON_MODE:static}
     base-url: ${HOTLINE_PYTHON_BASE_URL:http://127.0.0.1:8888}
     service-name: ${HOTLINE_PYTHON_SERVICE_NAME:hotline-python-api}
     connect-timeout: ${HOTLINE_PYTHON_CONNECT_TIMEOUT:1s}
     read-timeout: ${HOTLINE_PYTHON_READ_TIMEOUT:60s}
+    launch:
+      enabled: ${HOTLINE_PYTHON_AUTOSTART:true}
+      executable: ${HOTLINE_PYTHON_EXECUTABLE:}
+      root: ${HOTLINE_PYTHON_ROOT:}
+      startup-timeout: ${HOTLINE_PYTHON_STARTUP_TIMEOUT:30s}
+      worker-instances: ${HOTLINE_PYTHON_WORKER_INSTANCES:2}
   flow:
     # abjson 场景定义与处理器映射（pandora-search-music 同构约定）
     scenes-location: ${HOTLINE_FLOW_SCENES:classpath:flow/flows.json}

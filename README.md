@@ -54,7 +54,7 @@ Hotline Agent 是一个**持续探索前沿 AI 技术的智能体应用**：把�
 
 ### 从能力到复用
 
-以模块接口组合 AI 能力，以版本化 Skill 沉淀工作方法，通过评测、灰度与回滚管理技能变更。
+以模块接口组合 AI 能力，以版本化 Skill 沉淀工作方法，通过评测、灰度与回滚管理技能变更。Harness 测评中心支持按需启动 Ragas、BIRD SQLite EX 与 Locust 压测；普通启动不加载测试框架，离开测试页停止本页启动的任务。安装和数据格式见 [AI 测评工具](docs/evaluation.md)。
 
 </td>
 </tr>
@@ -66,11 +66,11 @@ Hotline Agent 是一个**持续探索前沿 AI 技术的智能体应用**：把�
 
 | 维度 | 现状 |
 | --- | --- |
-| Python 后端 | 132 个文件 / 18.3k 行，`python_backend/` |
-| Vue 前端 | 17 个文件 / 7.2k 行，`frontend/src/` |
-| Java 入口 | 83 个文件 / 4.3k 行，`java_backend/src/` |
+| Python 后端 | 176 个文件 / 22.9k 行，`python_backend/` |
+| Vue 前端 | 114 个文件 / 10.5k 行，`frontend/src/` |
+| Java 入口 | 98 个文件 / 5.0k 行，`java_backend/src/` |
 | 能力模块 | 后端 14 个，前端同名边界 11 个 |
-| HTTP 路由 | 17 个路由工厂，5 条 Agent SSE 流 |
+| HTTP 路由 | 20 个路由工厂，5 条 Agent SSE 流 |
 | 运行数据 | 全部落在 Git 忽略的 `data/`，按模块拆分本地 SQLite |
 
 ## 技术架构
@@ -157,6 +157,18 @@ sequenceDiagram
 ```
 
 Worker 离线时，就绪检查返回 503，新的 Agent 运行会被拒绝。事件保存在 `data/execution.db`，支持按游标恢复与事件回放。Java 保留上游 HTTP 状态、内容类型和 SSE 事件，使用虚拟线程处理流式转发。
+
+### 并行子任务
+
+同一会话可以一次派发多个子任务，各占一个 `slot` 并行执行：
+
+- 入口：控制台「执行任务 → 并行派发」，或 `POST /execution/runs/parallel`（单次最多 16 个）。
+- 队列：`execution_run` 增加 `parent_run_id`、`slot`、`workspace_root`；活跃唯一索引从 `(conversation_id)` 改为 `(conversation_id, slot)`，普通对话的 `slot` 为空串，「同会话只允许一个活跃运行」的语义不变。
+- 隔离：每个子任务分配独立目录 `data/parallel/<父运行或会话>/<slot>/`——git 工作区用独立 worktree 检出，普通目录复制一份，失败时降级为只有独立产物目录。隔离目录写入运行的 `workspace_root`，工作区规则（AGENTS.md）取自隔离副本。
+- 流式：所有子任务共用一条 SSE（`GET /execution/parallel/stream?runIds=...`），避开浏览器同源连接数上限。
+- 并发度取决于 Worker 进程数：`HOTLINE_PYTHON_WORKER_INSTANCES`（默认 2）。SQLite 队列用事务抢占，多个 Worker 会各自领取不同运行。
+
+当前限制：子任务读父会话历史作为上下文，但不写回父会话历史，也不共享彼此的对话上下文；工作区文件召回仍走共享索引，只有规则与产物目录做了隔离；执行链路目前没有写文件/脚本工具，接入这类工具时应把 `workspace_root` 作为其工作目录。
 
 ### 意图三级级联与澄清门闸
 
@@ -269,7 +281,7 @@ Java 当前以统一入口和能力调用为主，并提供两项自有能力：
 | 自动化 | 按固定间隔提交 Agent 运行 | `/harness/schedules`、`data/harness-schedules.db` |
 | 插件 | 已安装技能的启停与删除 | `/skill/list` |
 | 代码地图 | 系统架构、请求时序与上下文流程 | `/code-map`、`/code-map/hotline.html` |
-| 轻量机器人 | 角色指令、技能绑定与会话关联 | `/harness/bots`、`data/harness-bots.db` |
+| bot | 角色指令、技能绑定与全局开关（种子机器人：需求分析助手 + 产品经理、前端/后端/AI/运维/测试工程师） | `/harness/bots`、`data/harness-bots.db` |
 | 个人中心 | 昵称、简介、回答风格与主题 | `/harness/profile`、`data/harness-profile.db` |
 | 模型 API Key | 本机保存凭证，接口返回掩码 | `/harness/profile/credentials`、`data/harness-credentials.db` |
 
@@ -301,7 +313,7 @@ npm --prefix frontend install
 npm --prefix frontend run build
 ```
 
-使用 pip 时，可在已激活的 Python 3.11+ 虚拟环境中执行 `python -m pip install -r requirements.txt`。启动器优先使用 `uv run python`，未安装 uv 时使用系统 Python，需确保它对应已安装依赖的环境。
+依赖清单只有一份：`pyproject.toml`，锁文件是 `uv.lock`。安装用 `uv sync`。没有 uv 时，可在已激活的 Python 3.11+ 虚拟环境中执行 `python -m pip install -e .`。启动器优先使用 `uv run python`，未安装 uv 时使用系统 Python，需确保它对应已安装依赖的环境。
 
 模型 Key、真实服务地址和凭据保存在 Git 忽略的根 `.env` 或 `DODO_ENV_FILE` 指定的本地配置中。配置项参考模板，模型也可通过工作台的个人中心配置。[配置模板](.env.example)
 
@@ -357,6 +369,8 @@ python -m python_backend.modules.execution.worker
 
 `run_python_backend.ps1` 和 `run_python_backend.sh` 提供 Python API 启动方式。执行 Agent 任务时还需运行 Worker。
 
+Java 启动时会自动拉起本地 Python 网关与执行 Worker：仅在静态寻址、目标为本机回环且该端口未被占用时生效，使用仓库 `.venv` 解释器，Java 进程退出时一并回收。Python 已在运行时 Java 只做复用，不会重复拉起。用 `HOTLINE_PYTHON_AUTOSTART=false` 关闭，或用 `HOTLINE_PYTHON_EXECUTABLE` / `HOTLINE_PYTHON_ROOT` 指定解释器与项目根目录。
+
 遇到端口冲突时，先确认占用进程的用途。
 
 ```powershell
@@ -401,11 +415,20 @@ flowchart TB
 
 - **技能控制台**：后端启动后打开 <http://127.0.0.1:8080/console>，可新建/编辑技能（SKILL.md + 可选资源）、按版本启用或停用、运行自进化并查看门禁结果。
 - **渐进式披露**：技能智能体（`/agent/skills/stream`）使用 LangChain `create_agent` 处理模型与工具调用。技能名称与摘要仅放在动态生成的 `read_skill` 工具描述中，不注入初始消息，也不将技能名称注册成独立工具；模型需要时按技能 ID 调用工具读取完整 `SKILL.md`，参考资料另行按相对路径按需读取。
-- **技能来源**：仓库根 `skills/*/SKILL.md`（当前包含开发流程技能 `hotline-tdd`）、原安装目录 `data/skills/`、技能中心中绑定当前项目的版本。仓库技能仅扫描元数据头部；目录查询不读取数据库正文/资源，不自动加载 `skill-center/samples/`。`$技能名` 是传给模型的显式使用提示，不再通过关键词预选后直接注入正文。
+- **技能来源**：仓库根 `skills/*/SKILL.md`（当前包含开发流程技能 `hotline-tdd` 与需求分析技能 `requirement-analysis`）、原安装目录 `data/skills/`、技能中心中绑定当前项目的版本。仓库技能仅扫描元数据头部；目录查询不读取数据库正文/资源，不自动加载 `skill-center/samples/`。`$技能名` 是传给模型的显式使用提示，不再通过关键词预选后直接注入正文。
 - **元数据缓存**：后端进程内按来源缓存文件技能的名称与摘要。每次请求枚举技能并检查 `SKILL.md` 的 inode、修改时间和大小；未变化的条目复用缓存，新增或变更的条目才重新解析头部，删除项从缓存移除。技能中心仍按请求 ID 查询当前灰度版本，避免缓存绕过版本路由。目录变化在下一次技能请求生效；同尺寸内容若被外部程序同时恢复完全相同的 inode/时间戳/大小，stat 签名无法检测。
 - **上下文范围**：默认恢复当前会话的任务状态、近期完整交互、历史摘要和相关记忆，再进入技能工具循环；`HOTLINE_CONTEXT_ENABLED=false` 时使用单次技能请求隔离。长期记忆按显式绑定的工作区共享，未绑定工作区时按会话隔离。技能中心灰度按该请求 ID 稳定分桶，任务内固定选中版本；解绑/禁用后后续读取被拒绝。
 - **自进化闭环**：评测用例按 `train / selection / test` 分段；`evolve` 只接受最多 8 条 `add/delete/replace` patch，通过静态、动态、回归、增益、安全五道门禁后进入 `staged`，再用 `promote` 灰度绑定、`rollback` 回滚；错误率达到阈值自动回滚。
 - **可选模型配置**：`SKILL_EVOLUTION_*`（自动生成 patch）与 `SKILL_JUDGE_*`（独立评分），见 `.env.example`。
+- **需求分析助手**：机器人绑定了 `requirement-analysis` 技能时，会话走需求分析流程而不是通用意图门闸。引擎先判断需求本身能不能写出可验收条目：说不清就发 `clarify` 事件，给三个理解方向加一个自由输入口，用户作答后作为新一轮提问带原需求回到流程；说得清就直接按技能产出用户故事、验收标准、FR/NFR/SC、MoSCoW 与追踪矩阵。上一轮刚澄清过时不再重复追问。 技能本体（`skills/requirement-analysis/`）采用“状态诊断 + 四阶段提问”：先判断需求处在 R0 只有方案没有问题 / R1 方案先行 / R2 需求含糊 / R3 隐藏约束 / R4 范围蔓延 哪个状态，从最早的状态开始处理；再按问题发现 → 需求澄清 → 约束发现 → 范围定义提问，一轮不超过 3 题、每题带候选答案，先给一句白话结论并报出“第几轮、共几轮”。产出物含问题陈述简报、需求层级（Must/Should/Could/Won't）、可验收的 FR/NFR/SC、约束清单与假设映射、失败预演、V1 范围定义和追踪矩阵；诊断手法见包内 `references/diagnosis.md`。需求分析一开始，聊天推荐里就带着一条“按 TDD 把这些需求写成测试”，点击后切到技能助手，由已安装的 `hotline-tdd` 技能接手。正文里每个问题下的候选答案会被抽走（正文只留问题），集中显示在输入框上方的多选面板：每题从 A 重新编号，可跨题多选，选好后点“发送所选”即切到技能助手，按“问题 + 所选候选”交给 `hotline-tdd` 继续追问。
+- **机器人全局开关**：机器人页左侧栏列出机器人并各带一个开关，开关打开即表示这个助手对所有会话生效（同一时间只保留一个开启的机器人，开启新的会自动关掉旧的）；没有开启机器人时才回退到会话绑定的人设。列表与详情只显示名称、技能与状态，不展示角色指令，角色指令只能在编辑表单里修改。
+- **智能体即工具**：机器人登记进工具登记表（`source='agent'`，`input_schema.agent.bot_id` 指向机器人）后，技能智能体可以把它当工具调用。工具是无状态的：需求说不清时返回 `needs_clarification` 与三个方向，父智能体转述给用户，用户作答后带 `clarification` 参数再调一次，工具调用本身不阻塞。方案与实现记录见 [Agent as Tool 设计](docs/agent-as-tool-design.md)。
+
+本地数据种子（安装仓库技能包到 `data/skills/`，登记「需求分析助手」与 6 个角色机器人，可重复执行；已有机器人的开关状态保持不变）：
+
+```bash
+python -m python_backend.seed_bots
+```
 
 命令行工具（`skill-center/`，纯标准库）：
 
@@ -520,7 +543,7 @@ npm --prefix frontend run build
 
 ```powershell
 .`.venv`Scripts`python.exe -m unittest python_backend.modules.context_engineering.test_completion -v
-node --test frontend/src/modules/workspaces/paths.test.js frontend/src/modules/execution/progress.test.js
+node --test frontend/src/modules/workspaces/paths.test.js frontend/src/modules/execution/progress.test.js frontend/src/modules/app/bindings.test.js
 .`.venv`Scripts`python.exe -m python_backend.modules.context_engineering.benchmark --tokens 100000000 --queries 100 --output data/context-benchmark/new-run
 ```
 
@@ -547,6 +570,10 @@ node --test frontend/src/modules/workspaces/paths.test.js frontend/src/modules/e
 | `DODO_REPO_SKILLS_DIRECTORY` | 仓库技能包目录，默认根据源码位置定位根 `skills/`，不受启动工作目录影响 |
 | `SKILLS_DIRECTORY` | 原技能安装目录，默认 `data/skills/`，与仓库技能目录分别管理 |
 | `DODO_DEV_FRONTEND_PORT` / `HOTLINE_JAVA_PORT` / `DODO_PORT` | 前端 / Java / Python 端口，默认 5180 / 8080 / 8888 |
+| `HOTLINE_PYTHON_AUTOSTART` / `HOTLINE_PYTHON_EXECUTABLE` / `HOTLINE_PYTHON_ROOT` | Java 启动时是否自动拉起本地 Python、解释器路径、项目根目录 |
+| `HOTLINE_PYTHON_WORKER_INSTANCES` | Java 启动时拉起的执行 Worker 进程数，默认 2；决定并行执行的运行数上限 |
+| `DODO_REDIS_ENABLED` / `DODO_REDIS_HOST` / `DODO_REDIS_PORT` | 任务锁与停止广播走 Redis，默认关闭；生产在 `.env` 里显式开启并填远程地址 |
+| `HOTLINE_API_TOKEN` | 共享密钥，Java 入口与 Python API 同时校验；留空不启用。启用后浏览器需在「个人中心 → API Key」填入同一个令牌 |
 
 完整清单见 [.env.example](./.env.example)。
 

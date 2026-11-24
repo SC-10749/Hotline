@@ -25,6 +25,7 @@ from python_backend.modules.retrieval.vector_store import PgVectorStore
 from .application.execution_service import ExecutionApplicationService
 from .infrastructure.queue import SqliteExecutionQueue
 from python_backend.modules.execution.engine import ModelClient
+from .api.auth import build_auth_middleware
 from .api.routers.execution import create_execution_router
 from .api.routers.context_engineering import create_context_router
 from .modules.context_engineering.service import ContextService
@@ -128,10 +129,13 @@ async def lifespan(_: FastAPI):
         stop_schedule_loop()
         stop_release_observation()
         wait_for_background_runs(timeout=5)
+        evaluation_router.benchmark_service.close()
         documents.stop_sweeper()
 
 
 app = FastAPI(title="Hotline Agent", version="1.0.0", lifespan=lifespan)
+# 共享密钥鉴权：配置为空时不启用，启用后所有非健康检查路由都需要该请求头。
+app.add_middleware(build_auth_middleware(settings.api_token))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -145,15 +149,18 @@ app.include_router(
         lambda file_id: bool(storage.get_file(file_id) or storage.get_document(file_id)),
         lambda: len(governance_store.list('pending')),
         workspace_exists=lambda workspace_id: resource_store.get_workspace(workspace_id) is not None,
+        sse_limit=settings.sse_limit,
+        sse_idle_timeout=settings.sse_idle_timeout,
     )
 )
-app.include_router(create_evaluation_router(evaluation_store, execution_service))
+evaluation_router = create_evaluation_router(evaluation_store, execution_service)
+app.include_router(evaluation_router)
 if context_service:
     app.include_router(create_context_router(context_service, storage.delete_session))
 app.include_router(create_resource_router(resource_store))
 app.include_router(create_workspace_import_router(resource_store, settings.data_dir / 'workspace-imports'))
 app.include_router(create_registry_router(registry_store))
-app.include_router(create_mcp_router(registry_store))
+app.include_router(create_mcp_router(registry_store, governance_store))
 app.include_router(create_governance_router(execution_store.list_workers, governance_store, execution_store.set_worker_state, settings_store.get, notification_store, execution_store.list_worker_errors))
 app.include_router(create_observability_router(execution_store.list_runs, execution_store.get_run, execution_store.get_events))
 app.include_router(create_artifact_router(artifact_store, object_store))
@@ -513,7 +520,8 @@ def session_detail(conversation_id: str):
         {
             "conversationId": conversation_id,
             "workspaceId": scope['workspace_id'] if scope else '',
-            "agentType": rows[0].agentType,
+            # 会话当前处在哪个助手类型看最后一条：中途切到技能助手要认得出来。
+            "agentType": rows[-1].agentType,
             "fileid": rows[0].fileid,
             "messages": [row.to_dict() for row in rows],
         }

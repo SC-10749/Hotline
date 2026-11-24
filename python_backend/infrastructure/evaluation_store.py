@@ -1,37 +1,20 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
+
+from .sqlite_base import SqliteStore
 
 
 TERMINAL_RUN_STATUSES = {"completed", "failed", "blocked", "cancelled"}
 
 
-class EvaluationStore:
+class EvaluationStore(SqliteStore):
     """Durable metadata store for Harness datasets, configs, and evaluation runs."""
-
-    def __init__(self, path: Path):
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._initialize()
-
-    def _connect(self) -> sqlite3.Connection:
-        db = sqlite3.connect(self.path, timeout=30, isolation_level=None)
-        db.row_factory = sqlite3.Row
-        db.execute("PRAGMA busy_timeout = 30000")
-        return db
-
-    @contextmanager
-    def _db(self):
-        db = self._connect()
-        try:
-            yield db
-        finally:
-            db.close()
 
     def _initialize(self) -> None:
         with self._db() as db:
@@ -52,6 +35,8 @@ class EvaluationStore:
                     input_text TEXT NOT NULL,
                     expected_output TEXT NOT NULL DEFAULT '',
                     rubric TEXT NOT NULL DEFAULT '{}',
+                    turns TEXT NOT NULL DEFAULT '[]',
+                    user_profile TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(dataset_id) REFERENCES evaluation_dataset(dataset_id) ON DELETE CASCADE
                 );
@@ -105,6 +90,23 @@ class EvaluationStore:
                 run_columns = {row['name'] for row in db.execute('PRAGMA table_info(evaluation_run)')}
                 if 'summary' not in run_columns:
                     db.execute('ALTER TABLE evaluation_run ADD COLUMN summary TEXT')
+                if 'epochs' not in run_columns:
+                    db.execute('ALTER TABLE evaluation_run ADD COLUMN epochs INTEGER NOT NULL DEFAULT 1')
+                if 'provenance' not in run_columns:
+                    db.execute("ALTER TABLE evaluation_run ADD COLUMN provenance TEXT NOT NULL DEFAULT ''")
+                case_columns = {row['name'] for row in db.execute('PRAGMA table_info(evaluation_case)')}
+                if 'turns' not in case_columns:
+                    db.execute("ALTER TABLE evaluation_case ADD COLUMN turns TEXT NOT NULL DEFAULT '[]'")
+                if 'user_profile' not in case_columns:
+                    db.execute("ALTER TABLE evaluation_case ADD COLUMN user_profile TEXT NOT NULL DEFAULT ''")
+                result_columns = {row['name'] for row in db.execute('PRAGMA table_info(evaluation_result)')}
+                for column, ddl in (('epoch', 'INTEGER NOT NULL DEFAULT 0'),
+                                    ('failure_kind', "TEXT NOT NULL DEFAULT ''"),
+                                    ('exec_run_id', "TEXT NOT NULL DEFAULT ''"),
+                                    ('trace', "TEXT NOT NULL DEFAULT '{}'"),
+                                    ('metrics', "TEXT NOT NULL DEFAULT '{}'")):
+                    if column not in result_columns:
+                        db.execute(f'ALTER TABLE evaluation_result ADD COLUMN {column} {ddl}')
                 db.commit()
             except Exception:
                 db.rollback()
@@ -143,6 +145,11 @@ class EvaluationStore:
     def _case_dict(row: sqlite3.Row) -> dict[str, Any]:
         item = dict(row)
         item["rubric"] = json.loads(item["rubric"] or "{}")
+        try:
+            turns = json.loads(item.get("turns") or "[]")
+        except (TypeError, ValueError):
+            turns = []
+        item["turns"] = turns if isinstance(turns, list) else []
         return item
 
     def create_dataset(self, name: str, dataset_type: str, description: str = "") -> dict[str, Any]:
@@ -164,14 +171,16 @@ class EvaluationStore:
             return True
 
     def add_case(self, dataset_id: str, input_text: str, expected_output: str = "",
-                 rubric: dict[str, Any] | None = None) -> dict[str, Any]:
+                 rubric: dict[str, Any] | None = None, turns: list[str] | None = None,
+                 user_profile: str = "") -> dict[str, Any]:
         case_id = f"case-{uuid4().hex[:12]}"
         with self._db() as db:
             if not db.execute("SELECT 1 FROM evaluation_dataset WHERE dataset_id=?", (dataset_id,)).fetchone():
                 return None
             db.execute(
-                "INSERT INTO evaluation_case(case_id,dataset_id,input_text,expected_output,rubric) VALUES(?,?,?,?,?)",
-                (case_id, dataset_id, input_text, expected_output, json.dumps(rubric or {}, ensure_ascii=False)),
+                "INSERT INTO evaluation_case(case_id,dataset_id,input_text,expected_output,rubric,turns,user_profile) VALUES(?,?,?,?,?,?,?)",
+                (case_id, dataset_id, input_text, expected_output, json.dumps(rubric or {}, ensure_ascii=False),
+                 json.dumps(list(turns or []), ensure_ascii=False), user_profile or ""),
             )
             db.execute("UPDATE evaluation_dataset SET updated_at=CURRENT_TIMESTAMP WHERE dataset_id=?", (dataset_id,))
             row = db.execute("SELECT * FROM evaluation_case WHERE case_id=?", (case_id,)).fetchone()
@@ -186,9 +195,11 @@ class EvaluationStore:
             for item in cases:
                 case_id = f"case-{uuid4().hex[:12]}"
                 db.execute(
-                    "INSERT INTO evaluation_case(case_id,dataset_id,input_text,expected_output,rubric) VALUES(?,?,?,?,?)",
+                    "INSERT INTO evaluation_case(case_id,dataset_id,input_text,expected_output,rubric,turns,user_profile) VALUES(?,?,?,?,?,?,?)",
                     (case_id, dataset_id, item.get("input", ""), item.get("expectedOutput", ""),
-                     json.dumps(item.get("rubric") or {}, ensure_ascii=False)),
+                     json.dumps(item.get("rubric") or {}, ensure_ascii=False),
+                     json.dumps(list(item.get("turns") or []), ensure_ascii=False),
+                     str(item.get("userProfile") or item.get("user_profile") or "")),
                 )
                 row = db.execute("SELECT * FROM evaluation_case WHERE case_id=?", (case_id,)).fetchone()
                 created.append(self._case_dict(row))
@@ -204,9 +215,14 @@ class EvaluationStore:
                 db.execute("UPDATE evaluation_dataset SET updated_at=CURRENT_TIMESTAMP WHERE dataset_id=?", (dataset_id,))
             return bool(cursor.rowcount)
 
-    def update_case(self, dataset_id: str, case_id: str, input_text: str, expected_output: str, rubric: dict[str, Any]) -> dict[str, Any] | None:
+    def update_case(self, dataset_id: str, case_id: str, input_text: str, expected_output: str,
+                     rubric: dict[str, Any], turns: list[str] | None = None,
+                     user_profile: str = "") -> dict[str, Any] | None:
         with self._db() as db:
-            db.execute("UPDATE evaluation_case SET input_text=?,expected_output=?,rubric=? WHERE dataset_id=? AND case_id=?", (input_text, expected_output, json.dumps(rubric, ensure_ascii=False), dataset_id, case_id))
+            db.execute(
+                "UPDATE evaluation_case SET input_text=?,expected_output=?,rubric=?,turns=?,user_profile=? WHERE dataset_id=? AND case_id=?",
+                (input_text, expected_output, json.dumps(rubric, ensure_ascii=False),
+                 json.dumps(list(turns or []), ensure_ascii=False), user_profile or "", dataset_id, case_id))
             db.execute("UPDATE evaluation_dataset SET updated_at=CURRENT_TIMESTAMP WHERE dataset_id=?", (dataset_id,))
             row = db.execute("SELECT * FROM evaluation_case WHERE case_id=? AND dataset_id=?", (case_id, dataset_id)).fetchone()
         return self._case_dict(row) if row else None
@@ -222,11 +238,23 @@ class EvaluationStore:
             ).fetchone()[0]
             version = int(dataset["version"] or 1)
             snapshot_id = f"snapshot-{uuid4().hex[:12]}"
+            case_rows = db.execute(
+                "SELECT case_id,input_text,expected_output,rubric,turns,user_profile FROM evaluation_case WHERE dataset_id=? ORDER BY created_at, case_id",
+                (dataset_id,),
+            ).fetchall()
+            cases = [{"case_id": row["case_id"], "input_text": row["input_text"],
+                      "expected_output": row["expected_output"],
+                      "rubric": json.loads(row["rubric"] or "{}"),
+                      "turns": json.loads(row["turns"] or "[]"),
+                      "user_profile": row["user_profile"] or ""} for row in case_rows]
             payload = {
                 "name": dataset["name"],
                 "type": dataset["dataset_type"],
                 "description": dataset["description"],
                 "case_count": int(case_count),
+                "cases": cases,
+                "sha256": hashlib.sha256(
+                    json.dumps(cases, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest(),
             }
             db.execute(
                 "INSERT INTO evaluation_snapshot(snapshot_id,dataset_id,version,payload) VALUES(?,?,?,?)",
@@ -273,14 +301,16 @@ class EvaluationStore:
         return self.get_config()
 
     def create_run(self, dataset_id: str, agent: str, version: str,
-                   status: str = "running", error: str | None = None) -> dict[str, Any] | None:
+                   status: str = "running", error: str | None = None,
+                   epochs: int = 1, provenance: dict[str, Any] | None = None) -> dict[str, Any] | None:
         with self._db() as db:
             if not db.execute("SELECT 1 FROM evaluation_dataset WHERE dataset_id=?", (dataset_id,)).fetchone():
                 return None
             eval_run_id = f"eval-{uuid4().hex[:12]}"
             db.execute(
-                "INSERT INTO evaluation_run(eval_run_id,dataset_id,agent,version,status,error) VALUES(?,?,?,?,?,?)",
-                (eval_run_id, dataset_id, agent, version, status, error),
+                "INSERT INTO evaluation_run(eval_run_id,dataset_id,agent,version,status,error,epochs,provenance) VALUES(?,?,?,?,?,?,?,?)",
+                (eval_run_id, dataset_id, agent, version, status, error, int(epochs or 1),
+                 json.dumps(provenance or {}, ensure_ascii=False)),
             )
             row = db.execute("SELECT * FROM evaluation_run WHERE eval_run_id=?", (eval_run_id,)).fetchone()
         return self._run_dict(row) if row else None
@@ -293,6 +323,10 @@ class EvaluationStore:
                 item["summary"] = json.loads(item["summary"])
             except (TypeError, ValueError):
                 pass
+        try:
+            item["provenance"] = json.loads(item.get("provenance") or "{}")
+        except (TypeError, ValueError):
+            item["provenance"] = {}
         return item
 
     def update_run(self, eval_run_id: str, status: str, error: str | None = None,
@@ -324,16 +358,22 @@ class EvaluationStore:
         return [self._run_dict(row) for row in rows]
 
     def save_result(self, eval_run_id: str, case_id: str, score: float, verdict: str,
-                    detail: str = "", actual_output: str = "") -> dict[str, Any]:
+                    detail: str = "", actual_output: str = "", epoch: int = 0,
+                    failure_kind: str = "", exec_run_id: str = "",
+                    trace: dict[str, Any] | None = None,
+                    metrics: dict[str, Any] | None = None) -> dict[str, Any]:
         result_id = f"result-{uuid4().hex[:12]}"
         with self._db() as db:
             db.execute(
-                """INSERT INTO evaluation_result(result_id,eval_run_id,case_id,score,verdict,detail,actual_output)
-                   VALUES(?,?,?,?,?,?,?)""",
-                (result_id, eval_run_id, case_id, float(score), verdict, detail, actual_output),
+                """INSERT INTO evaluation_result(result_id,eval_run_id,case_id,score,verdict,detail,actual_output,epoch,failure_kind,exec_run_id,trace,metrics)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (result_id, eval_run_id, case_id, float(score), verdict, detail, actual_output,
+                 int(epoch or 0), failure_kind or "", exec_run_id or "",
+                 json.dumps(trace or {}, ensure_ascii=False),
+                 json.dumps(metrics or {}, ensure_ascii=False)),
             )
             row = db.execute("SELECT * FROM evaluation_result WHERE result_id=?", (result_id,)).fetchone()
-        return dict(row) if row else {}
+        return self._result_dict(row) if row else {}
 
     def list_results(self, eval_run_id: str) -> list[dict[str, Any]]:
         with self._db() as db:
@@ -341,4 +381,25 @@ class EvaluationStore:
                 "SELECT * FROM evaluation_result WHERE eval_run_id=? ORDER BY created_at, rowid",
                 (eval_run_id,),
             ).fetchall()
-        return [dict(row) for row in rows]
+        return [self._result_dict(row) for row in rows]
+
+    def find_result(self, eval_run_id: str, case_id: str, epoch: int = 0) -> dict[str, Any] | None:
+        with self._db() as db:
+            row = db.execute(
+                "SELECT * FROM evaluation_result WHERE eval_run_id=? AND case_id=? AND epoch=? ORDER BY rowid LIMIT 1",
+                (eval_run_id, case_id, int(epoch or 0)),
+            ).fetchone()
+        return self._result_dict(row) if row else None
+
+    @staticmethod
+    def _result_dict(row: sqlite3.Row) -> dict[str, Any]:
+        item = dict(row)
+        try:
+            item["trace"] = json.loads(item.get("trace") or "{}")
+        except (TypeError, ValueError):
+            item["trace"] = {}
+        try:
+            item["metrics"] = json.loads(item.get("metrics") or "{}")
+        except (TypeError, ValueError):
+            item["metrics"] = {}
+        return item

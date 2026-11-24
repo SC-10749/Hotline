@@ -26,8 +26,11 @@ class AgentProgressTests(unittest.TestCase):
 
     def test_understanding_is_first_and_answer_progress_precedes_text(self):
         events = list(self.engine.stream('chat', 'conversation', 'question'))
-        self.assertEqual(events[0]['stage'], 'understanding')
-        self.assertEqual(events[0]['status'], 'running')
+        # 首个事件是 agent 类型告知（前端据此切模式条），随后才是理解阶段。
+        self.assertEqual(events[0]['type'], 'agent')
+        self.assertEqual(events[0]['content'], 'chat')
+        self.assertEqual(events[1]['stage'], 'understanding')
+        self.assertEqual(events[1]['status'], 'running')
         stages = [event for event in events if event['type'] == 'step']
         self.assertEqual([event['stage'] for event in stages], ['llm', 'llm'])
         answer_start = next(i for i, event in enumerate(events) if event.get('stage') == 'llm')

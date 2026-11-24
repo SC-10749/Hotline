@@ -9,6 +9,7 @@ import zipfile
 import logging
 import hashlib
 import threading
+import time
 from urllib.parse import urlsplit
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -542,6 +543,40 @@ class SkillRegistry:
             if not any(target.iterdir()):
                 target.rmdir()
             raise
+
+    def install_from_dir(self, source: Path) -> Skill:
+        """从本地目录安装技能包：已安装同名技能时原地更新，技能编号保持不变。
+
+        机器人绑定的是技能编号，原地更新才能让已有绑定继续有效。
+        """
+        source = Path(source)
+        entry = source / SKILL_FILENAME
+        if not entry.is_file():
+            raise SkillError(f'技能包缺少 {SKILL_FILENAME}')
+        meta, _ = parse_frontmatter(entry.read_text('utf-8', errors='replace'))
+        name = meta.get('name') or source.name
+        existing = next((item for item in self.list() if item.name == name), None)
+        skill_id = existing.id if existing else uuid4().hex
+        dir_name = existing.dirName if existing else skill_id
+        staging = self._skill_dir(f'{dir_name}.staging')
+        shutil.rmtree(staging, ignore_errors=True)
+        shutil.copytree(source, staging)
+        skill = Skill(id=skill_id, name=name, description=meta.get('description', ''),
+                      entry=SKILL_FILENAME, sourceFile=str(source), enabled=True,
+                      createdAt=existing.createdAt if existing else _now(), dirName=dir_name)
+        (staging / META_NAME).write_text(json.dumps(asdict(skill), ensure_ascii=False, indent=2), 'utf-8')
+        target = self._skill_dir(dir_name)
+        shutil.rmtree(target, ignore_errors=True)
+        for attempt in range(3):
+            try:
+                staging.rename(target)
+                break
+            except OSError:
+                # Windows 上刚写完的目录偶尔被索引器短暂占用，重试即可。
+                if attempt == 2:
+                    raise
+                time.sleep(0.2)
+        return skill
 
     @staticmethod
     def _resolve_entry(staging: Path, entry: str, candidates: list[Path]) -> Path:

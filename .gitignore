@@ -76,3 +76,7 @@ replay_pid*.log
 
 # Legacy backend runtime data stays local.
 /python_backend/data/
+
+# Personal resume; keep it local, never commit or push.
+简历.md
+docs/简历.md

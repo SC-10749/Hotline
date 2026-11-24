@@ -329,7 +329,7 @@ class AgentIntegrationTests(unittest.TestCase):
 
     def test_skills_mode_has_no_history_and_preserves_existing_event_contract(self):
         model = ScriptedModel(responses=[AIMessage(content='技能回答')])
-        with patch('python_backend.agents.build_chat_model', return_value=model):
+        with patch('python_backend.modules.execution.skill_flow.build_chat_model', return_value=model):
             events = list(self.engine.stream('skills', 'conversation-id', '本次问题'))
         self.storage.session_messages.assert_not_called()
         self.storage.conversation_file_id.assert_not_called()
@@ -365,7 +365,7 @@ class AgentIntegrationTests(unittest.TestCase):
             store = ExecutionStore(Path(directory) / 'execution.db')
             run = store.enqueue('conversation-worker', 'skills', 'test', None)
             worker = ExecutionWorker(store, AgentEngineRuntime(self.engine), self.tasks, Mock())
-            with patch('python_backend.agents.build_chat_model', return_value=model):
+            with patch('python_backend.modules.execution.skill_flow.build_chat_model', return_value=model):
                 self.assertTrue(worker.run_once())
             self.assertEqual(store.get_status(run['run_id']), 'completed')
             saved = store.get_events(run['run_id'])
@@ -396,13 +396,13 @@ class AgentIntegrationTests(unittest.TestCase):
     def test_current_question_only_on_each_request(self):
         for query in ('第一轮问题', '第二轮问题'):
             model = ScriptedModel(responses=[AIMessage(content='回答')])
-            with patch('python_backend.agents.build_chat_model', return_value=model):
+            with patch('python_backend.modules.execution.skill_flow.build_chat_model', return_value=model):
                 list(self.engine.stream('skills', 'conversation-id', query))
             self.assertEqual([message.content for message in model.requests[0] if message.type == 'human'], [query])
 
     def test_failure_or_stop_never_emits_complete_or_saves_success(self):
         model = ScriptedModel(responses=[])
-        with patch('python_backend.agents.build_chat_model', return_value=model):
+        with patch('python_backend.modules.execution.skill_flow.build_chat_model', return_value=model):
             events = list(self.engine.stream('skills', 'conversation-id', '本次问题'))
         self.assertEqual(events[-1]['type'], 'error')
         self.storage.update_answer.assert_not_called()
@@ -442,7 +442,7 @@ class AgentIntegrationTests(unittest.TestCase):
             self.engine.skills = registry
             descriptor = session.descriptors[0]
             model = ScriptedModel(responses=[call_skill(descriptor.id), AIMessage(content='已按读取的说明回答')])
-            with patch('python_backend.agents.build_chat_model', return_value=model):
+            with patch('python_backend.modules.execution.skill_flow.build_chat_model', return_value=model):
                 events = list(self.engine.stream('skills', 'conversation-id', '请使用 demo'))
             self.assertEqual(events[-1]['type'], 'complete')
             self.assertNotIn('BODY_SENTINEL', repr(model.requests[0]))

@@ -11,7 +11,9 @@
 | [协作规则](../AGENTS.md) | 开发约束、私密信息保护和验证要求 |
 | [前端设计系统](../DESIGN.md) | 唯一视觉事实源，涵盖 Vue 工作台与静态技能控制台 |
 | [上下文工程实现与验收](context-engineering-design.md) | 请求链路、工作区、检索与上下文装配、验证方法 |
-| [独立 RAG 测评工具](evaluation.md) | `eval/` 下的采集、Ragas 打分和 Prompt 检查 |
+| [AI 测评工具与 Harness 接入](evaluation.md) | 按需 Ragas、BIRD SQL、Locust 压测与独立脚本 |
+| [变更规格（spec）](spec/index.md) | 每次代码、接口与方案变更的规格契约；开工前先读 |
+| [模块功能规格](spec/modules/index.md) | 按能力模块拆分的功能现状说明；改哪个模块就只读哪一份 |
 
 根目录三个约定文件保留在原位，确保仓库入口和开发工具可以直接找到；其他项目说明集中在本目录。
 
@@ -22,6 +24,7 @@
 | [Java 高并发、高可用与权限治理方案](java-production-readiness-plan.md) | Java/Python 职责边界、30 项功能的设计/实现/结果、VictoriaMetrics 源码对照与开源参考、迁移与验收；属于草案 |
 | [Java 21 与 Python 架构方案](微服务架构迁移草案.md) | 注册发现与调用边界、契约，以及权限、限流、分布式执行等后续建设目标；开篇说明当前进度 |
 | [第二阶段能力设计](stage-two-capability-design.md) | 检索、存储一致性、权限与测评等设计建议；属于草案 |
+| [Agent as Tool 设计](agent-as-tool-design.md) | 把「需求分析助手」包装成可被调用的工具并登记进已有工具登记表；含 MCP/A2A/AG2/Spring AI/LangChain4j/AgentScope Java 参考与分阶段实施；属于草案 |
 | [性能测量与并发压测方案](performance-benchmark-plan.md) | 分层测量、压测场景与验收方法；属于方案，不是压测结果 |
 
 ## 实施记录与保留草稿
@@ -39,3 +42,5 @@
 - `SKILL.md`、技能样本参考资料和许可证属于技能包自身内容，留在原目录，避免破坏加载与分发。
 - 依赖清单、配置、代码和运行数据不属于阅读文档，不为集中说明而搬动。
 - 已删除与当前设计系统冲突的旧 `前端设计规范.md`，统一使用根 `DESIGN.md`。
+
+测试数据与操作步骤：[Hotline 项目测试数据](testing/evaluation-data.md)。

@@ -630,7 +630,7 @@ source marker 里带 embedding 模型名与维度。模型换了，marker 不匹
 - **无 trace/span 结构**：事件里没有 `trace_id` / `span_id` / `parent_id`，跨 run 无法串联（`execution_run` 只有 `run_id` / `conversation_id`）。
 - **无金额成本**：没有单价、模型归集、per-user / per-workspace 成本。
 - 无延迟分位（P95/P99）、无业务口径的成功率（一次问答算不算成功没有定义）。
-- 无 OpenTelemetry / Langfuse 依赖（`requirements.txt` 与 `pyproject.toml` 均无）。
+- 无 OpenTelemetry / Langfuse 依赖（`pyproject.toml` 无）。
 
 ### 建议方案
 

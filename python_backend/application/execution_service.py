@@ -60,6 +60,16 @@ class ExecutionApplicationService:
         return self.queue.enqueue(request.conversation_id, request.agent, request.query, request.file_id,
                                   agent_id or '', workspace_id or '')
 
+    def create_parallel(self, conversation_id: str, tasks: list[dict[str, Any]],
+                        parent_run_id: str = "") -> list[dict[str, Any]]:
+        """一次派发多个子任务：每个任务一个 slot，可同时运行。"""
+        if not self.queue.has_live_worker():
+            raise WorkerUnavailableError("Agent Execution Worker 未运行")
+        return self.queue.enqueue_parallel(conversation_id, tasks, parent_run_id)
+
+    def list_children(self, parent_run_id: str) -> list[dict[str, Any]]:
+        return self.queue.list_children(parent_run_id)
+
     def get_run(self, run_id: str) -> dict[str, Any] | None:
         return self.queue.get_run(run_id)
 

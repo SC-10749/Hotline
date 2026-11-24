@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
-import sqlite3
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+
+from .sqlite_base import SqliteStore
 
 
 DEFAULT_HARNESS_SETTINGS = {
@@ -23,26 +23,7 @@ DEFAULT_HARNESS_SETTINGS = {
 }
 
 
-class SettingsStore:
-    def __init__(self, path: Path):
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._initialize()
-
-    def _connect(self):
-        db = sqlite3.connect(self.path, timeout=30, isolation_level=None)
-        db.row_factory = sqlite3.Row
-        db.execute('PRAGMA busy_timeout = 30000')
-        return db
-
-    @contextmanager
-    def _db(self):
-        db = self._connect()
-        try:
-            yield db
-        finally:
-            db.close()
-
+class SettingsStore(SqliteStore):
     def _initialize(self):
         with self._db() as db:
             db.execute('CREATE TABLE IF NOT EXISTS harness_settings (settings_id INTEGER PRIMARY KEY CHECK(settings_id=1), payload TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)')

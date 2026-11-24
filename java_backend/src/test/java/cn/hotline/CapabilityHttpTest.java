@@ -21,12 +21,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"spring.cloud.nacos.discovery.enabled=false", "hotline.python.mode=static",
                 "hotline.admission.store=memory",
+                "hotline.python.launch.enabled=false",
                 "HOTLINE_NACOS_ENABLED=true", "HOTLINE_NACOS_REGISTER_ENABLED=false"})
 class CapabilityHttpTest {
     private static final HttpServer UPSTREAM = upstream();
     private static volatile int healthStatus;
     private static volatile int readinessStatus;
     private static volatile String healthBody;
+    private static volatile String readinessBody;
 
     @Autowired
     private TestRestTemplate http;
@@ -45,7 +47,7 @@ class CapabilityHttpTest {
             server.createContext("/health", exchange -> {
                 boolean ready = exchange.getRequestURI().getPath().equals("/health/ready");
                 int status = ready ? readinessStatus : healthStatus;
-                String body = ready ? "{\"status\":\"UP\",\"service\":\"hotline-agent\"}" : healthBody;
+                String body = ready ? readinessBody : healthBody;
                 byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().set("Content-Type", "application/json");
                 exchange.sendResponseHeaders(status, bytes.length);
@@ -64,6 +66,7 @@ class CapabilityHttpTest {
     void reset() {
         healthStatus = 200;
         readinessStatus = 200;
+        readinessBody = "{\"status\":\"UP\",\"service\":\"hotline-agent\"}";
         healthBody = "{\"status\":\"UP\",\"service\":\"hotline-agent\",\"version\":\"fastapi\"}";
     }
 
@@ -118,7 +121,19 @@ class CapabilityHttpTest {
         ResponseEntity<String> response = http.getForEntity("/api/v1/capabilities/python/health", String.class);
         assertThat(response.getStatusCode().value()).isEqualTo(503);
         assertThat(response.getBody()).contains("PYTHON_UNAVAILABLE")
+                .contains("HTTP 500")
                 .doesNotContain("private diagnostic", "127.0.0.1", "http://");
+    }
+
+    @Test
+    void readinessExplainsUnavailableDependenciesWithoutLeakingOtherFields() {
+        readinessStatus = 503;
+        readinessBody = "{\"executionWorker\":\"unavailable\",\"serviceRegistry\":\"unavailable\","
+                + "\"detail\":\"private diagnostic\"}";
+        ResponseEntity<String> response = http.getForEntity("/health/ready", String.class);
+        assertThat(response.getStatusCode().value()).isEqualTo(503);
+        assertThat(response.getBody()).contains("HTTP 503", "Worker", "心跳过期", "服务注册不可用")
+                .doesNotContain("private diagnostic");
     }
 
     @Test

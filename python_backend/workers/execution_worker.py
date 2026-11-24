@@ -8,6 +8,7 @@ import signal
 import threading
 import time
 from collections.abc import Iterable
+from pathlib import Path
 from uuid import uuid4
 
 from ..bootstrap import load_environment
@@ -26,7 +27,8 @@ from ..infrastructure.queue import SqliteExecutionQueue  # noqa: E402
 from ..infrastructure.settings_store import SettingsStore  # noqa: E402
 from ..infrastructure.resource_store import ResourceStore  # noqa: E402
 from ..runtime import AgentEngineRuntime, AgentRuntime  # noqa: E402
-from ..modules.workspaces.context import load_workspace_rules, recall_workspace
+from ..modules.workspaces.context import load_workspace_rules, recall_workspace, resolve_workspace_root
+from ..modules.execution.parallel import allocate_task_workspace, task_key_for
 from ..modules.retrieval.workspace_index import WorkspaceIndex
 from ..modules.artifacts.store import ArtifactStore, artifact_metadata  # noqa: E402
 from ..modules.execution.tools import set_current_run_id, set_tool_policy  # noqa: E402
@@ -43,6 +45,7 @@ class ExecutionWorker:
         poll_interval: float = 0.5,
         artifacts: ArtifactStore | None = None,
         policy: dict | None = None,
+        resources: ResourceStore | None = None,
     ):
         self.store = store
         self.runtime = runtime
@@ -50,6 +53,7 @@ class ExecutionWorker:
         self.object_store = object_store
         self.poll_interval = poll_interval
         self.artifacts = artifacts
+        self.resources = resources
         # Harness 设置是运行时默认值来源：超时与重试次数在这里真正生效。
         self.timeout_seconds = int((policy or {}).get('defaultTimeoutSeconds') or 0)
         self.retry_count = int((policy or {}).get('defaultRetryCount') or 0)
@@ -119,20 +123,47 @@ class ExecutionWorker:
         self.store.heartbeat_worker(self.worker_id, os.getpid(), current_run_id,
                                     capacity=self.capacity, runtime_version=self.runtime_version)
 
-    def _monitor_run(self, run_id: str, conversation_id: str, stopped: threading.Event) -> None:
+    def _monitor_run(self, run_id: str, task_key: str, stopped: threading.Event) -> None:
         deadline = time.monotonic() + self.timeout_seconds if self.timeout_seconds > 0 else None
         while not stopped.wait(3):
             self._heartbeat(run_id)
             self.store.heartbeat_run(run_id, self.worker_id)
             if self.store.is_cancel_requested(run_id):
-                self.tasks.stop(conversation_id)
+                self.tasks.stop(task_key)
                 return
             if deadline is not None and time.monotonic() >= deadline:
                 # 超时按失败结束，避免运行无限占用 Worker。
                 self.store.append_event(run_id, {"type": "error", "content": f"运行超过 {self.timeout_seconds} 秒默认超时，已终止"})
                 self.store.finish(run_id, "failed", "timeout")
-                self.tasks.stop(conversation_id)
+                self.tasks.stop(task_key)
                 return
+
+    def _prepare_workspace(self, run: dict) -> str:
+        """子任务分配独立工作目录：并发子任务各有各的产出目录，互不覆盖。"""
+        parent = str(run.get('parent_run_id') or '')
+        slot = str(run.get('slot') or '')
+        if not slot:
+            return ''
+        # 直接派发（没有父运行）时按会话分目录，隔离目录一样有独立命名空间。
+        namespace = parent or f"conv-{run.get('conversation_id') or 'unknown'}"
+        workspace_id = str(run.get('workspace_id') or '')
+        source = None
+        if workspace_id and self.resources is not None:
+            try:
+                source = resolve_workspace_root(self.resources, workspace_id)
+            except Exception:
+                source = None
+        target = Path(self.object_store.settings.data_dir) / 'parallel' / namespace / slot
+        record = allocate_task_workspace(source, target)
+        run['workspace_root'] = str(record['workspacePath'])
+        self.store.set_workspace_root(run['run_id'], run['workspace_root'])
+        self.store.append_event(run['run_id'], {
+            'type': 'policy',
+            'content': '子任务隔离',
+            'policy': {'mode': record['mode'], 'workspacePath': record['workspacePath'],
+                       'outputsPath': record['outputsPath'], 'message': record['message']},
+        })
+        return run['workspace_root']
 
     def _events_for_run(self, run: dict) -> Iterable[dict]:
         agent = run["agent"]
@@ -175,7 +206,9 @@ class ExecutionWorker:
             self.object_store.upload_bytes(content, key, content_type)
         artifact = self.artifacts.register(run_id=run['run_id'], name=output.name, size=len(content),
                                            sha256=hashlib.sha256(content).hexdigest(), content_type=content_type,
-                                           storage_backend=backend, storage_key=key)
+                                           storage_backend=backend, storage_key=key,
+                                           # 归属方就是发起这次生成的会话；没有归属的产物谁都下不了。
+                                           owner=str(run.get('conversation_id') or run['run_id']))
         if backend == 'minio':
             output.unlink(missing_ok=True)
         metadata = artifact_metadata(artifact)
@@ -196,6 +229,7 @@ class ExecutionWorker:
         # 登记运行上下文，工具侧的审批请求据此关联到本次运行。
         set_current_run_id(run_id)
         self._heartbeat(run_id)
+        self._prepare_workspace(run)
         if self.isolation:
             # 记录本次运行实际使用的运行时策略，便于在运行详情里核对设置是否生效。
             self.store.append_event(run_id, {
@@ -238,8 +272,10 @@ class ExecutionWorker:
             return True
 
         stopped = threading.Event()
+        # 任务键按 slot 派生：子任务释放的是自己的锁，不会误删同会话其它运行的锁。
+        task_key = task_key_for(conversation_id, str(run.get('slot') or ''))
         monitor = threading.Thread(
-            target=self._monitor_run, args=(run_id, conversation_id, stopped), daemon=True
+            target=self._monitor_run, args=(run_id, task_key, stopped), daemon=True
         )
         monitor.start()
         terminal_event = None
@@ -288,7 +324,7 @@ class ExecutionWorker:
         finally:
             stopped.set()
             monitor.join(timeout=1)
-            self.tasks.remove(conversation_id)
+            self.tasks.remove(task_key)
             set_current_run_id(None)
             set_tool_policy(allowed=None, blocked=False)
             self._heartbeat(None)
@@ -351,7 +387,7 @@ def build_worker() -> ExecutionWorker:
     workspace_index = WorkspaceIndex(settings.data_dir / 'workspace-index.db')
     engine = AgentEngine(settings, storage, tasks, vector_store, skills, documents,
                           persona_reader=lambda conversation_id: load_persona(settings.data_dir, conversation_id),
-                          workspace_rules_reader=lambda workspace_id: load_workspace_rules(resources, workspace_id),
+                          workspace_rules_reader=lambda workspace_id, root='': load_workspace_rules(resources, workspace_id, root),
                           workspace_recall=lambda workspace_id, query, source_id='': recall_workspace(
                               resources, storage, workspace_index, vector_store,
                               vector_store.embed_batch, workspace_id, query, source_id),
@@ -361,6 +397,7 @@ def build_worker() -> ExecutionWorker:
         SqliteExecutionQueue(settings.execution_db_path), AgentEngineRuntime(engine), tasks, object_store,
         artifacts=ArtifactStore(settings.data_dir / 'artifacts.db'),
         policy=harness_settings,
+        resources=resources,
     )
 
 

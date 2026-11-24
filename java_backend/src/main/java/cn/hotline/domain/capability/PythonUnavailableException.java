@@ -2,6 +2,10 @@ package cn.hotline.domain.capability;
 
 public class PythonUnavailableException extends RuntimeException {
     public PythonUnavailableException() {
-        super("Python capability service is unavailable");
+        this("Python 能力服务暂不可用");
+    }
+
+    public PythonUnavailableException(String diagnostic) {
+        super(diagnostic);
     }
 }

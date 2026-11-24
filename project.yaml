@@ -26,7 +26,7 @@ overview:
   services:
     - name: Node.js、Python 3.11+（可选 uv）
       requirement: 启动必需
-      description: 先在 frontend 目录执行 npm install；后端依赖通过 pyproject.toml / requirements.txt 安装。确保 5180、8080 和 8888 端口空闲。
+      description: 先在 frontend 目录执行 npm install；后端依赖通过 pyproject.toml 与 uv.lock 安装（uv sync）。确保 5180、8080 和 8888 端口空闲。
     - name: 大模型 API
       requirement: 对话功能必需
       description: 配置兼容 OpenAI 的服务地址、模型和 API Key；仅启动页面无需调用模型。

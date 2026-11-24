@@ -23,7 +23,8 @@ import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"spring.cloud.nacos.discovery.enabled=false", "hotline.python.mode=nacos",
-                "hotline.admission.store=memory"})
+                "hotline.admission.store=memory",
+                "hotline.python.launch.enabled=false"})
 class PythonGatewayTest {
     private static final HttpServer UPSTREAM = upstream();
     private static volatile String receivedBody;

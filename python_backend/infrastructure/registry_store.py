@@ -2,37 +2,19 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
+
+from .sqlite_base import SqliteStore
 
 
 class RegistryConflictError(ValueError):
     pass
 
 
-class RegistryStore:
+class RegistryStore(SqliteStore):
     """Registry metadata for MCP tools and model routes."""
-
-    def __init__(self, path: Path):
-        self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._initialize()
-
-    def _connect(self):
-        db = sqlite3.connect(self.path, timeout=30, isolation_level=None)
-        db.row_factory = sqlite3.Row
-        db.execute("PRAGMA busy_timeout = 30000")
-        return db
-
-    @contextmanager
-    def _db(self):
-        db = self._connect()
-        try:
-            yield db
-        finally:
-            db.close()
 
     def _initialize(self):
         with self._db() as db:

@@ -4,6 +4,7 @@ import calendar
 import json
 import os
 import sqlite3
+import threading
 import time
 from collections.abc import Callable, Sequence
 from contextlib import closing
@@ -29,11 +30,11 @@ APPROVAL_ENFORCE_ENV = 'HARNESS_APPROVAL_ENFORCE'
 DEFAULT_APPROVAL_WAIT_SECONDS = 120
 APPROVAL_POLL_SECONDS = 0.5
 
-# 运行上下文：调用方在开始一次运行前登记 run_id，审批请求据此关联。
-_current_run_id: str | None = None
+# 运行上下文按线程隔离：并发子任务各自跑在独立线程里，
+# 放在模块全局会让审批请求关联到别的运行，工具白名单也会互相覆盖。
+_run_state = threading.local()
 
-# Agent 装配后的工具权限：allowed 为允许列表（None 表示不限制），blocked 表示 Agent 已停用。
-_tool_policy: dict[str, Any] = {'allowed': None, 'blocked': False}
+DEFAULT_TOOL_POLICY: dict[str, Any] = {'allowed': None, 'blocked': False}
 
 _TYPE_CHECKS: dict[str, Callable[[Any], bool]] = {
     'string': lambda value: isinstance(value, str),
@@ -108,22 +109,21 @@ def find_builtin_tool(name: str) -> dict[str, str] | None:
 
 def set_current_run_id(run_id: str | None) -> None:
     """登记当前运行的 run_id；审批请求用它关联运行。"""
-    global _current_run_id
-    _current_run_id = run_id or None
+    _run_state.current_run_id = run_id or None
 
 
 def set_tool_policy(allowed: list[str] | None = None, blocked: bool = False) -> None:
     """按 Agent 定义限制本次运行可用的工具。"""
-    global _tool_policy
-    _tool_policy = {'allowed': [str(item) for item in allowed] if allowed else None, 'blocked': bool(blocked)}
+    _run_state.tool_policy = {'allowed': [str(item) for item in allowed] if allowed else None,
+                              'blocked': bool(blocked)}
 
 
 def current_tool_policy() -> dict[str, Any]:
-    return dict(_tool_policy)
+    return dict(getattr(_run_state, 'tool_policy', None) or DEFAULT_TOOL_POLICY)
 
 
 def current_run_id() -> str | None:
-    return _current_run_id
+    return getattr(_run_state, 'current_run_id', None)
 
 
 def approval_enforced() -> bool:
@@ -198,19 +198,28 @@ def _expired(expires_at: Any) -> bool:
         return False
 
 
+def approval_required(record: dict[str, Any] | None) -> bool:
+    """审批策略判定（唯一口径）：always 一律要批，risk-based / required 只在高风险时要批。"""
+    item = record if isinstance(record, dict) else {}
+    policy = str(item.get('approval_policy') or '').strip().lower()
+    risk = str(item.get('risk') or '').strip().lower()
+    if policy == 'always':
+        return True
+    if policy in {'risk-based', 'required'}:
+        return risk == 'high'
+    return False
+
+
 def enforce_approval(tool_name: str, arguments: Any, record: dict[str, Any],
                       run_id: str | None = None, governance_db: Path | None = None,
                       wait_seconds: int | None = None) -> None:
     """按登记的审批策略阻塞等待人工审批；不需要审批时直接返回。"""
     if not approval_enforced():
         return
-    policy = str(record.get('approval_policy') or '').strip().lower()
-    risk = str(record.get('risk') or '').strip().lower()
-    if policy not in {'always', 'required'}:
+    risk = str((record or {}).get('risk') or '').strip().lower()
+    if not approval_required(record):
         return
-    if policy != 'always' and risk != 'high':
-        return
-    effective_run_id = run_id or _current_run_id
+    effective_run_id = run_id or current_run_id()
     if not effective_run_id:
         # 没有运行上下文时不阻塞，调用方需要显式登记 run_id 才会走审批。
         return

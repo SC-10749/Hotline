@@ -24,12 +24,13 @@ def resolve_workspace_root(store, workspace_id: str) -> Path | None:
     return store.resolve_local_repository(workspace['repository'])
 
 
-def load_workspace_rules(store, workspace_id: str) -> str:
+def load_workspace_rules(store, workspace_id: str, root: str = '') -> str:
     if not workspace_id:
         return ''
     if not store.get_workspace(workspace_id):
         raise ValueError('工作区不存在')
-    root = resolve_workspace_root(store, workspace_id)
+    # 子任务传入自己的隔离目录时，规则取自隔离副本，不受其它并发子任务影响。
+    root = Path(root) if root else resolve_workspace_root(store, workspace_id)
     if root is None:
         return ''
     rules = Path(root) / 'AGENTS.md'

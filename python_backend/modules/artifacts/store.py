@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from itertools import count
 from pathlib import Path, PurePosixPath
+from urllib.parse import quote
 from uuid import uuid4
 
 
@@ -67,7 +68,10 @@ class ArtifactStore:
 
     def register(self, *, run_id: str, name: str, size: int, sha256: str,
                  content_type: str, storage_backend: str, storage_key: str,
-                 owner: str = '') -> dict:
+                 owner: str) -> dict:
+        if not isinstance(owner, str) or not owner.strip():
+            # 归属为空意味着谁都能下；登记阶段就拦住。
+            raise ValueError('产物登记必须带归属身份')
         key = PurePosixPath(storage_key)
         if (not run_id or not name or name != PurePosixPath(name).name or '\\' in name
                 or any(ord(char) < 32 for char in name)
@@ -147,7 +151,7 @@ def legacy_run_id(identifier: str) -> str:
 
 
 def register_generated_file(store: ArtifactStore, path: Path, *, run_id: str, content_type: str,
-                               storage_backend: str, storage_key: str, owner: str = '') -> tuple[dict | None, str]:
+                               storage_backend: str, storage_key: str, owner: str) -> tuple[dict | None, str]:
     """Register a freshly generated file by its on-disk size and digest.
 
     Never raises: a failed registration returns (None, reason) so the caller can still
@@ -168,13 +172,19 @@ def register_legacy_artifact(store: ArtifactStore, path: Path, *, conversation_i
     """Register a file produced outside the run queue; the session id stands in for a run id."""
     name = Path(path).name
     storage_key = f'ppt/{conversation_id}/{name}' if storage_backend == 'minio' else name
+    # 会话就是这类产物的归属方。
     return register_generated_file(store, path, run_id=legacy_run_id(conversation_id),
                                    content_type=content_type, storage_backend=storage_backend,
-                                   storage_key=storage_key)
+                                   storage_key=storage_key, owner=f'session:{conversation_id}')
 
 
 def artifact_metadata(record: dict) -> dict:
+    owner = str(record.get('owner') or '')
+    download = f"/harness/artifacts/{record['artifact_id']}/download"
+    if owner:
+        # 归属值随链接一起发出去：直接点链接也能过归属校验。
+        download += f"?owner={quote(owner, safe='')}"
     return {**{key: record[key] for key in ('artifact_id', 'run_id', 'name', 'size', 'sha256',
                                            'content_type', 'storage_backend', 'owner', 'created_at')},
             'ageDays': age_days(record['created_at']),
-            'download': f"/harness/artifacts/{record['artifact_id']}/download"}
+            'download': download}
