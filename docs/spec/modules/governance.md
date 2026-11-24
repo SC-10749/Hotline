@@ -1,7 +1,7 @@
 # 审批与机器治理（governance）
 
 > 模块路径：`python_backend/modules/governance/`（目录内只有测试，真实实现落在 `python_backend/infrastructure/governance_store.py`、`python_backend/infrastructure/notification_store.py`、`python_backend/modules/execution/tools.py`）
-> 前端对应：无独立前端模块（`frontend/src/modules/governance/` 不存在）；界面在 `frontend/src/HarnessApp.vue` 的「运行治理 / 机器与运行时」「待审批」分区，接口封装在 `frontend/src/api.js`
+> 前端对应：接口封装在 `frontend/src/modules/governance/api.js`；界面在 `frontend/src/modules/harness/panels/ResourcesPanel.vue` 的「运行治理 / 机器与运行时」「待审批」分区
 > 状态：现状说明（以代码为准，冲突时以代码为准并修正本文档）
 
 ## 审批请求的创建与过期
@@ -81,7 +81,7 @@
 
 - 先执行一次过期标记，再导出；可选 `status` 过滤。
 - 列固定为 `request_id, run_id, tool, risk, status, reason, operator, created_at, decided_at`，不含 `detail`。
-- 输出带 UTF-8 BOM（`\ufeff`），`content-type` 为 `text/csv; charset=utf-8`，`Content-Disposition` 为 `attachment; filename="harness-approvals.csv"`；前端通过 `frontend/src/api.js:harnessApprovalAuditUrl` 直接下载。
+- 输出带 UTF-8 BOM（`\ufeff`），`content-type` 为 `text/csv; charset=utf-8`，`Content-Disposition` 为 `attachment; filename="harness-approvals.csv"`；前端通过 `frontend/src/modules/governance/api.js:harnessApprovalAuditUrl` 直接下载。
 
 ## 审批决定通知与 webhook 外发
 

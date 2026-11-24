@@ -5,10 +5,14 @@ import re
 import time
 import urllib.request
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from uuid import uuid4
 
 from python_backend.config import Settings
+
+# 一批多少段文本：一次请求算一批，批与批之间串行。
+EMBED_BATCH_SIZE = 16
 
 
 class PgVectorStore:
@@ -133,9 +137,9 @@ class PgVectorStore:
     def add_chunks(self, file_id: str, chunks: list[str]) -> None:
         if not chunks or not self.settings.embedding_api_key or not self._connect():
             return
+        vectors = self._embed_many(chunks)
         with self._connection.cursor() as cursor:
-            for index, text in enumerate(chunks):
-                vector = self._embed(text)
+            for index, (text, vector) in enumerate(zip(chunks, vectors)):
                 cursor.execute(
                     f"INSERT INTO {self._table} (id,content,metadata,embedding) VALUES (%s,%s,%s,%s::vector)",
                     (str(uuid4()), text, json.dumps({"fileid": file_id, "chunkId": index}), self._vector_literal(vector)),
@@ -160,6 +164,8 @@ class PgVectorStore:
         """Store parents unembedded and vectorise the children under them."""
         if not self._connect():
             return 0
+        # 向量先算好再写库：写库是单连接，串行更稳；嵌入是网络 IO，批内并发。
+        vectors = self._embed_many([child.content for child in children])
         with self._connection.cursor() as cursor:
             for parent in parents:
                 cursor.execute(
@@ -168,16 +174,40 @@ class PgVectorStore:
                     (parent.id, parent.fileId, parent.heading, parent.content),
                 )
             stored = 0
-            for child in children:
+            for child, vector in zip(children, vectors):
                 cursor.execute(
                     f"INSERT INTO {self._table} (id, content, metadata, embedding) VALUES (%s, %s, %s::jsonb, %s::vector)",
                     (child.id, child.content,
                      json.dumps({"fileid": child.fileId, "chunkId": child.index,
                                  "parentChunkId": child.parentId, "heading": child.heading}),
-                     self._vector_literal(self._embed(child.content))),
+                     self._vector_literal(vector)),
                 )
                 stored += 1
         return stored
+
+    def _embed_many(self, texts: list[str]) -> list[list[float]]:
+        """给多段文本算向量。
+
+        嵌入是网络 IO，逐段调用会把向量化拖成 N 次往返。这里按批并发取回，
+        批内失败退回逐条，保证结果与改造前一致。
+        """
+        if not texts:
+            return []
+        vectors: list[list[float]] = []
+        for start in range(0, len(texts), EMBED_BATCH_SIZE):
+            batch = texts[start:start + EMBED_BATCH_SIZE]
+            vectors.extend(self._embed_batch_or_per_item(batch))
+        return vectors
+
+    def _embed_batch_or_per_item(self, batch: list[str]) -> list[list[float]]:
+        """一次请求算整批；批接口不认就退回逐条调用。"""
+        try:
+            embedded = self.embed_batch(batch)
+        except Exception:
+            embedded = []
+        if len(embedded) == len(batch):
+            return embedded
+        return [self._embed(text) for text in batch]
 
     def search_expanded(self, file_id: str, question: str, top_k: int = 5) -> list[str]:
         """Recall children, then hand the LLM the whole parent section when there is one."""

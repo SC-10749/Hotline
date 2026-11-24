@@ -421,7 +421,7 @@ class ContextChainTests(unittest.TestCase):
         engine = AgentEngine(settings, storage, TaskManager(settings), skills=skills, context_service=self.service)
         engine.model.chat = Mock(return_value='{}')
         model = ScriptedModel(responses=[AIMessage(content='已恢复任务')])
-        with patch('python_backend.agents.build_chat_model', return_value=model):
+        with patch('python_backend.modules.execution.skill_flow.build_chat_model', return_value=model):
             events = list(engine.stream('skills', 'a', '继续这个项目', workspace_id='work-a'))
         self.assertEqual(events[-1]['type'], 'complete')
         self.assertIn('ALPHA123', repr(model.requests))

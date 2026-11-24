@@ -165,7 +165,7 @@ class ContextCompletionTests(unittest.TestCase):
                              context_service=self.context, workspace_recall=recall)
         engine.model.chat = Mock(return_value='{}')
         model = ScriptedModel(responses=[AIMessage(content='fixture result')])
-        with patch('python_backend.agents.build_chat_model', return_value=model):
+        with patch('python_backend.modules.execution.skill_flow.build_chat_model', return_value=model):
             events = list(engine.stream('skills', 'a', '按工作区资料回答', workspace_id='w'))
         self.assertEqual(events[-1]['type'], 'complete')
         self.assertTrue(recall.called)

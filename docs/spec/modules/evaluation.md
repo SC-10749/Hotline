@@ -1,7 +1,7 @@
 # 评测与基准（evaluation）
 
 > 模块路径：`python_backend/modules/evaluation/`（评分）、`python_backend/modules/evaluation/analysis.py`（轨迹、门禁、出处）、`python_backend/modules/evaluation/benchmarks.py`（基准压测作业）
-> 前端对应：`frontend/src/modules/evaluation/BenchmarkPanel.vue`（RAG / BIRD SQL / 并发压测面板）、`frontend/src/modules/evaluation/AgentEvalPanel.vue`（Agent 测评面板）；测评集、跑批与报告界面在 `frontend/src/HarnessApp.vue` 的「测评中心」页签
+> 前端对应：`frontend/src/modules/evaluation/BenchmarkPanel.vue`（RAG / BIRD SQL / 并发压测面板）、`frontend/src/modules/evaluation/AgentEvalPanel.vue`（Agent 测评面板）；测评集、跑批与报告界面在 `frontend/src/modules/harness/panels/EvaluationsPanel.vue` 的「测评中心」页签
 > 变更规格：[S-002](../../spec/2026-11-23-Agent测评增强.md)、[S-003](../../spec/2026-11-23-多轮评测与门禁CLI.md)、[S-004](../../spec/2026-11-23-并行跑批与预算护栏.md)、[S-005](../../spec/2026-11-23-语义评分与工具调用断言.md)、[S-006](../../spec/2026-11-23-评测矩阵视图.md)、[S-012](../../spec/2026-11-23-评测可读性.md)
 > 状态：现状说明（以代码为准，冲突时以代码为准并修正本文档）
 
@@ -28,7 +28,7 @@
 - 增删改样本会刷新测评集的 `updated_at`，但不改变 `version`；只有创建快照才把 `version` 加一（快照记录当前版本号，随后数据集版本递增）。
 - 快照 `payload` 存 `name`、`type`、`description`、`case_count`，并额外存 `cases`（快照时刻的样本正文：case_id、input_text、expected_output、rubric）与 `sha256`（对 cases 规范化 JSON 取 sha256）；快照列表按 `version` 倒序返回。
 - 删除测评集会同时清掉该集的样本与快照；历史测评运行与样本结果不随之删除。
-- 前端入口：`frontend/src/HarnessApp.vue` 测评中心「测评集」页签（新建测评集、批量导入、样本增删改、保存版本快照）。
+- 前端入口：`frontend/src/modules/harness/panels/EvaluationsPanel.vue` 测评中心「测评集」页签（新建测评集、批量导入、样本增删改、保存版本快照）。
 
 ### 关键实现
 

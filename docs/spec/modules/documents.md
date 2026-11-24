@@ -1,7 +1,7 @@
 # 文档解析与向量化（documents）
 
 > 模块路径：`python_backend/modules/documents/`（`service.py` / `parser.py` / `ppt.py`）
-> 前端对应：`frontend/src/App.vue`（文档面板：上传、切分预览、版本、补偿）、`frontend/src/modules/artifacts/ArtifactList.vue`（产物与文件展示）
+> 前端对应：`frontend/src/modules/documents/DocumentsDialog.vue`（上传、切分预览、版本、补偿）、`frontend/src/modules/documents/DocumentPreviewDialog.vue`（分段预览）、`frontend/src/modules/artifacts/ArtifactList.vue`（产物与文件展示）
 > 状态：现状说明（以代码为准，冲突时以代码为准并修正本文档）
 
 ## 上传与 MinerU 精度解析管线

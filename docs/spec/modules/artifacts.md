@@ -155,7 +155,7 @@
 - 没有对外的单条删除接口：`ArtifactStore.delete` 只在库内可用，且删登记不会删文件。
 - 预览只支持 local 后端与文本类类型；对象存储产物无法预览。
 - 下载与预览的归属校验依赖客户端自带请求头，不是登录态鉴权；`owner` 为空的旧产物对所有请求放行。
-- 前端 `frontend/src/api.js` 把归属请求头名写死为 `X-Harness-Owner`，在 Harness 设置里改 `artifactOwnerHeader` 后前后端不一致。
+- 前端 `frontend/src/modules/artifacts/api.js` 把归属请求头名写死为 `X-Harness-Owner`，在 Harness 设置里改 `artifactOwnerHeader` 后前后端不一致。
 - 清理不删对象存储文件：cleanup 与后台保留循环都只处理登记行，minio 对象随存储自身生命周期。
 - 两套过期口径不同：`cleanup` 按整天数判定（`ageDays ≥ retentionDays`），后台保留循环按时间戳与截止时间比较。
 - 只有 ppt 代理链路会自动登记产物；`register_legacy_artifact` 目前仅被测试使用，队列外产出没有自动登记入口。

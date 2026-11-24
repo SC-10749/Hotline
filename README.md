@@ -267,7 +267,7 @@ Java 当前以统一入口和能力调用为主。身份认证、租户授权、
 | 自动化 | 按固定间隔提交 Agent 运行 | `/harness/schedules`、`data/harness-schedules.db` |
 | 插件 | 已安装技能的启停与删除 | `/skill/list` |
 | 代码地图 | 系统架构、请求时序与上下文流程 | `/code-map`、`/code-map/hotline.html` |
-| bot | 角色指令、技能绑定与全局开关（种子机器人：需求分析助手） | `/harness/bots`、`data/harness-bots.db` |
+| bot | 角色指令、技能绑定与全局开关（种子机器人：需求分析助手 + 产品经理、前端/后端/AI/运维/测试工程师） | `/harness/bots`、`data/harness-bots.db` |
 | 个人中心 | 昵称、简介、回答风格与主题 | `/harness/profile`、`data/harness-profile.db` |
 | 模型 API Key | 本机保存凭证，接口返回掩码 | `/harness/profile/credentials`、`data/harness-credentials.db` |
 
@@ -410,7 +410,7 @@ flowchart TB
 - **机器人全局开关**：机器人页左侧栏列出机器人并各带一个开关，开关打开即表示这个助手对所有会话生效（同一时间只保留一个开启的机器人，开启新的会自动关掉旧的）；没有开启机器人时才回退到会话绑定的人设。列表与详情只显示名称、技能与状态，不展示角色指令，角色指令只能在编辑表单里修改。
 - **智能体即工具**：机器人登记进工具登记表（`source='agent'`，`input_schema.agent.bot_id` 指向机器人）后，技能智能体可以把它当工具调用。工具是无状态的：需求说不清时返回 `needs_clarification` 与三个方向，父智能体转述给用户，用户作答后带 `clarification` 参数再调一次，工具调用本身不阻塞。方案与实现记录见 [Agent as Tool 设计](docs/agent-as-tool-design.md)。
 
-本地数据种子（安装仓库技能包到 `data/skills/` 并登记「需求分析助手」机器人，可重复执行）：
+本地数据种子（安装仓库技能包到 `data/skills/`，登记「需求分析助手」与 6 个角色机器人，可重复执行；已有机器人的开关状态保持不变）：
 
 ```bash
 python -m python_backend.seed_bots
@@ -529,7 +529,7 @@ npm --prefix frontend run build
 
 ```powershell
 .`.venv`Scripts`python.exe -m unittest python_backend.modules.context_engineering.test_completion -v
-node --test frontend/src/modules/workspaces/paths.test.js frontend/src/modules/execution/progress.test.js
+node --test frontend/src/modules/workspaces/paths.test.js frontend/src/modules/execution/progress.test.js frontend/src/modules/app/bindings.test.js
 .`.venv`Scripts`python.exe -m python_backend.modules.context_engineering.benchmark --tokens 100000000 --queries 100 --output data/context-benchmark/new-run
 ```
 

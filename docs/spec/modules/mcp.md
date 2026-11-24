@@ -1,7 +1,7 @@
 # MCP 工具接入（mcp）
 
 > 模块路径：`python_backend/modules/mcp/`（连接器实现）＋ `python_backend/api/routers/mcp.py`（HTTP 路由）＋ `python_backend/infrastructure/registry_store.py`（登记存储）
-> 前端对应：`frontend/src/modules/mcp/` 只有 `.gitkeep` 占位，无独立前端模块；实际调用在 `frontend/src/api.js`（`getHarnessMcpServers`、`callMcpTool`）与 `frontend/src/HarnessApp.vue` 的「工具与 MCP」面板
+> 前端对应：`frontend/src/modules/mcp/` 只有 `.gitkeep` 占位，无独立前端模块；实际调用在 `frontend/src/modules/harness/tools/api.js`（`getHarnessMcpServers`、`callMcpTool`）与 `frontend/src/modules/harness/panels/ToolsPanel.vue` 的「工具与 MCP」面板
 > 状态：最小 stdio 型 MCP 连接器（自研 JSON-RPC over stdio，不引入 MCP SDK）；支持 initialize 探测、tools/list 工具发现、tools/call 工具调用；HTTP 路由提供服务器清单与工具调用，工具调用会先过审批策略（规格 S-013）
 
 ## stdio 会话启动与收尾
@@ -157,4 +157,4 @@
 - 路由层的工具调用不经过 `prepare_tool_call`：运行级工具白名单与人工审批策略对这条路径不生效（审批链只在 Agent 工具调用路径上生效）。
 - 登记项里的 `command` 与 `args` 由登记方决定，连接器不做可执行路径白名单校验，也不限制 `env` 里能放什么键；`env` 以宿主环境为底叠加，宿主环境里的凭据会一并传给子进程，这些值不出现在任何响应或错误消息中。
 - stderr 被丢弃：MCP 服务器的诊断输出无法从本模块取回，排障只能靠返回值。
-- 前端 `frontend/src/modules/mcp/` 只有占位文件，MCP 界面由 `frontend/src/HarnessApp.vue` 的「工具与 MCP」面板承担，与其它能力模块的前端组织方式不一致。
+- 前端 `frontend/src/modules/mcp/` 只有占位文件，MCP 界面由 `frontend/src/modules/harness/panels/ToolsPanel.vue` 的「工具与 MCP」面板承担，与其它能力模块的前端组织方式不一致。

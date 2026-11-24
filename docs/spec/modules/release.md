@@ -1,7 +1,7 @@
 # 发布治理（release）
 
 > 模块路径：`python_backend/api/routers/release.py`（HTTP 路由与门禁判定）、`python_backend/infrastructure/governance_store.py`（门禁 / 记录 / 观测 / 配置存储）、`python_backend/modules/skills/catalog.py`（灰度绑定、指标与回滚动作）
-> 前端对应：无独立前端模块目录（`frontend/src/modules/release/` 不存在）；界面在 `frontend/src/HarnessApp.vue` 的「运行治理 / 发布治理」分区，接口封装在 `frontend/src/api.js`
+> 前端对应：接口封装在 `frontend/src/modules/release/api.js`；界面在 `frontend/src/modules/harness/panels/ReleasesPanel.vue` 的「运行治理 / 发布治理」分区
 > 状态：现状说明（以代码为准，冲突时以代码为准并修正本文档）
 
 ## 质量门禁与阈值配置
@@ -104,18 +104,18 @@
 
 - `GET /release/summary` —— `release.py:release_summary`，一次返回灰度、自进化运行与指标。
 - `GET /release/rollouts` / `GET /release/runs` / `GET /release/metrics` —— `release.py:list_rollouts` / `list_release_runs` / `list_metrics`。
-- `frontend/src/HarnessApp.vue` 的 `releases` 分区 —— 「运行治理 / 发布治理」界面。
+- `frontend/src/modules/harness/panels/ReleasesPanel.vue` —— 「运行治理 / 发布治理」界面。
 
 ### 行为
 
 - `summary` 的 `project` 缺省取应用配置 `DODO_SKILL_PROJECT`；`metrics` 列表在 `GET /release/metrics` 上按 `limit` 截断（1~500，默认 200）。
 - 控制台分区包含：KPI（活动灰度数、最高灰度比例、发布记录数、线上指标数）、当前灰度表格、推进灰度表单、灰度观察记录、发布记录。
 - 灰度表格每行可「推进灰度」「立即观察」「回滚」；表单里的「进入灰度」按钮在门禁结果不是通过态时禁用。
-- 前端接口封装在 `frontend/src/api.js`：`getReleaseSummary`、`promoteRelease`、`evaluateReleaseGate`、`getReleaseGates`、`getReleaseRecords`、`advanceRollout`、`getReleaseConfig`、`saveReleaseConfig`、`getReleaseGateThresholds`、`saveReleaseGateThresholds`、`rollbackRelease`、`getReleaseObservations`、`observeReleaseRollout`。
+- 前端接口封装在 `frontend/src/modules/release/api.js`：`getReleaseSummary`、`promoteRelease`、`evaluateReleaseGate`、`getReleaseGates`、`getReleaseRecords`、`advanceRollout`、`getReleaseConfig`、`saveReleaseConfig`、`getReleaseGateThresholds`、`saveReleaseGateThresholds`、`rollbackRelease`、`getReleaseObservations`、`observeReleaseRollout`。
 
 ### 关键实现
 
-- `release.py:release_summary` / `list_rollouts` / `list_metrics`，以及 `frontend/src/HarnessApp.vue` 的 `releases` 分区模板与 `refreshReleaseData`、`checkReleaseGate`、`promoteCurrentRelease`、`advanceRolloutRow`、`observeRollout`、`rollbackReleaseByRow` 等处理函数。
+- `release.py:release_summary` / `list_rollouts` / `list_metrics`，以及 `frontend/src/modules/harness/panels/ReleasesPanel.vue` 的模板与 `frontend/src/modules/harness/useReleases.js` 的 `refreshReleaseData`、`checkReleaseGate`、`promoteCurrentRelease`、`advanceRolloutRow`、`observeRollout`、`rollbackReleaseByRow` 等处理函数。
 
 ## 数据与存储
 

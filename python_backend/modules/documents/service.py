@@ -251,6 +251,10 @@ MD_SUFFIXES = {".md", ".markdown"}
 # A data URL keeps captions working when object storage is the local backend:
 # a hosted vision model cannot reach an http://127.0.0.1 image address.
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
+# 图片描述的并发数：模型调用是网络 IO，并行能显著缩短整篇转换时间。
+CAPTION_WORKERS = 4
+# 关系抽取的并发数：同样是模型调用，块数多时串行会拖很久。
+RELATION_WORKERS = 4
 
 
 class VisionCaptioner:
@@ -293,22 +297,35 @@ class VisionCaptioner:
 
 
 def caption_images(parsed: ParsedDocument, captioner: VisionCaptioner) -> list[str]:
-    """Write one caption under every image the markdown references."""
+    """Write one caption under every image the markdown references.
+
+    每张图的描述是一次独立的模型调用，串行会按图片数量线性拖长转换；
+    这里并行取回，单张失败不影响其它图片。
+    """
+    pending = [image for image in parsed.images if image.local_path is not None]
     warnings: list[str] = []
-    for image in parsed.images:
-        if image.local_path is None:
-            continue
-        try:
-            image.caption = captioner.describe(image.local_path)
-        except DocumentError as exc:
-            warnings.append(f"{image.src}: {exc}")
-            continue
-        if not image.caption:
-            warnings.append(f"{image.src}: 模型没有返回描述内容")
-            continue
-        parsed.markdown = parsed.markdown.replace(
-            image.tag, f"{image.tag}\n\n> 图注：{image.caption}", 1)
+    if pending:
+        with ThreadPoolExecutor(max_workers=CAPTION_WORKERS) as pool:
+            results = list(pool.map(_describe_one, pending, [captioner] * len(pending)))
+        for image, (caption, error) in zip(pending, results):
+            if error:
+                warnings.append(f"{image.src}: {error}")
+                continue
+            if not caption:
+                warnings.append(f"{image.src}: 模型没有返回描述内容")
+                continue
+            image.caption = caption
+            parsed.markdown = parsed.markdown.replace(
+                image.tag, f"{image.tag}\n\n> 图注：{image.caption}", 1)
     return warnings
+
+
+def _describe_one(image: DocImage, captioner: VisionCaptioner) -> tuple[str, str]:
+    """描述一张图片；失败时返回 (空描述, 错误信息)，不抛异常。"""
+    try:
+        return captioner.describe(image.local_path), ""
+    except DocumentError as exc:
+        return "", str(exc)
 
 
 @dataclass
@@ -594,6 +611,20 @@ class DocumentService:
         except Exception:
             return []
 
+    def _extract_relations_batch(self, texts: list[str]) -> list[dict[str, str]]:
+        """批量抽取实体关系：每块一次模型调用，并行取回。
+
+        关系抽取彼此独立，串行会按块数线性拖长向量化；失败的那块不影响其它块。
+        """
+        if not texts:
+            return []
+        with ThreadPoolExecutor(max_workers=RELATION_WORKERS) as pool:
+            results = list(pool.map(self._extract_relations, texts))
+        relations: list[dict[str, str]] = []
+        for result in results:
+            relations.extend(result)
+        return relations
+
     def start_sweeper(self) -> None:
         """In-process stand-in for the scheduled job; XXL-Job can POST /document/compensate instead."""
         interval = self.settings.doc_compensate_interval
@@ -685,9 +716,7 @@ class DocumentService:
             self.vector.delete_document(doc_id)
             stored = self.vector.index_document(parents, children)
             if stored and model_ready(self.settings):
-                relations: list[dict[str, str]] = []
-                for child in children[:40]:
-                    relations.extend(self._extract_relations(child.content))
+                relations = self._extract_relations_batch([child.content for child in children[:40]])
                 self.vector.replace_graph(doc_id, relations)
         except Exception as exc:
             record.status = "CONVERTED"

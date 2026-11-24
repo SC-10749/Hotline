@@ -1,15 +1,31 @@
 # Vue 工作台主界面（chat-web）
 
 > 模块路径：`frontend/src/`（主界面实现）｜ 后端流式入口：`python_backend/api/routers/execution.py`
-> 前端对应：`frontend/src/App.vue`、`frontend/src/api.js`、`frontend/src/main.js`、`frontend/src/modules/requirement/`、`frontend/src/modules/skills/`、`frontend/src/modules/execution/`
+> 前端对应：`frontend/src/App.vue`（壳）、`frontend/src/modules/<能力>/`（接口层 `api.js` / 应用层 `use*.js` / 表现层 `*.vue`）、`frontend/src/core/http.js`、`frontend/src/api.js`（兼容 barrel）
 > 状态：现状说明（以代码为准，冲突时以代码为准并修正本文档）
+
+## 目录分层（S-007 拆分后）
+
+### 入口
+
+- `frontend/src/App.vue` —— 壳层：布局、导航、页面与模式切换、弹窗焦点管理、跨页面 toast。
+- `frontend/src/modules/app/context.js` / `keys.js` —— 应用上下文与 provide/inject 键。
+- `frontend/src/core/http.js` —— 基础设施层：`unwrap` / `apiUrl`。
+- `frontend/src/api.js` —— 兼容 barrel，全量再导出各能力 `api.js`，既有 import 路径继续可用。
+
+### 行为
+
+- 每个能力目录固定三层：`api.js`（只做 HTTP 适配）、`use<Feature>.js`（状态与用例编排）、`*.vue`（模板与交互）。
+- 能力目录：`chat`、`workspaces`、`documents`、`skills`、`bots`、`automation`、`profile`、`settings`、`app`、`streaming`，以及既有的 `requirement`、`execution`、`evaluation`、`artifacts` 等。
+- 组件之间不互相 import：数据经 `provide` / `inject`（键在 `modules/app/keys.js`）下发，交互经 `emit` 上抛。
+- 全局样式仍是 `chat.css` / `style.css` / `theme.css`，按 class 名生效，模板搬迁不改视觉。
 
 ## 应用骨架、页面导航与助手模式条
 
 ### 入口
 
 - `frontend/src/main.js` —— 挂载 `#app`，导入 `tokens.css`、`style.css`、`harness.css`、`chat.css`、`theme.css`
-- `frontend/src/App.vue:modes` / `chooseMode` / `usePageState` —— 五种模式、模式切换与导航状态
+- `frontend/src/modules/chat/modes.js:modes` —— 五种模式定义；`frontend/src/modules/chat/useChat.js:chooseMode` —— 模式切换；`frontend/src/composables/usePageState.js` —— 导航状态（存 `sessionStorage` 的 `hotline-navigation:*`）
 
 ### 行为
 
@@ -20,14 +36,14 @@
 
 ### 关键实现
 
-- `frontend/src/App.vue:onMounted` —— 绑定 `keydown`、`visibilitychange` 与输入区 `ResizeObserver`；导航状态存 `sessionStorage` 的 `hotline-navigation:*`
+- `frontend/src/App.vue:onMounted` —— 绑定 `keydown`、`visibilitychange`；`frontend/src/modules/chat/ChatView.vue:onMounted` —— 输入区 `ResizeObserver`
 
 ## 消息流与自动贴底
 
 ### 入口
 
-- `frontend/src/App.vue:sendMessage` —— 推送用户消息与助手占位消息
-- `frontend/src/App.vue:scrollToBottom` / `onUserScroll` —— 贴底与上滑判定
+- `frontend/src/modules/chat/useChat.js:sendMessage` —— 推送用户消息与助手占位消息
+- `frontend/src/modules/chat/ChatView.vue:scrollToBottom` / `onUserScroll` —— 贴底与上滑判定
 
 ### 行为
 
@@ -38,13 +54,13 @@
 
 ### 关键实现
 
-- `frontend/src/App.vue:watch([input, composer])` —— 量内容高度时临时关过渡，输入框高度在 26px–150px 自适应
+- `frontend/src/modules/chat/ChatView.vue` 的 `watch([input, composer])` —— 量内容高度时临时关过渡，输入框高度在 26px–150px 自适应
 
 ## 会话列表、会话详情与 agentType 判定
 
 ### 入口
 
-- `frontend/src/App.vue:refreshSessions` / `selectSession` / `deleteConversation`
+- `frontend/src/modules/chat/useChat.js:refreshSessions` / `selectSession` / `deleteConversation`
 - `GET /session/list`、`GET /session/{conversationId}`、`DELETE /session/{conversationId}`
 
 ### 行为
@@ -55,14 +71,14 @@
 
 ### 关键实现
 
-- `frontend/src/App.vue:selectSession` —— 组装历史消息并调用 `applyQuestionOptions`；`python_backend/fastapi_app.py:session_detail` —— 返回 `rows[-1].agentType`
+- `frontend/src/modules/chat/useChat.js:selectSession` —— 组装历史消息并调用 `applyQuestionOptions`；`python_backend/fastapi_app.py:session_detail` —— 返回 `rows[-1].agentType`
 
 ## SSE 流式接入与事件处理
 
 ### 入口
 
-- `frontend/src/App.vue:sendMessage` —— `fetch` 读取 `text/event-stream`
-- `frontend/src/App.vue:appendStreamEvent` —— 事件分发到消息字段
+- `frontend/src/modules/chat/useChat.js:sendMessage` —— `fetch` 读取 `text/event-stream`
+- `frontend/src/modules/chat/useChat.js:appendStreamEvent` —— 事件分发到消息字段
 
 ### 行为
 
@@ -73,7 +89,7 @@
 
 ### 关键实现
 
-- `frontend/src/App.vue:answerClarify` —— 澄清作答拼装；`frontend/src/modules/execution/progress.js:appendProgressEvent` —— 阶段与工具调用条目
+- `frontend/src/modules/chat/useChat.js:answerClarify` —— 澄清作答拼装；`frontend/src/modules/execution/progress.js:appendProgressEvent` —— 阶段与工具调用条目
 
 ## 需求助手交接与候选答案面板
 
@@ -92,14 +108,14 @@
 
 ### 关键实现
 
-- `frontend/src/App.vue:sendRecommendation` / `toggleOption` / `sendSelectedOptions` —— 点击推荐项、切换选项与发送；`python_backend/modules/skills/handoff.py:normalize_recommendations` —— 旧会话字符串推荐项升级成结构化项
+- `frontend/src/modules/chat/useChat.js:sendRecommendation` / `toggleOption` / `sendSelectedOptions` —— 点击推荐项、切换选项与发送；`python_backend/modules/skills/handoff.py:normalize_recommendations` —— 旧会话字符串推荐项升级成结构化项
 
 ## 技能助手接管底部输入区
 
 ### 入口
 
 - `frontend/src/modules/skills/composer.js:skillComposerCopy`
-- `frontend/src/App.vue:skillCopy` —— 模板取值
+- `frontend/src/modules/chat/useChat.js:skillCopy` —— 模板取值
 
 ### 行为
 
@@ -132,7 +148,7 @@
 
 ### 入口
 
-- `frontend/src/App.vue:exportChatHistory` —— 导出全部聊天
+- `frontend/src/modules/chat/useChat.js:exportChatHistory` —— 导出全部聊天
 - `GET /session/list`（分页取全量）、`GET /session/{conversationId}`
 
 ### 行为
@@ -142,7 +158,7 @@
 
 ### 关键实现
 
-- `frontend/src/api.js:getAllSessions` —— 分页拉全量；`frontend/src/App.vue:exportChatHistory` —— 批量取详情并生成本地文件
+- `frontend/src/modules/chat/api.js:getAllSessions` —— 分页拉全量；`frontend/src/modules/chat/useChat.js:exportChatHistory` —— 批量取详情并生成本地文件
 
 ## 数据与存储
 
@@ -176,4 +192,4 @@
 - 候选抽取依赖模型输出格式：候选不足两条或单条超过 60 字时不会进入面板；打字节奏是显示模拟，正文内容与后端下发量一致
 - 同一会话的第二个子任务会被后端任务锁拒绝；导出一次性读取全量会话，会话数量多时耗时随之增长
 - 工作区导入只按路径与大小过滤（跳过私密与依赖路径，单文件上限 50 MB），不校验文件内容
-- 右侧「变更」面板的变更列表是前端静态数据（`frontend/src/App.vue:changedFiles`），不代表真实仓库差异；PPT 下载链接依赖后端在正文中给出下载路径，前端只做抽取与拼链接
+- 右侧「变更」面板的变更列表是前端静态数据（`frontend/src/modules/workspaces/useWorkspaces.js:changedFiles`），不代表真实仓库差异；PPT 下载链接依赖后端在正文中给出下载路径，前端只做抽取与拼链接

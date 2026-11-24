@@ -10,6 +10,7 @@ import json
 import math
 import threading
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 from .catalog import IntentCatalog
@@ -17,6 +18,8 @@ from ..context_engineering.privacy import sanitize_text
 
 # 召回的相似度下限：低于它认为没有可用候选。
 MIN_SIMILARITY = 0.45
+# 预热示例句时的并发数：网络 IO 密集，适度并发即可。
+WARMUP_WORKERS = 8
 
 
 @dataclass(frozen=True)
@@ -55,6 +58,46 @@ def embed_text(text: str, config: VectorConfig) -> list[float] | None:
     if len(vector) != config.dimension:
         return None
     return [float(value) for value in vector]
+
+
+def embed_texts(texts: list[str], config: VectorConfig) -> list[list[float]] | None:
+    """一次请求算多条文本的向量；任一条不对就整体返回 None。
+
+    与 embed_text 的失败语义一致：不可用就返回 None，由调用方跳过这一层。
+    """
+    cleaned = [sanitize_text(text) for text in (texts or []) if text and text.strip()]
+    if not config.usable or not cleaned:
+        return None
+    endpoint = config.base_url.rstrip('/') + '/embeddings'
+    request = urllib.request.Request(
+        endpoint,
+        data=json.dumps({'model': config.model, 'input': cleaned}).encode(),
+        headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {config.api_key}'},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=config.timeout) as response:
+            payload = json.loads(response.read().decode('utf-8'))
+    except Exception:
+        return None
+    items = payload.get('data') if isinstance(payload, dict) else None
+    if not isinstance(items, list) or len(items) != len(cleaned):
+        return None
+    ordered: list[list[float] | None] = [None] * len(cleaned)
+    for item in items:
+        if not isinstance(item, dict) or not isinstance(item.get('index'), int):
+            return None
+        index = item['index']
+        if not 0 <= index < len(ordered) or ordered[index] is not None:
+            return None
+        vector = item.get('embedding')
+        if not isinstance(vector, list) or not vector:
+            return None
+        if len(vector) != config.dimension:
+            return None
+        ordered[index] = [float(value) for value in vector]
+    if any(vector is None for vector in ordered):
+        return None
+    return [vector for vector in ordered if vector is not None]
 
 
 def cosine(left: list[float], right: list[float]) -> float:
@@ -112,12 +155,14 @@ class ExampleVectorStore:
                 return False
             pairs = self._example_texts()
             vectors: dict[tuple[str, str], list[float]] = {}
-            for name, example in pairs:
-                vector = embed_text(example, self.config)
+            # 示例句互不依赖，嵌入是网络 IO：并行取回，顺序保持与 pairs 一致。
+            with ThreadPoolExecutor(max_workers=WARMUP_WORKERS) as pool:
+                embedded = list(pool.map(lambda pair: embed_text(pair[1], self.config), pairs))
+            for pair, vector in zip(pairs, embedded):
                 if vector is None:
                     self._failed = True
                     return False
-                vectors[(name, example)] = vector
+                vectors[pair] = vector
             self._vectors = vectors
             self._ready = True
             return True

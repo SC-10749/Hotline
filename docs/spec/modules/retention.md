@@ -1,7 +1,7 @@
 # 数据保留与清理（retention）
 
 > 模块路径：`python_backend/modules/retention/`（`maintenance.py` 清理逻辑，`test_retention.py` 用例）
-> 前端对应：无独立前端模块；保留窗口只出现在 `frontend/src/HarnessApp.vue` 的 Harness 设置表单（「审计保留天数」输入框）
+> 前端对应：无独立前端模块；保留窗口只出现在 `frontend/src/modules/harness/panels/SettingsPanel.vue` 的 Harness 设置表单（「审计保留天数」输入框）
 > 状态：现状说明（以代码为准，冲突时以代码为准并修正本文档）
 
 ## 运行历史与事件清理
@@ -66,7 +66,7 @@
 - `python_backend/modules/retention/maintenance.py:run_retention` —— 按设置里的窗口执行清理
 - `python_backend/fastapi_app.py:lifespan` —— 进程启动时注册循环，退出时 `retention_stop.set()`
 - `GET /harness/settings` / `PUT /harness/settings` —— Harness 设置读写
-- `frontend/src/HarnessApp.vue` —— 设置表单里的「审计保留天数」
+- `frontend/src/modules/harness/panels/SettingsPanel.vue` —— 设置表单里的「审计保留天数」
 
 ### 行为
 

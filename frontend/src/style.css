@@ -950,5 +950,9 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
 .bot-nav-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bot-nav-row .switch { padding-right: 6px; }
 .bot-nav-empty { margin: 12px 0 0; padding: 0 8px; color: var(--muted); font-size: 12px; }
-.bot-avatar { width: 20px; height: 20px; flex: 0 0 auto; border-radius: 50%; object-fit: cover; }
-.bot-avatar-lg { width: 44px; height: 44px; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 50%; object-fit: cover; }
+/* 角色头像：圆形裁切 + 主题色描边，角标是贴在头像右下角的角色贴图 */
+.bot-avatar { width: 20px; height: 20px; flex: 0 0 auto; border-radius: 50%; object-fit: cover; object-position: center 32%; box-shadow: 0 0 0 1.5px var(--bot-accent, var(--line)); transition: transform .15s ease; }
+.bot-nav-name:hover .bot-avatar { transform: scale(1.08); }
+.bot-avatar-lg { width: 48px; height: 48px; flex: 0 0 auto; border-radius: 50%; object-fit: cover; object-position: center 30%; box-shadow: 0 0 0 2px var(--bot-accent, var(--line)), 0 6px 16px rgba(20, 24, 22, .16); }
+.bot-avatar-frame { position: relative; display: inline-grid; place-items: center; flex: 0 0 auto; }
+.bot-sticker { position: absolute; right: -3px; bottom: -3px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: #fff; background: var(--bot-accent, var(--accent)); border: 2px solid var(--surface); box-shadow: 0 2px 6px rgba(20, 24, 22, .2); }

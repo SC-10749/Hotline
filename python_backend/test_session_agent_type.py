@@ -64,7 +64,7 @@ class TddHandoffCommandTests(unittest.TestCase):
         self.engine.model.stream = Mock(return_value=iter(['回答']))
 
     def test_handoff_command_runs_as_skill(self):
-        with patch('python_backend.modules.execution.engine.run_agent') as runner:
+        with patch('python_backend.modules.execution.skill_flow.run_agent') as runner:
             runner.return_value = iter([])
             list(self.engine.stream('chat', 'conversation', TDD_RECOMMENDATION))
 

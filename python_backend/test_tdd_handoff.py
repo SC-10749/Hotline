@@ -68,14 +68,14 @@ class TddHandoffTests(unittest.TestCase):
         self.storage.session_messages.return_value = [
             SimpleNamespace(id=1, answer=REQUIREMENT_BODY, thinking=REQUIREMENT_FLAG,
                             question='做个请假系统')]
-        with patch('python_backend.modules.execution.engine.run_agent') as runner:
+        with patch('python_backend.modules.execution.skill_flow.run_agent') as runner:
             runner.return_value = iter([])
             list(self.engine.stream('skills', 'conversation', '按 TDD 把这些需求写成测试'))
         prompt = runner.call_args[0][1]
         self.assertIn(REQUIREMENT_BODY, prompt)
 
     def test_skill_run_without_requirement_body_still_runs(self):
-        with patch('python_backend.modules.execution.engine.run_agent') as runner:
+        with patch('python_backend.modules.execution.skill_flow.run_agent') as runner:
             runner.return_value = iter([])
             list(self.engine.stream('skills', 'conversation', '按 TDD 把这些需求写成测试'))
         prompt = runner.call_args[0][1]
@@ -86,7 +86,7 @@ class TddHandoffTests(unittest.TestCase):
         self.storage.session_messages.return_value = [
             SimpleNamespace(id=1, answer=REQUIREMENT_BODY, thinking=REQUIREMENT_FLAG,
                             question='做个请假系统')]
-        with patch('python_backend.modules.execution.engine.run_agent') as runner:
+        with patch('python_backend.modules.execution.skill_flow.run_agent') as runner:
             runner.return_value = iter([])
             list(self.engine.stream('skills', 'conversation', '按 TDD 把这些需求写成测试'))
         prompt = runner.call_args[0][1]

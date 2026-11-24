@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
+
+from ...infrastructure.sqlite_base import SqliteStore
 
 
 ACTIVE_STATUSES = ("queued", "running")
@@ -38,30 +39,14 @@ class ActiveExecutionError(RuntimeError):
     pass
 
 
-class ExecutionStore:
+class ExecutionStore(SqliteStore):
     """Single-host durable queue and replayable event log for Agent runs."""
+    foreign_keys = True
 
     def __init__(self, path: Path, lease_seconds: int = 45, worker_stale_seconds: int = 15):
-        self.path = Path(path)
         self.lease_seconds = lease_seconds
         self.worker_stale_seconds = worker_stale_seconds
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._initialize()
-
-    def _connect(self) -> sqlite3.Connection:
-        db = sqlite3.connect(self.path, timeout=30, isolation_level=None)
-        db.row_factory = sqlite3.Row
-        db.execute("PRAGMA busy_timeout = 30000")
-        db.execute("PRAGMA foreign_keys = ON")
-        return db
-
-    @contextmanager
-    def _db(self):
-        db = self._connect()
-        try:
-            yield db
-        finally:
-            db.close()
+        super().__init__(path)
 
     def _initialize(self) -> None:
         with self._db() as db:
@@ -144,9 +129,7 @@ class ExecutionStore:
     def enqueue(self, conversation_id: str, agent: str, query: str, file_id: str | None,
                 agent_id: str = "", workspace_id: str = "", slot: str = "",
                 parent_run_id: str = "", workspace_root: str = "") -> dict[str, Any]:
-        db = self._connect()
-        try:
-            db.execute("BEGIN IMMEDIATE")
+        with self._transaction() as db:
             active = db.execute(
                 "SELECT * FROM execution_run WHERE conversation_id=? AND slot=? AND status IN ('queued','running')",
                 (conversation_id, slot),
@@ -169,11 +152,7 @@ class ExecutionStore:
             row = db.execute("SELECT * FROM execution_run WHERE run_id=?", (run_id,)).fetchone()
             db.commit()
             return self._run_dict(row)
-        except Exception:
-            db.rollback()
-            raise
-        finally:
-            db.close()
+
 
     def enqueue_parallel(self, conversation_id: str, tasks: list[dict[str, Any]],
                          parent_run_id: str = "") -> list[dict[str, Any]]:
@@ -195,9 +174,7 @@ class ExecutionStore:
                 # slot 会拼进目录名，不能带冒号等非法路径字符。
                 "slot": f"sub-{index}",
             })
-        db = self._connect()
-        try:
-            db.execute("BEGIN IMMEDIATE")
+        with self._transaction() as db:
             created: list[dict[str, Any]] = []
             for item in prepared:
                 active = db.execute(
@@ -221,11 +198,7 @@ class ExecutionStore:
                 created.append(self._run_dict(row))
             db.commit()
             return created
-        except Exception:
-            db.rollback()
-            raise
-        finally:
-            db.close()
+
 
     def list_children(self, parent_run_id: str) -> list[dict[str, Any]]:
         """按父运行列出子任务，顺序与派发顺序一致。"""
@@ -239,9 +212,7 @@ class ExecutionStore:
         return [self._run_dict(row) for row in rows]
 
     def retry_run(self, run_id: str) -> dict[str, Any] | None:
-        db = self._connect()
-        try:
-            db.execute("BEGIN IMMEDIATE")
+        with self._transaction() as db:
             source = db.execute("SELECT conversation_id,agent,query,file_id,status,agent_id,workspace_id,slot,parent_run_id,workspace_root FROM execution_run WHERE run_id=?", (run_id,)).fetchone()
             if not source or source["status"] not in TERMINAL_STATUSES:
                 db.commit()
@@ -261,16 +232,10 @@ class ExecutionStore:
             row = db.execute("SELECT * FROM execution_run WHERE run_id=?", (new_run_id,)).fetchone()
             db.commit()
             return self._run_dict(row)
-        except Exception:
-            db.rollback()
-            raise
-        finally:
-            db.close()
+
 
     def claim_next(self, worker_id: str) -> dict[str, Any] | None:
-        db = self._connect()
-        try:
-            db.execute("BEGIN IMMEDIATE")
+        with self._transaction() as db:
             now = time.time()
             expired = db.execute(
                 "SELECT run_id FROM execution_run WHERE status='running' AND lease_until < ?",
@@ -302,24 +267,14 @@ class ExecutionStore:
             claimed = db.execute("SELECT * FROM execution_run WHERE run_id=?", (row["run_id"],)).fetchone()
             db.commit()
             return self._run_dict(claimed)
-        except Exception:
-            db.rollback()
-            raise
-        finally:
-            db.close()
+
 
     def append_event(self, run_id: str, event: dict[str, Any]) -> int:
-        db = self._connect()
-        try:
-            db.execute("BEGIN IMMEDIATE")
+        with self._transaction() as db:
             event_id = self._append_event(db, run_id, event)
             db.commit()
             return event_id
-        except Exception:
-            db.rollback()
-            raise
-        finally:
-            db.close()
+
 
     def _append_event(self, db: sqlite3.Connection, run_id: str, event: dict[str, Any]) -> int:
         cursor = db.execute(
@@ -453,9 +408,7 @@ class ExecutionStore:
         return self.events_after(run_id, event_id, **filters)
 
     def request_cancel(self, conversation_id: str) -> bool:
-        db = self._connect()
-        try:
-            db.execute("BEGIN IMMEDIATE")
+        with self._transaction() as db:
             rows = db.execute(
                 "SELECT run_id,status FROM execution_run WHERE conversation_id=? AND status IN ('queued','running')",
                 (conversation_id,),
@@ -475,16 +428,10 @@ class ExecutionStore:
                     db.execute("UPDATE execution_run SET cancel_requested=1 WHERE run_id=?", (row["run_id"],))
             db.commit()
             return True
-        except Exception:
-            db.rollback()
-            raise
-        finally:
-            db.close()
+
 
     def request_cancel_run(self, run_id: str) -> bool:
-        db = self._connect()
-        try:
-            db.execute("BEGIN IMMEDIATE")
+        with self._transaction() as db:
             row = db.execute(
                 "SELECT run_id,status FROM execution_run WHERE run_id=? AND status IN ('queued','running')",
                 (run_id,),
@@ -502,11 +449,7 @@ class ExecutionStore:
                 db.execute("UPDATE execution_run SET cancel_requested=1 WHERE run_id=?", (run_id,))
             db.commit()
             return True
-        except Exception:
-            db.rollback()
-            raise
-        finally:
-            db.close()
+
 
     def is_cancel_requested(self, run_id: str) -> bool:
         with self._db() as db:

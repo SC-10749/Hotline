@@ -4,6 +4,26 @@
 > 前端对应：`frontend/src/modules/execution/`
 > 状态：现状说明（以代码为准，冲突时以代码为准并修正本文档）
 
+## 引擎分层（S-007 拆分后）
+
+### 入口
+
+- `python_backend/modules/execution/engine.py:AgentEngine` —— 编排层：构造、事件工厂、上下文装配、`stream()` 主流程。
+- `python_backend/modules/execution/tasks.py:TaskManager` —— 任务锁：会话级互斥，Redis 模式下广播停止。
+- `python_backend/modules/execution/model_client.py:ModelClient` —— 模型调用适配层：一次性与流式对话、token 用量统计。
+- `python_backend/modules/execution/grounding.py:GroundingMixin` —— 证据落地：检索链路选择、文档/工作区召回、多跳证据扩展。
+- `python_backend/modules/execution/gates.py:GateMixin` —— 意图门闸与需求级门闸。
+- `python_backend/modules/execution/answer_flow.py:AnswerFlowMixin` —— 通用回答流程：提示组装、上下文装配、降级回答。
+- `python_backend/modules/execution/skill_flow.py:SkillFlowMixin` —— 技能智能体执行流。
+- `python_backend/modules/execution/constants.py` —— 门闸标记、需求交接标记与推荐项文案。
+
+### 行为
+
+- `AgentEngine` 由四个 mixin 组合而成，对外方法签名与 SSE 事件格式不变；`from python_backend.modules.execution.engine import AgentEngine, TaskManager, ModelClient` 等既有导入继续可用。
+- `python_backend/agents.py` 仍是兼容入口，仍等价于 `modules.execution.engine`。
+- mixin 只通过 `self` 访问已有协作者（模型、向量库、存储、文档），不直接依赖彼此。
+- 打桩路径随代码位置变化：技能流用 `python_backend.modules.execution.skill_flow.run_agent` 与 `...skill_flow.build_chat_model`，不再从 `engine` 打桩。
+
 ## 执行队列与幂等入队
 
 ### 入口

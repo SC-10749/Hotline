@@ -1,6 +1,6 @@
 # Harness 控制台（harness-console）
 > 模块路径：`python_backend/api/routers/{registry,bots,profile,settings,schedules,observability,code_map}.py` + `python_backend/infrastructure/{registry_store,bot_store,persona,profile_store,credential_store,settings_store,scheduled_store}.py` + `python_backend/modules/execution/scheduler.py`
-> 前端对应：`frontend/src/HarnessApp.vue`（控制台分区）、`frontend/src/App.vue`（bot / 自动化 / 个人中心页）、`frontend/src/modules/artifacts/CodeMapPage.vue`
+> 前端对应：`frontend/src/HarnessApp.vue`（控制台壳层）、`frontend/src/modules/harness/panels/*Panel.vue`（各 section 面板）、`frontend/src/modules/bots/BotPage.vue`（bot）、`frontend/src/modules/automation/AutomationPage.vue`（自动化）、`frontend/src/modules/profile/ProfilePage.vue`（个人中心）、`frontend/src/modules/artifacts/CodeMapPage.vue`
 > 状态：现状说明（以代码为准，冲突时以代码为准并修正本文档）
 
 ## 工具与模型登记
@@ -8,7 +8,7 @@
 - `python_backend/api/routers/registry.py:create_registry_router` —— 工具与模型登记路由；`python_backend/infrastructure/registry_store.py:RegistryStore` —— SQLite 登记表读写
 - `GET/POST /harness/tools`、`GET/PUT /harness/tools/{tool_id}`、`POST /harness/tools/{tool_id}/test`
 - `GET/POST /harness/models`、`GET/PUT /harness/models/{model_id}`、`POST /harness/models/{model_id}/test`、`GET /harness/models/{model_id}/fallback-chain`
-- 前端：`frontend/src/HarnessApp.vue`「工具与 MCP」「模型路由」分区；`frontend/src/api.js` 的 `getHarnessTools/createHarnessTool/updateHarnessTool/testHarnessTool`、`getHarnessModels/createHarnessModel/updateHarnessModel/testHarnessModel/getModelFallbackChain`
+- 前端：`frontend/src/modules/harness/panels/ToolsPanel.vue`「工具与 MCP」、`frontend/src/modules/harness/panels/ModelsPanel.vue`「模型路由」；接口封装在 `frontend/src/modules/harness/tools/api.js`（`getHarnessTools/createHarnessTool/updateHarnessTool/testHarnessTool`）与 `frontend/src/modules/harness/models/api.js`（`getHarnessModels/createHarnessModel/updateHarnessModel/testHarnessModel/getModelFallbackChain`）
 ### 行为
 - 工具登记项含 `name/source/scope/risk/status/description/input_schema/approval_policy`；`name/source/scope/status` 去空格后不能为空。
 - `input_schema` 必须是 JSON Schema：根 `type` 为 `object`、`properties` 为对象、`required` 为字符串数组，且 `required` 中每个字段都在 `properties` 里声明过（`registry.py:ToolPayload.object_schema`）。
@@ -29,7 +29,7 @@
 - `python_backend/api/routers/bots.py:create_bots_router` —— 机器人 CRUD 与会话绑定路由；`python_backend/infrastructure/bot_store.py:BotStore` —— 存储
 - `GET/POST /harness/bots`、`GET/PUT/DELETE /harness/bots/{bot_id}`、`POST /harness/bots/{bot_id}/sessions`
 - `python_backend/infrastructure/persona.py:load_persona` —— 汇总注入模型的人设
-- 前端：`frontend/src/App.vue`「bot」页（左侧栏列表 + 每个机器人一个开关）；`frontend/src/api.js` 的 `getBots/createBot/updateBot/deleteBot/bindBotSession`
+- 前端：`frontend/src/modules/bots/BotPage.vue` 与 `BotSidebar.vue`「bot」页（左侧栏列表 + 每个机器人一个开关）；`frontend/src/modules/bots/api.js` 的 `getBots/createBot/updateBot/deleteBot`（会话绑定接口只在后端开放，前端没有调用）
 ### 行为
 - 机器人 = 名称 + 角色指令 + 绑定技能 + 启用状态；名称去空格后为空返回 422。
 - 开关是全局语义：开启一个机器人会把其余机器人全部关闭（`BotStore._disable_others`），同一时间只留一个开启的。
@@ -39,13 +39,14 @@
 - 前端列表与详情不展示角色指令，只有编辑表单里能改。
 ### 关键实现
 - `python_backend/infrastructure/bot_store.py:create/update/delete/bind_session` —— 写库时同步维护「只留一个开启」
-- `python_backend/seed_bots.py` —— 本地数据种子入口，把仓库技能包装成机器人并登记为 `harness_tool` 的 `agent` 来源
+- `python_backend/seed_bots.py` —— 本地数据种子入口，把仓库技能包装成机器人并登记为 `harness_tool` 的 `agent` 来源；同时播种 6 个角色机器人（产品经理、前端/后端/AI/运维/测试工程师），按名称 upsert 并保留用户设置的开启状态
+- 前端头像：`frontend/src/modules/bots/useBots.js` 的 `BOT_META` 按机器人名称映射头像图片、Lucide 角色图标与主题色，列表小头像 + 详情大头像 + 右下角角标贴图（样式在 `frontend/src/style.css`，图片在 `frontend/src/assets/bot-*-avatar.jpg`）
 
 ## 画像与凭据
 ### 入口
 - `python_backend/api/routers/profile.py:create_profile_router` —— 画像与模型凭据路由；`python_backend/infrastructure/profile_store.py:ProfileStore`、`python_backend/infrastructure/credential_store.py:CredentialStore`
 - `GET/PUT /harness/profile`、`GET/PUT/DELETE /harness/profile/credentials`、`POST /harness/profile/credentials/test`
-- 前端：`frontend/src/App.vue`「个人中心」页；`frontend/src/api.js` 的 `getProfile/saveProfile/getCredential/saveCredential/deleteCredential/testCredential`
+- 前端：`frontend/src/modules/profile/ProfilePage.vue`「个人中心」页；`frontend/src/modules/profile/api.js` 的 `getProfile/saveProfile/getCredential/saveCredential/deleteCredential/testCredential`
 ### 行为
 - 画像字段 `nickname/bio/answerStyle/theme`；`answerStyle` 只接受 `default/concise/detailed/friendly`，`theme` 只接受 `system/light/dark`，其它取值返回 400。
 - 画像是部分更新：未提交的字段沿用旧值，只改主题不会把昵称清空。
@@ -61,7 +62,7 @@
 ### 入口
 - `python_backend/api/routers/settings.py:create_settings_router` —— 设置读写路由；`python_backend/infrastructure/settings_store.py:SettingsStore` —— 单行设置存储
 - `GET /harness/settings`、`PUT /harness/settings`
-- 前端：`frontend/src/HarnessApp.vue`「Harness 设置」分区（`getHarnessSettings/saveHarnessSettings`）
+- 前端：`frontend/src/modules/harness/panels/SettingsPanel.vue`「Harness 设置」分区（接口在 `frontend/src/modules/harness/api.js`：`getHarnessSettings/saveHarnessSettings`）
 ### 行为
 - 设置项：`isolation`、`auditRetentionDays`、`approvalPolicy`、`defaultBudgetUsd`、`defaultTimeoutSeconds`、`defaultRetryCount`、`approvalTimeoutSeconds`、`artifactRetentionDays`、`defaultTokenBudget`、`approvalNotifyEnabled`、`notificationWebhookUrl`、`artifactOwnerHeader`。
 - 取值范围：保留天数 1–3650，默认预算 0–100000，默认超时 1–86400 秒，默认重试 0–10，审批超时 60–86400 秒，默认令牌预算 0–100000000。
@@ -75,7 +76,7 @@
 - `python_backend/api/routers/schedules.py:create_schedules_router` —— 定时任务路由；同文件 `create_schedule_runner/submit_task_run` —— 到点扫描与提交运行
 - `python_backend/infrastructure/scheduled_store.py:ScheduledStore` —— 定时任务存储；`python_backend/modules/execution/scheduler.py:register_runner/run_once/stop_schedule_loop` —— 调度线程
 - `GET/POST /harness/schedules`、`PUT/DELETE /harness/schedules/{task_id}`、`POST /harness/schedules/{task_id}/run`
-- 前端：`frontend/src/App.vue`「自动化」页（`getSchedules/createSchedule/updateSchedule/deleteSchedule/runSchedule`）
+- 前端：`frontend/src/modules/automation/AutomationPage.vue`「自动化」页（`getSchedules/createSchedule/updateSchedule/deleteSchedule/runSchedule`）
 ### 行为
 - 任务字段 `name/prompt/agent`（默认 `chat`）`intervalMinutes`（默认 60）`enabled`；间隔按整分钟计，取值 1 到 60×24×30。
 - 更新是部分更新，未提交的字段保持原值；更新或删除不存在的任务返回 404。
@@ -92,7 +93,7 @@
 - `python_backend/api/routers/observability.py:create_observability_router` —— 运行、事件、指标、导出与趋势路由；数据来自执行库（`python_backend/infrastructure/queue.py:SqliteExecutionQueue` 的 `list_runs/get_run/get_events`）
 - `GET /harness/observability/runs`、`GET /harness/observability/runs/{run_id}/events`、`GET /harness/observability/metrics`
 - `GET /harness/observability/runs/{run_id}/export`、`GET /harness/observability/exports`、`GET /harness/observability/trends`
-- 前端：`frontend/src/HarnessApp.vue`「追踪与日志」分区（`getHarnessObservabilityRuns/getHarnessObservabilityMetrics/getObservabilityExports/getObservabilityTrends/harnessTraceExportUrl`）
+- 前端：`frontend/src/modules/harness/panels/TracesPanel.vue`「追踪与日志」分区（接口在 `frontend/src/modules/governance/api.js`：`getHarnessObservabilityRuns/getHarnessObservabilityMetrics/getObservabilityExports/getObservabilityTrends/harnessTraceExportUrl`）
 ### 行为
 - 运行列表 `limit` 取值 1–200，返回 `items` 与 `total`；事件查询支持 `after/level/tool/hasError/since/until/type` 过滤，运行不存在时返回空列表而不是 404。
 - 指标按 `queued/running/completed/failed/cancelled` 分类统计运行数，并统计错误事件数、`tool_start` 次数与最近 10 次运行。
@@ -108,7 +109,7 @@
 ### 入口
 - `python_backend/api/routers/code_map.py:create_code_map_router` —— 代码地图静态资源路由
 - `GET /code-map` —— 可用性探测；`GET /code-map/{asset_path}` —— 资源读取
-- 前端：`frontend/src/modules/artifacts/CodeMapPage.vue`（App.vue 的「代码地图」页），`frontend/src/api.js:getCodeMapStatus`
+- 前端：`frontend/src/modules/artifacts/CodeMapPage.vue`（壳层「代码地图」页），`frontend/src/modules/artifacts/api.js:getCodeMapStatus`
 ### 行为
 - 只提供两个静态资源：`hotline.html`（`text/html`）与 `vendor/mermaid.min.js`（`application/javascript`）。
 - `GET /code-map` 返回 `available`：两个文件都存在才为 true，缺一即为 false。

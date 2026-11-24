@@ -94,6 +94,7 @@
 - `session_messages` 按 id 升序返回整个会话；`context_messages` 取最近 N 条（默认 64）再反转为升序。
 - `search_session_messages` 把查询切成最多 8 个词元做 `LIKE` 匹配，只返回 answer 非空且按 id 倒序的前 N 条（默认 6）。
 - `session_list` 的标题取会话第一条消息，`agentType` 取最后一条消息的助手类型。
+- `session_list` 过滤掉 `eval:%` 开头的会话（测评跑批的产物，不进用户侧栏），列表与计数口径一致；这些行仍留在 `ai_session` 里可追溯。
 - `delete_session` 先判断会话是否存在，再依次删除 `ai_file_info`、`ai_ppt_inst`、`ai_session` 中该会话的行。
 - 文档记录按 `doc_id` 唯一，版本表按 `(doc_id, version)` 唯一，`image_map` 以 JSON 存放。
 - 返回给前端的结构体由 `python_backend/models.py` 的 `FileInfo`、`SessionMessage`、`DocumentRecord` 定义。
