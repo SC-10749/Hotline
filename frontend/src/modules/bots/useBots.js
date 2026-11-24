@@ -1,6 +1,6 @@
 import { computed, reactive, ref } from 'vue'
 import { Brain, Bug, ClipboardCheck, ClipboardList, Code, Server, Wrench } from 'lucide-vue-next'
-import { createBot, deleteBot, getBots, updateBot } from '../../api'
+import { createBot, deleteBot, getBots, getCiWorkflow, setCiWorkflow, updateBot } from '../../api'
 import botRequirementAvatar from '../../assets/bot-requirement-analysis-avatar.jpg'
 
 // 角色机器人的头像与贴图角标：按机器人名称匹配，角标用 Lucide 图标 + 主题色。
@@ -21,6 +21,9 @@ export function useBots(ctx, skills) {
   const showBotForm = ref(false)
   const botDraft = ref({ botId: '', name: '', instruction: '', skills: [], enabled: false })
   const selectedBotId = ref('')
+  // CI 工作流开关：直接启停仓库里的 GitHub Actions 工作流，未配置凭据时如实显示。
+  const ciWorkflow = ref({ configured: false, enabled: null, state: '', workflow: '', repository: '', message: '' })
+  const ciBusy = ref(false)
 
   const selectedBot = computed(() => bots.value.find(bot => bot.bot_id === selectedBotId.value) || null)
   const skillNameMap = computed(() => new Map(skills.state.skills.map(skill => [skill.id, skill.name])))
@@ -44,9 +47,33 @@ export function useBots(ctx, skills) {
     } catch (error) {
       bots.value = []
     }
+    await refreshCiWorkflow()
     // 不自动选中：右侧详情只在用户点左侧列表项时出现。
     if (!bots.value.some(bot => bot.bot_id === selectedBotId.value)) {
       selectedBotId.value = ''
+    }
+  }
+
+  async function refreshCiWorkflow() {
+    try {
+      ciWorkflow.value = await getCiWorkflow(ctx.backendUrl)
+    } catch (error) {
+      ciWorkflow.value = { configured: false, enabled: null, state: '', workflow: '', repository: '',
+        message: error.message || 'CI 工作流服务不可用' }
+    }
+  }
+
+  async function toggleCiWorkflow() {
+    if (ciBusy.value || !ciWorkflow.value.configured) return
+    ciBusy.value = true
+    const next = !ciWorkflow.value.enabled
+    try {
+      ciWorkflow.value = await setCiWorkflow(ctx.backendUrl, next)
+      ctx.showToast(next ? 'CI 工作流已开启' : 'CI 工作流已关闭')
+    } catch (error) {
+      ctx.showToast(`切换失败：${error.message || 'CI 工作流服务不可用'}`)
+    } finally {
+      ciBusy.value = false
     }
   }
 
@@ -125,11 +152,11 @@ export function useBots(ctx, skills) {
     }
   }
 
-  const state = reactive({ bots, botBusy, showBotForm, botDraft, selectedBotId, selectedBot })
+  const state = reactive({ bots, botBusy, showBotForm, botDraft, selectedBotId, selectedBot, ciWorkflow, ciBusy })
 
   const actions = {
     refreshBots, selectBot, botSkillNames, openBotForm, submitBot, toggleBot, removeBot,
-    botMeta, botAvatar, botAccent,
+    botMeta, botAvatar, botAccent, refreshCiWorkflow, toggleCiWorkflow,
   }
 
   return { state, actions }

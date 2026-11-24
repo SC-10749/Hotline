@@ -48,6 +48,7 @@ from .modules.execution.scheduler import register_runner, stop_schedule_loop
 from .api.routers.settings import create_settings_router
 from .api.routers.schedules import create_schedule_runner, create_schedules_router
 from .api.routers.bots import create_bots_router
+from .api.routers.ci_workflow import create_ci_workflow_router
 from .api.routers.profile import create_profile_router
 from .llm import probe_credential
 from .infrastructure.evaluation_store import EvaluationStore
@@ -168,6 +169,7 @@ app.include_router(create_code_map_router(settings.data_dir / 'code-map' / 'hotl
 app.include_router(create_settings_router(settings_store))
 app.include_router(create_schedules_router(scheduled_store, execution_service))
 app.include_router(create_bots_router(bot_store))
+app.include_router(create_ci_workflow_router(settings))
 app.include_router(create_profile_router(profile_store, credential_store, model_probe=probe_credential))
 # 意图识别：第二层向量召回按 scope 各建一份缓存，未配置 embedding 时自动跳过。
 _intent_vector_config = vector_config_from_settings(settings)

@@ -143,6 +143,11 @@ class Settings:
     sse_limit: int = int(os.getenv('HOTLINE_SSE_LIMIT', '0'))
     sse_idle_timeout: float = float(os.getenv('HOTLINE_SSE_IDLE_TIMEOUT', '0'))
 
+    # GitHub Actions 工作流开关：凭据只从本机环境变量读，不入库、不写日志。
+    github_token: str = os.getenv('HOTLINE_GITHUB_TOKEN', '').strip()
+    github_repository: str = os.getenv('HOTLINE_GITHUB_REPOSITORY', '').strip()
+    github_ci_workflow: str = os.getenv('HOTLINE_GITHUB_CI_WORKFLOW', 'ci.yml').strip()
+
     context_enabled: bool = _bool_env('HOTLINE_CONTEXT_ENABLED', True)
     context_window: int = int(os.getenv('HOTLINE_CONTEXT_WINDOW', '128000'))
     context_input_budget: int = int(os.getenv('HOTLINE_CONTEXT_INPUT_BUDGET', '64000'))

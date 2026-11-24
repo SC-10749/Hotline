@@ -38,6 +38,7 @@
 | [S-007](2026-11-23-分层拆分与目录治理.md) | 2026-11-23 | 前端与 AI 引擎分层拆分（接口层 / 应用层 / 表现层） | 已实现 | frontend/src 全量、python_backend/modules/execution、模块文档 |
 | [S-014](2026-11-23-二次元与像素头像素材集.md) | 2026-11-23 | 二次元与像素头像素材集（1 角色头像 + 14 页面贴图 + 侧边栏插画） | 已实现 | frontend/src/assets/generated 新增素材，未接入界面 |
 | [S-015](2026-11-24-CI校验修复.md) | 2026-11-24 | CI 校验修复（技能流历史契约 · agent 事件 · 注册取消挂死 · mvnw 可执行位） | 已实现 | skill-center 技能测试、service_registry 取消语义、java_backend/mvnw 权限位、execution 模块文档 |
+| [S-016](2026-11-24-CI工作流开关.md) | 2026-11-24 | 机器人页的 CI 工作流开关 | 已实现 | harness-console 模块、/harness/ci-workflow 路由、GitHub 工作流客户端、机器人页开关 |
 | S-XXX | — | 模板见 [_template.md](_template.md) | — | — |
 
 ## 写规格的最小要求

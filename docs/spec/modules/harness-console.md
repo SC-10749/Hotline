@@ -42,6 +42,22 @@
 - `python_backend/seed_bots.py` —— 本地数据种子入口，把仓库技能包装成机器人并登记为 `harness_tool` 的 `agent` 来源；同时播种 6 个角色机器人（产品经理、前端/后端/AI/运维/测试工程师），按名称 upsert 并保留用户设置的开启状态
 - 前端头像：`frontend/src/modules/bots/useBots.js` 的 `BOT_META` 按机器人名称映射头像图片、Lucide 角色图标与主题色，列表小头像 + 详情大头像 + 右下角角标贴图（样式在 `frontend/src/style.css`，图片在 `frontend/src/assets/bot-*-avatar.jpg`）
 
+## CI 工作流开关
+### 入口
+- `python_backend/api/routers/ci_workflow.py:create_ci_workflow_router` —— 读状态与启停工作流的路由
+- `python_backend/infrastructure/github_workflow.py:GitHubWorkflowClient` —— GitHub Actions 工作流客户端（stdlib urllib，不引入新依赖）
+- `GET /harness/ci-workflow`、`POST /harness/ci-workflow`（请求体 `{"enabled": true|false}`）
+- 前端：`frontend/src/modules/bots/BotPage.vue` 顶部的「CI 工作流」开关；`frontend/src/modules/bots/api.js` 的 `getCiWorkflow/setCiWorkflow`
+### 行为
+- 开关直接调用 GitHub 的 `PUT /repos/{owner}/{repo}/actions/workflows/{workflow}/enable|disable`，关闭后推送与 PR 不再触发该工作流。
+- 凭据只从本机环境变量读：`HOTLINE_GITHUB_TOKEN`、`HOTLINE_GITHUB_REPOSITORY`、`HOTLINE_GITHUB_CI_WORKFLOW`（默认 `ci.yml`）；不进数据库、不写日志、不随请求外传。
+- 未配置 Token 或仓库时，`GET` 如实返回 `configured: false` 并说明原因，`POST` 返回 409；前端开关置灰，不做猜测。
+- GitHub 侧出错时统一转成 502，错误消息只带状态码，不带凭据。
+- 前端只展示后端返回的状态与目标（仓库 + 工作流文件），不自己推断；切换后以后端返回的状态为准。
+### 关键实现
+- `GitHubWorkflowClient.workflow_state` 把 GitHub 的 `state` 映射成 `enabled`：只有 `active` 算开启，`disabled_manually` 等都算关闭。
+- 开关状态与机器人列表一起刷新（`useBots.refreshBots` 内调用 `refreshCiWorkflow`），进页面或定时刷新时都能看到最新状态。
+
 ## 画像与凭据
 ### 入口
 - `python_backend/api/routers/profile.py:create_profile_router` —— 画像与模型凭据路由；`python_backend/infrastructure/profile_store.py:ProfileStore`、`python_backend/infrastructure/credential_store.py:CredentialStore`
@@ -141,6 +157,7 @@
 | `GET, POST` | `/harness/bots` | 列出机器人 / 新建机器人 |
 | `GET, PUT, DELETE` | `/harness/bots/{bot_id}` | 读详情 / 更新（含开关）/ 删除（含会话绑定） |
 | `POST` | `/harness/bots/{bot_id}/sessions` | 绑定会话到机器人 |
+| `GET, POST` | `/harness/ci-workflow` | 读 CI 工作流状态 / 启停工作流（请求体 `{"enabled": true}`） |
 | `GET, PUT` | `/harness/profile` | 读个人偏好 / 保存（部分更新） |
 | `GET, PUT, DELETE` | `/harness/profile/credentials` | 读凭据（掩码）/ 保存 / 删除 |
 | `POST` | `/harness/profile/credentials/test` | 模型凭据连通性测试 |

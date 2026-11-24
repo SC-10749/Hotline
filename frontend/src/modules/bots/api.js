@@ -31,3 +31,19 @@ export async function deleteBot(base, botId) {
   })
   return unwrap(response)
 }
+
+// CI 工作流开关：直接启停仓库里的 GitHub Actions 工作流。
+export async function getCiWorkflow(base) {
+  const response = await apiFetch(apiUrl(base, '/harness/ci-workflow'), { signal: AbortSignal.timeout(10000) })
+  const result = await unwrap(response)
+  return result || {}
+}
+
+export async function setCiWorkflow(base, enabled) {
+  const response = await apiFetch(apiUrl(base, '/harness/ci-workflow'), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }),
+    signal: AbortSignal.timeout(20000),
+  })
+  const result = await unwrap(response)
+  return result || {}
+}
