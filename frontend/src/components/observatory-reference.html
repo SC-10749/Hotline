@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>运行总览</title>
+<style>
+  :root{
+    --bg:#0a0d13;
+    --bg-soft:#0e1219;
+    --card:#12161f;
+    --card-2:#171c27;
+    --card-3:#1c2230;
+    --border:#232a37;
+    --border-soft:#1c2330;
+    --text:#e7ecf4;
+    --text-dim:#93a0b4;
+    --text-faint:#5d6a7d;
+    --accent:#4f8cff;
+    --accent-soft:rgba(79,140,255,.14);
+    --cyan:#22d3ee;
+    --green:#2dd4a7;
+    --green-soft:rgba(45,212,167,.14);
+    --amber:#f5b945;
+    --amber-soft:rgba(245,185,69,.14);
+    --red:#f2565a;
+    --red-soft:rgba(242,86,90,.14);
+    --violet:#a78bfa;
+    --pink:#f472b6;
+    --orange:#fb923c;
+    --sky:#38bdf8;
+    --mono:"SF Mono","JetBrains Mono","Roboto Mono",ui-monospace,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    --radius:14px;
+    --shadow:0 8px 28px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;scrollbar-width:thin;scrollbar-color:rgba(147,160,180,.3) transparent}
+  *::-webkit-scrollbar{width:8px;height:8px;background:transparent}
+  *::-webkit-scrollbar-track{background:transparent}
+  *::-webkit-scrollbar-thumb{border:2px solid transparent;border-radius:999px;background:rgba(147,160,180,.3);background-clip:padding-box}
+  *::-webkit-scrollbar-thumb:hover{background:rgba(147,160,180,.52);background-clip:padding-box}
+  html{scroll-behavior:smooth}
+  body{
+    background:radial-gradient(1200px 500px at 15% -10%, rgba(79,140,255,.08), transparent 60%),
+               radial-gradient(1000px 500px at 90% -10%, rgba(34,211,238,.06), transparent 55%),
+               var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    font-size:12px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{max-width:1560px;margin:0 auto;padding:18px 20px 60px}
+
+  /* ===== 顶部 ===== */
+  .topbar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+  .brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+  .brand .logo{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
+    background:linear-gradient(135deg,#4f8cff,#22d3ee);font-weight:800;font-size:15px;color:#04121f;box-shadow:0 4px 16px rgba(79,140,255,.4)}
+  .brand h1{font-size:15px;font-weight:700;letter-spacing:.2px}
+  .brand .sub{font-size:11px;color:var(--text-faint);margin-top:1px}
+  .toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .seg{display:flex;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:3px;gap:2px}
+  .seg button{border:none;background:transparent;color:var(--text-dim);font-size:12px;padding:5px 11px;border-radius:7px;cursor:pointer;font-family:var(--sans);transition:.15s}
+  .seg button:hover{color:var(--text)}
+  .seg button.on{background:var(--card-3);color:var(--text);font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+  .slice{position:relative}
+  .slice>button{display:flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--border);
+    color:var(--text-dim);font-size:12px;padding:6px 12px;border-radius:10px;cursor:pointer;font-family:var(--sans);transition:.15s}
+  .slice>button:hover{border-color:#35404f;color:var(--text)}
+  .slice>button .val{color:var(--text);font-weight:600}
+  .slice-menu{position:absolute;top:calc(100% + 6px);right:0;min-width:180px;background:var(--card-2);border:1px solid var(--border);
+    border-radius:12px;padding:6px;box-shadow:var(--shadow);z-index:40;display:none}
+  .slice-menu.open{display:block}
+  .slice-menu .opt{padding:7px 10px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:8px;color:var(--text-dim)}
+  .slice-menu .opt:hover{background:var(--card-3);color:var(--text)}
+  .slice-menu .opt.sel{color:var(--text)}
+  .slice-menu .opt .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);opacity:0}
+  .slice-menu .opt.sel .dot{opacity:1}
+  .filter-chip{display:none;align-items:center;gap:6px;background:var(--accent-soft);border:1px solid rgba(79,140,255,.3);
+    color:var(--accent);font-size:11px;padding:4px 9px;border-radius:999px}
+  .filter-chip.show{display:inline-flex}
+  .filter-chip b{font-weight:600;color:var(--text)}
+  .filter-chip button{background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;line-height:1}
+
+  /* ===== 指标条 ===== */
+  .metric-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px}
+  .metric{position:relative;background:linear-gradient(180deg,var(--card),var(--bg-soft));border:1px solid var(--border);
+    border-radius:var(--radius);padding:16px 18px;cursor:pointer;transition:.18s;overflow:hidden}
+  .metric:hover{transform:translateY(-2px);border-color:#344154;box-shadow:var(--shadow)}
+  .metric::after{content:"↗";position:absolute;top:14px;right:14px;color:var(--text-faint);font-size:13px;opacity:0;transition:.18s}
+  .metric:hover::after{opacity:1;color:var(--accent)}
+  .metric .m-label{font-size:12px;color:var(--text-dim);display:flex;align-items:center;gap:6px}
+  .metric .m-val{font-size:24px;font-weight:750;letter-spacing:-.5px;margin-top:6px;font-variant-numeric:tabular-nums}
+  .metric .m-val small{font-size:14px;font-weight:600;color:var(--text-dim)}
+  .metric .m-sub{font-size:11px;color:var(--text-faint);margin-top:4px;display:flex;align-items:center;gap:6px}
+  .metric .spark{position:absolute;right:14px;bottom:14px}
+  .delta{font-weight:600;font-size:11px}
+  .delta.up{color:var(--red)}.delta.down{color:var(--green)}.delta.flat{color:var(--text-dim)}
+  .badge-dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+  .pulse{animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+  /* ===== 三栏 ===== */
+  .three-col{display:grid;grid-template-columns:308px minmax(0,1fr) 330px;gap:12px;align-items:stretch}
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+  .panel-head{display:flex;align-items:center;gap:8px;padding:13px 16px;border-bottom:1px solid var(--border-soft)}
+  .panel-head .t{font-size:12px;font-weight:700;display:flex;align-items:center;gap:7px}
+  .panel-head .t .n{color:var(--text-faint);font-weight:600;font-size:11px}
+  .panel-head .spacer{flex:1}
+  .panel-body{padding:12px}
+  #queuePanel{height:0;min-height:100%;display:flex;flex-direction:column}
+  #queueBody{flex:1;min-height:0;overflow-y:auto;padding-right:6px}
+  #queueBody::-webkit-scrollbar{width:6px}
+  #queueBody::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+  #queueBody::-webkit-scrollbar-thumb:hover{background:#344154}
+
+  /* 执行队列 */
+  .queue-tabs{display:flex;gap:2px;padding:4px;margin:12px 12px 0;background:var(--card-2);border:1px solid var(--border-soft);border-radius:10px}
+  .queue-tabs button{flex:1;border:none;background:transparent;color:var(--text-dim);font-size:12px;padding:6px 4px;border-radius:8px;cursor:pointer;font-family:var(--sans);display:flex;align-items:center;justify-content:center;gap:5px}
+  .queue-tabs button:hover{color:var(--text)}
+  .queue-tabs button.on{background:var(--card-3);color:var(--text);font-weight:600}
+  .queue-tabs .cnt{font-size:10px;color:var(--text-faint);font-weight:700;min-width:15px;text-align:center}
+  .queue-tabs button.on .cnt{color:var(--accent)}
+  .qrun{padding:11px 12px;border-radius:11px;border:1px solid var(--border-soft);margin-bottom:9px;cursor:pointer;background:var(--bg-soft);transition:.15s}
+  .qrun:hover{border-color:#3a4658;background:var(--card-2)}
+  .qrun.active{border-color:var(--accent);background:var(--accent-soft)}
+  .qrun .r1{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+  .qrun .agent{font-weight:650;font-size:12.5px}
+  .qrun .rid{font-family:var(--mono);font-size:10px;color:var(--text-faint);margin-left:auto}
+  .qrun .task{font-size:12px;color:var(--text-dim);margin-bottom:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .qrun .meta{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--text-faint);flex-wrap:wrap}
+  .qrun .meta .model{font-family:var(--mono)}
+  .progress{height:4px;background:var(--card-3);border-radius:2px;overflow:hidden;margin-top:7px}
+  .progress>i{display:block;height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--cyan));transition:width .4s}
+  .status{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:650;padding:2px 7px;border-radius:999px;white-space:nowrap}
+  .status .badge-dot{width:6px;height:6px}
+  .s-running{background:rgba(34,211,238,.14);color:#67e0f5}.s-running .badge-dot{background:var(--cyan)}
+  .s-queued{background:rgba(147,160,180,.14);color:#a9b5c7}.s-queued .badge-dot{background:#8b98ac}
+  .s-failed{background:var(--red-soft);color:#ff8d90}.s-failed .badge-dot{background:var(--red)}
+  .s-success{background:var(--green-soft);color:#5ee0bd}.s-success .badge-dot{background:var(--green)}
+  .s-warn{background:var(--amber-soft);color:#f7cf7e}.s-warn .badge-dot{background:var(--amber)}
+  .grp-label{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:var(--text-dim);margin:13px 2px 8px;letter-spacing:.3px}
+  .grp-label .chip{font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px}
+  .grp-label .cnt{color:var(--text-faint);font-weight:600}
+  .empty{padding:28px 12px;text-align:center;color:var(--text-faint);font-size:12px}
+
+  /* 运行详情 */
+  .detail-head{padding:14px 16px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .detail-head .rid{font-family:var(--mono);font-size:12.5px;font-weight:650}
+  .detail-head .tags{display:flex;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--text-dim)}
+  .detail-head .tags span{background:var(--card-2);border:1px solid var(--border-soft);padding:2px 8px;border-radius:7px}
+  .detail-tabs{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--border-soft);overflow-x:auto}
+  .detail-tabs button{border:none;background:none;color:var(--text-dim);font-size:12px;padding:10px 12px;cursor:pointer;font-family:var(--sans);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;font-weight:550}
+  .detail-tabs button:hover{color:var(--text)}
+  .detail-tabs button.on{color:var(--text);border-bottom-color:var(--accent);font-weight:650}
+  .detail-body{padding:14px 16px}
+  .trace-table{width:100%;border-collapse:collapse;font-size:12px}
+  .trace-table th{text-align:left;color:var(--text-faint);font-weight:600;font-size:10.5px;padding:7px 9px;border-bottom:1px solid var(--border-soft);white-space:nowrap;letter-spacing:.3px}
+  .trace-table td{padding:9px;border-bottom:1px solid var(--border-soft);vertical-align:middle}
+  .trace-table tr:hover td{background:var(--card-2)}
+  .trace-table tr.crit td{background:var(--red-soft)}
+  .trace-table tr.crit:hover td{background:rgba(242,86,90,.18)}
+  .stage{display:inline-flex;align-items:center;gap:6px;font-weight:650;font-size:11.5px}
+  .stage .sw{width:8px;height:8px;border-radius:3px}
+  .step-name{font-weight:550}
+  .step-note{font-size:10.5px;color:var(--text-faint);margin-top:2px}
+  .cell-mono{font-family:var(--mono);font-size:11px;color:var(--text-dim);font-variant-numeric:tabular-nums}
+  .crit-tag{display:inline-block;font-size:9.5px;font-weight:700;background:var(--red);color:#fff;padding:1px 6px;border-radius:5px;margin-left:7px;letter-spacing:.3px}
+  .attrib{margin-top:16px;border:1px solid rgba(242,86,90,.4);background:linear-gradient(180deg,rgba(242,86,90,.08),transparent);border-radius:12px;padding:14px 16px}
+  .attrib-head{display:flex;align-items:center;gap:8px;font-weight:700;font-size:12.5px;margin-bottom:12px;color:#ffb3b5}
+  .attrib-head .ic{width:18px;height:18px;border-radius:6px;background:var(--red);display:grid;place-items:center;font-size:11px;color:#fff}
+  .attrib-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .attrib-item{background:var(--card-2);border:1px solid var(--border-soft);border-radius:10px;padding:10px 12px}
+  .attrib-item .k{font-size:10.5px;color:var(--text-faint);margin-bottom:4px;font-weight:600}
+  .attrib-item .v{font-size:12.5px;font-weight:600}
+  .attrib-item .v.dim{color:var(--text-dim);font-weight:500}
+  .cat-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:12px}
+  .cat-cell{text-align:center;padding:9px 4px;border-radius:10px;border:1px solid var(--border-soft);background:var(--card-2)}
+  .cat-cell .name{font-size:10.5px;color:var(--text-dim);font-weight:600}
+  .cat-cell .pct{font-size:14px;font-weight:750;margin-top:3px;font-variant-numeric:tabular-nums}
+  .cat-cell.blame{border-color:currentColor;background:var(--card-3)}
+  .conf-bar{height:6px;background:var(--card-3);border-radius:3px;overflow:hidden;margin-top:6px}
+  .conf-bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--red),var(--amber))}
+
+  /* 运行检查 */
+  .insp-item{border:1px solid var(--border-soft);border-radius:11px;margin-bottom:10px;overflow:hidden}
+  .insp-item .ih{display:flex;align-items:center;gap:7px;padding:10px 12px;background:var(--bg-soft);font-size:12px;font-weight:650;cursor:pointer}
+  .insp-item .ih .spacer{flex:1}
+  .insp-item .ih .chev{color:var(--text-faint);transition:.2s;font-size:11px}
+  .insp-item.open .ih .chev{transform:rotate(90deg)}
+  .insp-item .ib{padding:10px 12px}
+  .toolcall{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-soft);font-size:12px}
+  .toolcall:last-child{border-bottom:none}
+  .toolcall .tname{font-family:var(--mono);font-size:11px;font-weight:600}
+  .toolcall .tdim{color:var(--text-faint);font-size:10.5px;margin-left:auto;white-space:nowrap}
+  .kv{display:flex;justify-content:space-between;font-size:11.5px;padding:4px 0;color:var(--text-dim)}
+  .kv b{color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+  .ctx-bar{height:7px;border-radius:4px;background:var(--card-3);overflow:hidden;display:flex;margin:6px 0 4px}
+  .ctx-bar i{display:block;height:100%}
+  .ctx-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:10.5px;color:var(--text-faint);margin-top:6px}
+  .ctx-legend span{display:flex;align-items:center;gap:5px}
+  .ctx-legend .sw{width:8px;height:8px;border-radius:2px;display:inline-block}
+  .budget-th{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--text-faint)}
+  .policy-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-soft);font-size:11.5px}
+  .policy-row:last-child{border-bottom:none}
+  .policy-row .pname{color:var(--text-dim)}
+  .policy-row .pres{margin-left:auto;display:flex;gap:6px;font-size:10.5px;font-weight:650}
+  .tag{font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px}
+  .tag.block{background:var(--red-soft);color:#ff8d90}
+  .tag.pass{background:var(--green-soft);color:#5ee0bd}
+  .tag.warn{background:var(--amber-soft);color:#f7cf7e}
+
+  /* 异常聚合 */
+  .exceptions{margin-top:14px}
+  .exc-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px}
+  .exc-card{border:1px solid var(--border);border-radius:12px;padding:13px 15px;background:var(--card);cursor:pointer;transition:.15s;position:relative;overflow:hidden}
+  .exc-card:hover{border-color:#3a4658;transform:translateY(-1px)}
+  .exc-card .ec-t{font-size:11.5px;color:var(--text-dim);font-weight:600;display:flex;align-items:center;gap:6px}
+  .exc-card .ec-v{font-size:24px;font-weight:750;margin-top:4px;font-variant-numeric:tabular-nums}
+  .exc-card .ec-s{font-size:10.5px;color:var(--text-faint);margin-top:2px}
+  .exc-card .sw{width:9px;height:9px;border-radius:3px;display:inline-block}
+  .fail-list .frow{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--border-soft);transition:.12s}
+  .fail-list .frow:hover{background:var(--card-2)}
+  .fail-list .frow:last-child{border-bottom:none}
+  .sev{width:3px;align-self:stretch;border-radius:2px;flex:none}
+  .sev.high{background:var(--red)}.sev.med{background:var(--amber)}.sev.low{background:var(--sky)}
+  .f-main{min-width:0;flex:1.2}
+  .f-main .ft{font-weight:650;font-size:12.5px;display:flex;align-items:center;gap:8px}
+  .f-main .fd{font-size:11px;color:var(--text-faint);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .f-col{flex:1;min-width:0;font-size:11px;color:var(--text-dim)}
+  .f-col .fc-t{font-size:9.5px;color:var(--text-faint);font-weight:600;letter-spacing:.3px;margin-bottom:2px}
+  .f-col .fc-v{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .f-actions{display:flex;gap:6px;flex:none}
+  .btn{font-size:11px;font-weight:600;padding:5px 11px;border-radius:8px;cursor:pointer;border:1px solid var(--border);background:var(--card-2);color:var(--text-dim);font-family:var(--sans);transition:.14s}
+  .btn:hover{color:var(--text);border-color:#3a4658}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover{background:#3f7cf0}
+  .btn.ghost{background:transparent}
+  .btn.danger{color:#ff8d90;border-color:rgba(242,86,90,.35)}
+  .btn.danger:hover{background:var(--red-soft);color:#ffb3b5}
+
+  /* 节点 + 趋势 */
+  .nodes{margin-top:14px}
+  .node-table{width:100%;border-collapse:collapse;font-size:12px}
+  .node-table th{text-align:left;color:var(--text-faint);font-weight:600;font-size:10.5px;padding:9px 14px;border-bottom:1px solid var(--border-soft);letter-spacing:.3px;white-space:nowrap}
+  .node-table td{padding:10px 14px;border-bottom:1px solid var(--border-soft);white-space:nowrap}
+  .node-table tr:hover td{background:var(--card-2)}
+  .node-table .mono{font-family:var(--mono);font-size:11px;color:var(--text-dim)}
+  .mini-bar{width:70px;height:5px;background:var(--card-3);border-radius:3px;overflow:hidden;display:inline-block;vertical-align:middle;margin-right:6px}
+  .mini-bar i{display:block;height:100%;background:var(--accent)}
+  .trends{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+  .trend-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .trend-cell{border:1px solid var(--border-soft);border-radius:11px;padding:12px 14px;background:var(--bg-soft)}
+  .trend-cell .tt{font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:6px;font-weight:600}
+  .trend-cell .tv{font-size:20px;font-weight:750;margin:5px 0 2px;font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:7px}
+  .trend-cell .tv small{font-size:11px;color:var(--text-faint);font-weight:500}
+  .hbar-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border-soft)}
+  .hbar-row:last-child{border-bottom:none}
+  .hbar-row .hname{width:52px;font-size:12px;font-weight:650;flex:none}
+  .hbar-row .hwrap{flex:1;height:9px;background:var(--card-3);border-radius:5px;overflow:hidden}
+  .hbar-row .hwrap i{display:block;height:100%;border-radius:5px}
+  .hbar-row .hval{width:70px;text-align:right;font-size:11px;color:var(--text-dim);font-variant-numeric:tabular-nums;flex:none}
+
+  /* 模态 */
+  .modal-mask{position:fixed;inset:0;background:rgba(3,6,10,.66);backdrop-filter:blur(3px);z-index:100;display:none;align-items:flex-start;justify-content:center;padding:8vh 20px}
+  .modal-mask.open{display:flex}
+  .modal{width:620px;max-width:100%;background:var(--card);border:1px solid #2a3342;border-radius:16px;box-shadow:var(--shadow);overflow:hidden;animation:pop .18s ease}
+  @keyframes pop{from{transform:translateY(10px);opacity:0}to{transform:none;opacity:1}}
+  .modal-head{display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--border-soft)}
+  .modal-head .t{font-size:14px;font-weight:700}
+  .modal-head .x{margin-left:auto;background:none;border:none;color:var(--text-faint);font-size:20px;cursor:pointer;line-height:1}
+  .modal-body{padding:12px 18px;max-height:62vh;overflow-y:auto}
+  .appr-item{display:flex;gap:12px;padding:13px;border:1px solid var(--border-soft);border-radius:12px;margin-bottom:10px;background:var(--bg-soft)}
+  .appr-item .sev{width:4px;border-radius:2px;flex:none}
+  .appr-main{flex:1;min-width:0}
+  .appr-main .at{font-weight:650;font-size:12.5px;display:flex;align-items:center;gap:8px}
+  .appr-main .ad{font-size:11px;color:var(--text-dim);margin-top:4px}
+  .appr-actions{display:flex;gap:6px;align-items:flex-start;flex:none}
+  .risk-tag{font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px}
+  .risk-tag.high{background:var(--red-soft);color:#ff8d90}
+  .risk-tag.med{background:var(--amber-soft);color:#f7cf7e}
+  .risk-tag.low{background:var(--green-soft);color:#5ee0bd}
+
+  /* toast */
+  .toast-wrap{position:fixed;bottom:22px;right:22px;z-index:200;display:flex;flex-direction:column;gap:8px}
+  .toast{background:var(--card-3);border:1px solid #3a4658;border-radius:11px;padding:11px 15px;font-size:12.5px;box-shadow:var(--shadow);
+    display:flex;align-items:center;gap:9px;animation:slide .22s ease}
+  @keyframes slide{from{transform:translateX(16px);opacity:0}to{transform:none;opacity:1}}
+  .toast .ic{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;font-size:11px;flex:none}
+
+  .footnote{margin-top:26px;padding:13px 16px;border:1px dashed #2b3342;border-radius:12px;font-size:11.5px;color:var(--text-faint);display:flex;gap:10px;align-items:flex-start}
+  .footnote b{color:var(--text-dim)}
+  .footnote code{font-family:var(--mono);font-size:10.5px;color:#a9c6ff;background:var(--accent-soft);padding:1px 5px;border-radius:5px}
+
+  .mono{font-family:var(--mono)}
+  .muted{color:var(--text-faint)}
+  .spacer{flex:1}
+
+  @media(max-width:1280px){
+    .three-col{grid-template-columns:1fr 1fr}
+    .inspector{grid-column:1/-1}
+  }
+  @media(max-width:900px){
+    .metric-strip{grid-template-columns:1fr 1fr}
+    .three-col{grid-template-columns:1fr}
+    .trends{grid-template-columns:1fr}
+    .exc-summary{grid-template-columns:repeat(2,1fr)}
+    .cat-strip{grid-template-columns:repeat(2,1fr)}
+    .attrib-grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- 顶部 -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">◈</div>
+      <div>
+        <h1>运行总览</h1>
+        <div class="sub">运行观测 · 多智能体治理</div>
+      </div>
+    </div>
+    <div class="toolbar">
+      <div class="seg" id="rangeSeg">
+        <button data-range="today" class="on">今日</button>
+        <button data-range="7d">7 天</button>
+        <button data-range="14d">14 天</button>
+      </div>
+      <div class="slice" id="sliceAgent">
+        <button>智能体 <span class="val" data-v="全部">全部</span> ▾</button>
+        <div class="slice-menu"></div>
+      </div>
+      <div class="slice" id="sliceModel">
+        <button>模型 <span class="val" data-v="全部">全部</span> ▾</button>
+        <div class="slice-menu"></div>
+      </div>
+      <div class="slice" id="sliceWs">
+        <button>工作空间 <span class="val" data-v="全部">全部</span> ▾</button>
+        <div class="slice-menu"></div>
+      </div>
+      <div class="filter-chip" id="filterChip">已应用 <b class="fc-count"></b> 个切片 <button onclick="clearFilters()">✕</button></div>
+    </div>
+  </header>
+
+  <!-- 指标条 -->
+  <section class="metric-strip">
+    <div class="metric" onclick="goRunning()">
+      <div class="m-label"><span class="badge-dot pulse" style="background:var(--cyan)"></span>活动运行</div>
+      <div class="m-val" id="mRunning">12</div>
+      <div class="m-sub">较昨日 <span class="delta up">+2</span> · 点击查看队列</div>
+    </div>
+    <div class="metric" onclick="openApprovals()">
+      <div class="m-label"><span class="badge-dot" style="background:var(--amber)"></span>待人工审批</div>
+      <div class="m-val" id="mApproval">3</div>
+      <div class="m-sub"><span class="delta flat">高风险 1</span> · 点击查看清单</div>
+    </div>
+    <div class="metric" onclick="goExceptions()">
+      <div class="m-label"><span class="badge-dot" style="background:var(--red)"></span>今日异常</div>
+      <div class="m-val" id="mFailed" style="color:var(--red)">8</div>
+      <div class="m-sub"><span class="delta up">较昨日 +2</span> · 点击查看归因</div>
+    </div>
+    <div class="metric" onclick="goCost()">
+      <div class="m-label"><span class="badge-dot" style="background:var(--violet)"></span>今日成本</div>
+      <div class="m-val">$4.82</div>
+      <div class="m-sub">日预算 $20 · 已用 <span class="delta flat">24%</span></div>
+      <div class="spark" id="sparkCost"></div>
+    </div>
+  </section>
+
+  <!-- 三栏 -->
+  <section class="three-col">
+    <!-- 左：执行队列 -->
+    <aside class="panel" id="queuePanel">
+      <div class="panel-head">
+        <div class="t">执行队列 <span class="n">任务队列</span></div>
+      </div>
+      <div class="queue-tabs" id="queueTabs">
+        <button data-tab="all" class="on">全部 <span class="cnt" id="cntAll"></span></button>
+        <button data-tab="running">运行中 <span class="cnt" id="cntRun"></span></button>
+        <button data-tab="queued">排队中 <span class="cnt" id="cntQue"></span></button>
+        <button data-tab="failed">异常 <span class="cnt" id="cntFail"></span></button>
+      </div>
+      <div class="panel-body" id="queueBody"></div>
+    </aside>
+
+    <!-- 中：运行详情 -->
+    <main class="panel" id="detailPanel">
+      <div class="detail-head">
+        <span class="rid" id="dRid">run_91c4</span>
+        <span class="status s-failed"><span class="badge-dot"></span>失败</span>
+        <div class="tags">
+          <span id="dAgent">代码智能体</span>
+          <span id="dModel">深度求索 第四代专业版</span>
+          <span id="dWs">生产</span>
+          <span id="dTime">09:42:18 · 耗时 5 分 12 秒</span>
+        </div>
+      </div>
+      <div class="detail-tabs" id="detailTabs">
+        <button data-tab="trace" class="on">轨迹</button>
+        <button data-tab="overview">概览</button>
+        <button data-tab="artifact">产物</button>
+        <button data-tab="config">配置</button>
+        <button data-tab="logs">日志</button>
+      </div>
+      <div class="detail-body" id="detailBody"></div>
+    </main>
+
+    <!-- 右：运行检查 -->
+    <aside class="panel inspector" id="inspectorPanel">
+      <div class="panel-head">
+        <div class="t">运行检查 <span class="n">检查器</span></div>
+        <div class="spacer"></div>
+        <span class="muted" style="font-size:10.5px">跟随 run_91c4</span>
+      </div>
+      <div class="panel-body" id="inspectorBody"></div>
+    </aside>
+  </section>
+
+  <!-- 异常与失败聚合 -->
+  <section class="panel exceptions" id="exceptionsPanel">
+    <div class="panel-head">
+      <div class="t">今日异常与失败 <span class="n">失败聚合</span></div>
+      <div class="spacer"></div>
+      <span class="muted" style="font-size:11px">按错误分类进行五类归因与失败模式分析</span>
+    </div>
+    <div class="panel-body">
+      <div class="exc-summary" id="excSummary"></div>
+      <div class="fail-list" id="failList"></div>
+    </div>
+  </section>
+
+  <!-- 执行节点 -->
+  <section class="panel nodes" id="nodesPanel">
+    <div class="panel-head">
+      <div class="t">执行节点 <span class="n">运行节点</span></div>
+      <div class="spacer"></div>
+      <span class="muted" style="font-size:11px">节点表保留 · 单次运行处理器与内存条已让位给上下文预算</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="node-table">
+        <thead><tr><th>节点</th><th>状态</th><th>驻留智能体</th><th>模型</th><th>运行中</th><th>处理器</th><th>内存</th><th>今日任务</th><th>运行时长</th></tr></thead>
+        <tbody id="nodeBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 趋势 + 失败分布 -->
+  <section class="trends">
+    <div class="panel">
+      <div class="panel-head">
+        <div class="t">7 日趋势 <span class="n">趋势</span></div>
+        <div class="spacer"></div>
+        <div class="seg" id="trendSeg">
+          <button data-t="7" class="on">7 天</button>
+          <button data-t="14">14 天</button>
+        </div>
+      </div>
+      <div class="panel-body trend-grid" id="trendGrid"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <div class="t">失败类型分布 <span class="n">失败构成</span></div>
+        <div class="spacer"></div>
+        <span class="muted" style="font-size:11px">今日</span>
+      </div>
+      <div class="panel-body" id="failMix"></div>
+    </div>
+  </section>
+
+  <div class="footnote">
+    <div style="font-size:15px">ⓘ</div>
+    <div>
+      <b>数据模型建议：</b>当前运行数据库只存运行状态与事件，运行轨迹仍是演示数据。要做失败归因与切片分析，建议按通用的生成式人工智能语义字段落库，后续接入第三方观测工具时可以减少迁移成本。
+    </div>
+  </div>
+</div>
+
+<!-- 审批模态 -->
+<div class="modal-mask" id="approvalMask" onclick="if(event.target===this)closeApprovals()">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="t">待人工审批 · 按风险排序</div>
+      <button class="x" onclick="closeApprovals()">×</button>
+    </div>
+    <div class="modal-body" id="approvalBody"></div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script>
+/* ============ 数据 ============ */
+const CATEGORY = {
+  memory:{label:'记忆', color:'#6b4da7', desc:'检索 / 写入 / 上下文'},
+  reflection:{label:'反思', color:'#93406c', desc:'自我评估 / 收敛'},
+  planning:{label:'规划', color:'#8b5d0c', desc:'分解 / 依赖 / 超时'},
+  action:{label:'动作', color:'#a34e1b', desc:'工具调用 / 重试'},
+  system:{label:'系统', color:'#3d7087', desc:'模型 / 沙箱 / 网络'},
+};
+
+const RUNS = [
+  {id:'run_8f3a2', agent:'research-agent', model:'deepseek-v4-pro', ws:'生产', task:'第三季度竞品分析报告', status:'running', progress:72, elapsed:'04:12', step:'动作 · 抓取 7/10 源'},
+  {id:'run_2b9d8', agent:'ops-agent', model:'claude-3.5', ws:'沙箱', task:'生产告警批量处置', status:'running', progress:31, elapsed:'01:44', step:'动作 · 关联告警上下文'},
+  {id:'run_c6e2a', agent:'codegen-agent', model:'deepseek-v4-pro', ws:'生产', task:'支付模块单元测试', status:'running', progress:19, elapsed:'00:58', step:'记忆 · 加载仓库上下文'},
+  {id:'run_1f8b4', agent:'research-agent', model:'gpt-4.1', ws:'生产', task:'客户访谈纪要摘要', status:'queued', progress:0, elapsed:'—', step:'排队中 · 优先级二级'},
+  {id:'run_9d0c3', agent:'data-agent', model:'deepseek-v4-pro', ws:'分析', task:'渠道归因模型回测', status:'queued', progress:0, elapsed:'—', step:'排队中 · 等待节点'},
+  {id:'run_91c4', agent:'codegen-agent', model:'deepseek-v4-pro', ws:'生产', task:'重构支付模块', status:'failed', progress:0, elapsed:'05:12', step:'动作 · 支付接口超时', cat:'action', type:'工具调用超时', severity:'high'},
+  {id:'run_77a9', agent:'research-agent', model:'gpt-4.1', ws:'生产', task:'政策解读简报', status:'failed', progress:0, elapsed:'03:40', step:'记忆 · 上下文溢出', cat:'memory', type:'上下文窗口溢出', severity:'high'},
+  {id:'run_b2d1', agent:'ops-agent', model:'deepseek-v4-pro', ws:'沙箱', task:'日志巡检 · 实时', status:'failed', progress:0, elapsed:'00:21', step:'系统 · 模型限流 429', cat:'system', type:'模型限流 429', severity:'medium'},
+  {id:'run_5f0e', agent:'qa-agent', model:'claude-3.5', ws:'生产', task:'回归测试用例生成', status:'failed', progress:0, elapsed:'08:02', step:'规划 · 计划超时', cat:'planning', type:'计划超时', severity:'medium'},
+  {id:'run_3c7b', agent:'data-agent', model:'deepseek-v4-pro', ws:'分析', task:'周报数据汇总', status:'failed', progress:0, elapsed:'02:15', step:'反思 · 循环未收敛', cat:'reflection', type:'反思循环未收敛', severity:'medium'},
+  {id:'run_e8a2', agent:'research-agent', model:'gpt-4.1', ws:'生产', task:'客户访谈摘要', status:'failed', progress:0, elapsed:'01:33', step:'动作 · 返回格式错误', cat:'action', type:'工具返回格式错误', severity:'low'},
+  {id:'run_0d5f', agent:'codegen-agent', model:'deepseek-v4-pro', ws:'生产', task:'修复 lint 报错', status:'failed', progress:0, elapsed:'00:47', step:'系统 · 沙箱崩溃', cat:'system', type:'沙箱崩溃', severity:'high'},
+  {id:'run_a44c', agent:'ops-agent', model:'claude-3.5', ws:'沙箱', task:'告警处置 · 降级', status:'failed', progress:0, elapsed:'00:33', step:'记忆 · 检索无果', cat:'memory', type:'检索不到相关记忆', severity:'low'},
+];
+
+const TRACE = {
+  'run_91c4':{
+    summary:{cost:'$0.31', tokens:'4,120', duration:'5 分 12 秒', mode:'级联失败', conf:'高'},
+    steps:[
+      {stage:'memory', name:'检索仓库上下文', status:'success', dur:'320 毫秒', tok:'1.2 千', note:'命中 18 个相关文件'},
+      {stage:'planning', name:'分解重构步骤', status:'success', dur:'180 毫秒', tok:'0.4 千', note:'生成 6 步计划'},
+      {stage:'action', name:'调用支付接口', status:'failed', dur:'30 秒 ×3', tok:'1.1 千', note:'重试 3 次均超时（>30 秒）', crit:true},
+      {stage:'action', name:'写回重构代码', status:'skipped', dur:'—', tok:'—', note:'因上游失败被跳过'},
+      {stage:'reflection', name:'评估与自我修正', status:'skipped', dur:'—', tok:'—', note:'因上游失败被跳过'},
+    ],
+    blame:{cat:'action', type:'工具调用超时', mode:'级联失败 · 重试耗尽', conf:'高', advice:'为支付接口增加超时降级与熔断；或切换只读模拟端点。下游 2 步被跳过，修复后应清除关键失败步骤。'},
+  }
+};
+
+const INSPECTOR = {
+  toolCalls:[
+    {name:'read_file', status:'success', detail:'18 次 · 1.4 千令牌'},
+    {name:'search_code', status:'success', detail:'7 次 · 0.8 千令牌'},
+    {name:'payment_api', status:'failed', detail:'3 次 · 均超时'},
+    {name:'write_file', status:'pending', detail:'0 次（被跳过）'},
+  ],
+  ctx:{input:'18.4 千', inputMax:'128 千', output:'3.2 千', cache:'6.1 千', compaction:2, compactionNote:'62% 时触发一次压缩', pct:78},
+  usage:{runCost:'$0.31', tokens:'4.12 千', dayCost:'$4.82', budget:'$20', dayPct:24, warn:80},
+  policy:[
+    {name:'敏感数据外发', result:'block', n:2, text:'拦截 2 次'},
+    {name:'越权工具调用', result:'pass', n:0, text:'放行 0 · 拦截 0'},
+    {name:'单步成本上限', result:'warn', n:3, text:'预警 3 次'},
+    {name:'策略集 v1.8', result:'meta', n:null, text:'质量优先 · 实时评估'},
+  ],
+};
+
+const NODES = [
+  {name:'node-01', status:'healthy', agent:'研究 / 数据', model:'deepseek-v4-pro', running:4, cpu:38, mem:52, tasks:41, uptime:'12 天 4 小时'},
+  {name:'node-02', status:'healthy', agent:'代码', model:'deepseek-v4-pro', running:5, cpu:64, mem:71, tasks:38, uptime:'12 天 4 小时'},
+  {name:'node-03', status:'degraded', agent:'运维 / 测试', model:'claude-3.5', running:3, cpu:88, mem:83, tasks:29, uptime:'6 天 11 小时'},
+  {name:'node-04', status:'healthy', agent:'研究', model:'gpt-4.1', running:2, cpu:31, mem:44, tasks:22, uptime:'4 天 2 小时'},
+];
+
+const TREND = {
+  success7:[96,94,97,92,95,93,91],
+  cost7:[2.9,3.4,3.2,4.6,4.1,4.4,4.82],
+  dur7:[8.4,9.1,8.0,10.2,9.6,11.3,10.4],
+  fail7:[2,3,1,4,5,4,8],
+  success14:[98,97,96,94,97,92,95,93,91,89,90,93,95,97],
+  cost14:[2.1,2.4,2.8,2.3,3.4,3.9,3.2,4.6,4.1,3.8,4.9,5.2,4.4,4.82],
+  dur14:[8.0,8.2,8.4,9.1,8.0,10.2,9.6,11.3,12.5,11.8,10.4,9.8,8.6,8.3],
+  fail14:[1,2,2,3,1,4,5,4,7,6,5,8,7,8],
+};
+
+const AGENTS = ['全部','research-agent','codegen-agent','ops-agent','qa-agent','data-agent'];
+const MODELS = ['全部','deepseek-v4-pro','gpt-4.1','claude-3.5'];
+const WS = ['全部','生产','沙箱','分析'];
+const AGENT_LABELS = {'research-agent':'研究智能体','codegen-agent':'代码智能体','ops-agent':'运维智能体','qa-agent':'测试智能体','data-agent':'数据智能体'};
+const MODEL_LABELS = {'deepseek-v4-pro':'深度求索 第四代专业版','gpt-4.1':'通用模型 第四代','claude-3.5':'协作模型 第三代半'};
+const TOOL_LABELS = {read_file:'读取文件',search_code:'搜索代码',payment_api:'支付接口',write_file:'写入文件'};
+function displayAgent(value){return AGENT_LABELS[value]||value;}
+function displayModel(value){return MODEL_LABELS[value]||value;}
+function displayTool(value){return TOOL_LABELS[value]||value;}
+function displaySliceValue(key,value){return key==='agent'?displayAgent(value):key==='model'?displayModel(value):value;}
+
+/* ============ 状态 ============ */
+let filters = {agent:'全部', model:'全部', ws:'全部'};
+let queueTab = 'all';
+let selectedRun = 'run_91c4';
+
+/* ============ 工具 ============ */
+function sparkline(points, opts={}){
+  const w=opts.w||96, h=opts.h||28, color=opts.color||'#4f8cff';
+  const min=Math.min(...points), max=Math.max(...points);
+  const range=(max-min)||1;
+  const step=w/(points.length-1);
+  const pts=points.map((p,i)=>[+(i*step).toFixed(1), +(h-2-((p-min)/range)*(h-6)).toFixed(1)]);
+  const d=pts.map((p,i)=>(i?'L':'M')+p[0]+' '+p[1]).join(' ');
+  const area=d+' L'+w+' '+h+' L0 '+h+' Z';
+  const gid='g'+(Math.random()*1e6|0);
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${color}" stop-opacity=".32"/><stop offset="1" stop-color="${color}" stop-opacity="0"/>
+    </linearGradient></defs>
+    <path d="${area}" fill="url(#${gid})"/>
+    <path d="${d}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="${pts[pts.length-1][0]}" cy="${pts[pts.length-1][1]}" r="2.4" fill="${color}"/>
+  </svg>`;
+}
+function toast(msg, kind){
+  const icons={ok:'✓', retry:'↻', skip:'⏭', fix:'🔧', deny:'✕'};
+  const colors={ok:'var(--green)', retry:'var(--accent)', skip:'var(--sky)', fix:'var(--amber)', deny:'var(--red)'};
+  const el=document.createElement('div'); el.className='toast';
+  el.innerHTML=`<span class="ic" style="background:${colors[kind]||'var(--accent)'}22;color:${colors[kind]||'var(--accent)'}">${icons[kind]||'✓'}</span><span>${msg}</span>`;
+  document.getElementById('toastWrap').appendChild(el);
+  setTimeout(()=>{el.style.transition='opacity .3s';el.style.opacity='0';setTimeout(()=>el.remove(),300)},2600);
+}
+function filteredRuns(){
+  return RUNS.filter(r=>{
+    if(filters.agent!=='全部' && r.agent!==filters.agent) return false;
+    if(filters.model!=='全部' && r.model!==filters.model) return false;
+    if(filters.ws!=='全部' && r.ws!==filters.ws) return false;
+    return true;
+  });
+}
+function statusHtml(s){
+  const map={
+    running:['s-running','运行中','var(--cyan)'],
+    queued:['s-queued','排队中','#8b98ac'],
+    failed:['s-failed','失败','var(--red)'],
+    success:['s-success','成功','var(--green)'],
+    skipped:['s-warn','跳过','var(--amber)'],
+  };
+  const [cls,txt,dot]=map[s]||map.queued;
+  return `<span class="status ${cls}"><span class="badge-dot" style="background:${dot}"></span>${txt}</span>`;
+}
+function catChip(cat){
+  const c=CATEGORY[cat]; if(!c) return '';
+  return `<span class="chip" style="background:${c.color}22;color:${c.color}">${c.label}</span>`;
+}
+
+/* ============ 切片 ============ */
+function buildSlice(id, key, list){
+  const root=document.getElementById(id);
+  const menu=root.querySelector('.slice-menu');
+  menu.innerHTML=list.map(v=>`<div class="opt ${filters[key]===v?'sel':''}" onclick="setFilter('${key}','${v}')"><span class="dot"></span>${displaySliceValue(key,v)}</div>`).join('');
+  root.querySelector('button').onclick=e=>{e.stopPropagation();closeMenus(menu);menu.classList.toggle('open')};
+}
+function closeMenus(except){
+  document.querySelectorAll('.slice-menu.open').forEach(m=>{if(m!==except)m.classList.remove('open')});
+}
+function setFilter(key,val){
+  filters[key]=val;
+  document.getElementById(key==='agent'?'sliceAgent':key==='model'?'sliceModel':'sliceWs').querySelector('.val').textContent=displaySliceValue(key,val);
+  closeMenus();
+  refreshAll();
+}
+function clearFilters(){filters={agent:'全部',model:'全部',ws:'全部'};['sliceAgent','sliceModel','sliceWs'].forEach(id=>document.getElementById(id).querySelector('.val').textContent='全部');refreshAll();}
+
+/* ============ 指标 ============ */
+function renderMetrics(){
+  const r=filteredRuns();
+  document.getElementById('mRunning').textContent=r.filter(x=>x.status==='running').length;
+  document.getElementById('mFailed').textContent=r.filter(x=>x.status==='failed').length;
+  document.getElementById('mApproval').textContent=3;
+  document.getElementById('sparkCost').innerHTML=sparkline(TREND.cost7,{color:'#a78bfa'});
+}
+
+/* ============ 执行队列 ============ */
+function renderQueue(){
+  const r=filteredRuns();
+  const byStatus=s=>({running:r.filter(x=>x.status==='running').length,queued:r.filter(x=>x.status==='queued').length,failed:r.filter(x=>x.status==='failed').length}[s]);
+  document.getElementById('cntAll').textContent=r.length;
+  document.getElementById('cntRun').textContent=byStatus('running');
+  document.getElementById('cntQue').textContent=byStatus('queued');
+  document.getElementById('cntFail').textContent=byStatus('failed');
+  const body=document.getElementById('queueBody');
+  let list;
+  if(queueTab==='running') list=r.filter(x=>x.status==='running');
+  else if(queueTab==='queued') list=r.filter(x=>x.status==='queued');
+  else if(queueTab==='failed') list=r.filter(x=>x.status==='failed');
+  else list=r;
+
+  if(queueTab==='failed'){
+    const sevOrder={high:0,medium:1,low:2};
+    const cats=[...new Set(list.map(x=>x.cat))];
+    let html='';
+    if(!list.length) html=`<div class="empty">当前切片下暂无异常</div>`;
+    for(const cat of cats){
+      const group=list.filter(x=>x.cat===cat).sort((a,b)=>sevOrder[a.severity]-sevOrder[b.severity]);
+      const c=CATEGORY[cat];
+      html+=`<div class="grp-label">${catChip(cat)} ${c.label}失败 <span class="cnt">${group.length} 条</span></div>`;
+      html+=group.map(x=>runCard(x)).join('');
+    }
+    html+=`<div style="margin-top:10px;font-size:11px;color:var(--text-faint)">详细归因与处置见下方「异常与失败聚合」<a href="#exceptionsPanel" style="color:var(--accent);text-decoration:none">↓ 前往</a></div>`;
+    body.innerHTML=html;
+  } else {
+    body.innerHTML=list.length?list.map(runCard).join(''):`<div class="empty">当前切片下无 ${queueTab==='all'?'':queueTab} 运行</div>`;
+  }
+}
+function runCard(x){
+  const isSel=x.id===selectedRun;
+  let extra='';
+  if(x.status==='running') extra=`<div class="progress"><i style="width:${x.progress}%"></i></div>`;
+  if(x.status==='failed') extra=`<div class="meta" style="margin-top:6px">${catChip(x.cat)} <span>${x.type}</span> <span class="sev-tag" style="color:${x.severity==='high'?'var(--red)':x.severity==='medium'?'var(--amber)':'var(--sky)'}">${x.severity==='high'?'严重':x.severity==='medium'?'中等':'轻微'}</span></div>`;
+  return `<div class="qrun ${isSel?'active':''}" onclick="selectRun('${x.id}')">
+    <div class="r1"><span class="agent">${displayAgent(x.agent)}</span>${statusHtml(x.status)}<span class="rid">${x.id}</span></div>
+    <div class="task">${x.task}</div>
+    <div class="meta"><span class="model">${displayModel(x.model)}</span><span>·</span><span>${x.ws}</span><span>·</span><span>${x.step}</span><span style="margin-left:auto">${x.elapsed}</span></div>
+    ${extra}
+  </div>`;
+}
+
+/* ============ 运行详情 ============ */
+function selectRun(id){
+  selectedRun=id;
+  refreshAll();
+  document.getElementById('detailPanel').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function renderDetail(){
+  const run=RUNS.find(x=>x.id===selectedRun)||RUNS[0];
+  const t=TRACE[selectedRun]||TRACE['run_91c4'];
+  const isFail=run.status==='failed';
+  document.getElementById('dRid').textContent=run.id;
+  document.getElementById('dAgent').textContent=displayAgent(run.agent);
+  document.getElementById('dModel').textContent=displayModel(run.model);
+  document.getElementById('dWs').textContent=run.ws;
+  document.getElementById('dTime').textContent=(isFail?'09:42:18':'实时')+' · 耗时 '+(run.elapsed||'—');
+  // 状态徽章
+  const head=document.querySelector('.detail-head .status');
+  const map={running:['s-running','运行中'],queued:['s-queued','排队中'],failed:['s-failed','失败']};
+  head.className='status '+map[run.status][0]; head.innerHTML=`<span class="badge-dot"></span>${map[run.status][1]}`;
+  // Trace 表
+  let html=`<table class="trace-table"><thead><tr><th>#</th><th>阶段</th><th>步骤</th><th>状态</th><th>耗时</th><th>令牌</th><th>备注</th></tr></thead><tbody>`;
+  t.steps.forEach((s,i)=>{
+    const c=CATEGORY[s.stage];
+    const crit=s.crit?' class="crit"':'';
+    html+=`<tr${crit}><td class="muted">${i+1}</td>
+      <td><span class="stage"><span class="sw" style="background:${c.color}"></span>${c.label}</span></td>
+      <td><span class="step-name">${s.name}</span>${s.crit?'<span class="crit-tag">关键失败步骤</span>':''}<div class="step-note">${s.note}</div></td>
+      <td>${statusHtml(s.status)}</td>
+      <td class="cell-mono">${s.dur}</td>
+      <td class="cell-mono">${s.tok}</td>
+      <td class="muted" style="font-size:10.5px">${s.status==='skipped'?'被跳过':'—'}</td></tr>`;
+  });
+  html+=`</tbody></table>`;
+
+  if(isFail){
+    const b=t.blame; const bc=CATEGORY[b.cat];
+    html+=`<div class="attrib">
+      <div class="attrib-head"><span class="ic">!</span>失败归因 · 原因分析</div>
+      <div class="cat-strip">${['memory','reflection','planning','action','system'].map(k=>{
+        const cc=CATEGORY[k];
+        const blame=k===b.cat;
+        return `<div class="cat-cell ${blame?'blame':''}" style="${blame?'color:'+cc.color:''}"><div class="name">${cc.label}</div><div class="pct" style="${blame?'color:'+cc.color:''}">${blame?100:0}%</div></div>`;
+      }).join('')}</div>
+      <div class="attrib-grid">
+        <div class="attrib-item"><div class="k">归因类别</div><div class="v" style="color:${bc.color}">${bc.label}失败 · ${b.type}</div></div>
+        <div class="attrib-item"><div class="k">失败模式</div><div class="v dim">${b.mode}</div></div>
+        <div class="attrib-item"><div class="k">修复建议</div><div class="v dim">${b.advice}</div></div>
+        <div class="attrib-item"><div class="k">归因置信度</div><div class="v">${b.conf}<div class="conf-bar"><i style="width:${b.conf==='高'?94:70}%"></i></div></div></div>
+      </div>
+    </div>`;
+  }
+  document.getElementById('detailBody').innerHTML=html;
+
+  // inspector 跟随
+  const inspHead=document.querySelector('#inspectorPanel .panel-head .muted');
+  if(inspHead) inspHead.textContent='跟随 '+run.id;
+  renderInspector(isFail);
+}
+
+/* 详情 tab 切换 */
+document.getElementById('detailTabs').addEventListener('click',e=>{
+  const btn=e.target.closest('button'); if(!btn) return;
+  document.querySelectorAll('#detailTabs button').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  renderDetailTab(btn.dataset.tab);
+});
+function renderDetailTab(tab){
+  if(tab==='trace'){renderDetail();return;}
+  const content={
+    overview:`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      ${[['本次成本','$0.31'],['令牌消耗','4,120'],['运行时长','5 分 12 秒'],['重试次数','3 次'],['失败模式','级联失败'],['归因类别','动作失败']].map(([k,v])=>`<div class="trend-cell"><div class="tt">${k}</div><div class="tv">${v}</div></div>`).join('')}
+    </div>`,
+    artifact:`<div class="empty" style="padding:40px">产物预览已挪至此专属分区<br><span style="color:var(--text-faint)">本次运行因失败未产出产物</span></div>`,
+    config:`<div class="empty" style="padding:40px">配置快照已挪至此专属分区<br><span style="color:var(--text-faint)">模型=深度求索 V4 Pro · 温度=0.2 · 最大步数=24 · 预算=$5</span></div>`,
+    logs:`<div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);line-height:1.9">
+      <div>09:37:02.114 <span style="color:var(--sky)">信息</span> 运行开始（智能体=代码智能体）</div>
+      <div>09:37:02.891 <span style="color:var(--sky)">信息</span> 记忆加载 → 18 个文件（缓存命中 6.1 千）</div>
+      <div>09:38:11.023 <span style="color:var(--sky)">信息</span> 计划生成 → 6 个步骤</div>
+      <div>09:39:20.451 <span style="color:var(--amber)">警告</span>  支付接口超时 #1（30 秒）</div>
+      <div>09:40:51.662 <span style="color:var(--amber)">警告</span>  支付接口超时 #2（30 秒）</div>
+      <div>09:42:18.990 <span style="color:var(--amber)">警告</span>  支付接口超时 #3（30 秒）</div>
+      <div>09:42:19.007 <span style="color:var(--red)">错误</span> 动作步骤失败：工具调用超时 → 关键失败步骤</div>
+      <div>09:42:19.012 <span style="color:var(--red)">错误</span> 运行失败（模式=级联失败）</div>
+    </div>`
+  };
+  document.getElementById('detailBody').innerHTML=content[tab];
+}
+
+/* ============ 运行检查 ============ */
+function renderInspector(isFail){
+  const I=INSPECTOR;
+  const tc=I.toolCalls.map(t=>`<div class="toolcall">
+    <span class="tname" style="color:${t.status==='failed'?'var(--red)':t.status==='pending'?'var(--text-faint)':'var(--cyan)'}">${displayTool(t.name)}</span>
+    ${statusHtml(t.status==='pending'?'queued':t.status)}
+    <span class="tdim">${t.detail}</span></div>`).join('');
+
+  const ctxTotal=18.4+3.2;
+  const html=`
+    <div class="insp-item open">
+      <div class="ih"><span style="color:var(--cyan)">▤</span>工具调用 <span class="spacer"></span><span class="chev">›</span></div>
+      <div class="ib">${tc}</div>
+    </div>
+    <div class="insp-item open">
+      <div class="ih"><span style="color:var(--violet)">▥</span>上下文预算 <span class="spacer"></span><span class="chev">›</span></div>
+      <div class="ib">
+        <div class="ctx-bar">
+          <i style="width:${(18.4/ctxTotal)*100}%;background:var(--violet)"></i>
+          <i style="width:${(3.2/ctxTotal)*100}%;background:var(--cyan)"></i>
+        </div>
+        <div class="ctx-legend">
+          <span><span class="sw" style="background:var(--violet)"></span>输入 18.4 千</span>
+          <span><span class="sw" style="background:var(--cyan)"></span>输出 3.2 千</span>
+          <span><span class="sw" style="background:var(--sky)"></span>缓存命中 6.1 千</span>
+        </div>
+        <div class="kv"><span>上下文压缩事件</span><b style="color:var(--amber)">${I.ctx.compaction} 次</b></div>
+        <div class="kv"><span>窗口占用</span><b>${I.ctx.pct}% / 128k</b></div>
+        <div class="budget-th" style="color:var(--amber)">⚠ ${I.ctx.compactionNote} —— 静默质量退化信号</div>
+      </div>
+    </div>
+    <div class="insp-item open">
+      <div class="ih"><span style="color:var(--green)">◔</span>用量与成本 <span class="spacer"></span><span class="chev">›</span></div>
+      <div class="ib">
+        <div class="kv"><span>本次成本</span><b>${I.usage.runCost}</b></div>
+        <div class="kv"><span>本次令牌</span><b>${I.usage.tokens}</b></div>
+        <div style="height:8px;border-radius:4px;background:var(--card-3);overflow:hidden;display:flex;margin:8px 0 4px">
+          <i style="width:${I.usage.dayPct}%;background:linear-gradient(90deg,var(--green),var(--cyan))"></i>
+        </div>
+        <div class="budget-th"><span>今日 ${I.usage.dayCost} / 预算 ${I.usage.budget}</span><span style="margin-left:auto">${I.usage.dayPct}%</span></div>
+        <div class="budget-th" style="margin-top:4px;color:var(--text-faint)">全局告警阈值 ${I.usage.warn}% · 触发即推送</div>
+      </div>
+    </div>
+    <div class="insp-item open">
+      <div class="ih"><span style="color:var(--amber)">⚑</span>策略检查 <span class="spacer"></span><span style="font-size:10px;color:var(--text-faint)">实时评估</span><span class="chev">›</span></div>
+      <div class="ib">
+        ${I.policy.map(p=>{
+          if(p.result==='meta') return `<div class="policy-row"><span class="pname">${p.name}</span><span class="pres"><span class="tag pass">实时</span></span></div>`;
+          const cls=p.result==='block'?'block':p.result==='pass'?'pass':'warn';
+          return `<div class="policy-row"><span class="pname">${p.name}</span><span class="pres"><span class="tag ${cls}">${p.text}</span></span></div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  document.getElementById('inspectorBody').innerHTML=html;
+}
+
+/* ============ 异常聚合 ============ */
+function renderExceptions(){
+  const fails=filteredRuns().filter(x=>x.status==='failed');
+  const sevOrder={high:0,medium:1,low:2};
+  const order=['memory','reflection','planning','action','system'];
+  const counts={memory:0,reflection:0,planning:0,action:0,system:0};
+  fails.forEach(f=>counts[f.cat]=(counts[f.cat]||0)+1);
+  const summary=order.map(cat=>{
+    const c=CATEGORY[cat]; const n=counts[cat]||0;
+    return `<div class="exc-card" onclick="filterByCat('${cat}')">
+      <div class="ec-t"><span class="sw" style="background:${c.color}"></span>${c.label}失败</div>
+      <div class="ec-v" style="color:${n?c.color:'var(--text-faint)'}">${n}</div>
+      <div class="ec-s">${c.desc}</div></div>`;
+  }).join('');
+  document.getElementById('excSummary').innerHTML=summary;
+
+  const sorted=[...fails].sort((a,b)=>sevOrder[a.severity]-sevOrder[b.severity]);
+  const listEl=document.getElementById('failList');
+  if(!sorted.length){listEl.innerHTML=`<div class="empty">今日无失败运行</div>`;return;}
+  const sevMeta={high:['严重','var(--red)'],medium:['中等','var(--amber)'],low:['轻微','var(--sky)']};
+  listEl.innerHTML=sorted.map(f=>{
+    const c=CATEGORY[f.cat]; const [sl,sc]=sevMeta[f.severity];
+    return `<div class="frow">
+      <div class="sev ${f.severity}"></div>
+      <div class="f-main">
+        <div class="ft">${catChip(f.cat)} <span style="color:${sc};font-size:10.5px">${sl}</span><span class="rid mono" style="margin-left:auto;color:var(--text-faint)">${f.id}</span></div>
+        <div class="fd">${f.task} · ${f.type} · <span style="color:${c.color}">${f.step}</span></div>
+      </div>
+      <div class="f-col"><div class="fc-t">智能体 / 模型</div><div class="fc-v">${displayAgent(f.agent)} · ${displayModel(f.model)}</div></div>
+      <div class="f-col"><div class="fc-t">失败模式</div><div class="fc-v">${f.type}</div></div>
+      <div class="f-col"><div class="fc-t">时间</div><div class="fc-v mono">${f.elapsed}</div></div>
+      <div class="f-actions">
+        <button class="btn primary" onclick="toast('已重试 ${f.id}','retry')">重试</button>
+        <button class="btn ghost" onclick="toast('已跳过 ${f.id}','skip')">跳过</button>
+        <button class="btn danger" onclick="toast('已生成修复建议 · 待确认','fix')">修复</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function filterByCat(cat){
+  // 高亮对应队列异常 tab（演示交互）
+  queueTab='failed';
+  document.querySelectorAll('#queueTabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab==='failed'));
+  renderQueue();
+  toast('已聚焦「'+CATEGORY[cat].label+'失败」分组','ok');
+  document.getElementById('queuePanel').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+/* ============ 节点 ============ */
+function renderNodes(){
+  const st={healthy:['s-success','健康'],degraded:['s-warn','降级']};
+  document.getElementById('nodeBody').innerHTML=NODES.map(n=>{
+    const [cls,txt]=st[n.status];
+    return `<tr>
+      <td class="mono" style="color:var(--text)">${n.name}</td>
+      <td>${n.status==='healthy'
+        ?'<span class="status s-success"><span class="badge-dot" style="background:var(--green)"></span>健康</span>'
+        :'<span class="status s-warn"><span class="badge-dot" style="background:var(--amber)"></span>降级</span>'}</td>
+      <td>${n.agent==='research / data'?'研究 / 数据':n.agent==='codegen'?'代码':n.agent==='ops / qa'?'运维 / 测试':'研究'}</td>
+      <td class="mono">${displayModel(n.model)}</td>
+      <td>${n.running}</td>
+      <td><span class="mini-bar"><i style="width:${n.cpu}%;background:${n.cpu>80?'var(--red)':'var(--accent)'}"></i></span>${n.cpu}%</td>
+      <td><span class="mini-bar"><i style="width:${n.mem}%;background:${n.mem>80?'var(--amber)':'var(--cyan)'}"></i></span>${n.mem}%</td>
+      <td>${n.tasks}</td>
+      <td class="muted">${n.uptime}</td></tr>`;
+  }).join('');
+}
+
+/* ============ 趋势 ============ */
+function renderTrends(){
+  const t=document.getElementById('trendSeg').querySelector('.on').dataset.t;
+  const days=+t;
+  const S=days===7?TREND.success7:TREND.success14;
+  const C=days===7?TREND.cost7:TREND.cost14;
+  const D=days===7?TREND.dur7:TREND.dur14;
+  const F=days===7?TREND.fail7:TREND.fail14;
+  const avg=a=>a.reduce((x,y)=>x+y,0)/a.length;
+  const cells=[
+    {t:'成功率', v:(avg(S)).toFixed(1)+'%', small:'较前段 '+ (S[S.length-1]>=S[0]?'+':'-')+(Math.abs(S[S.length-1]-S[0]))+' 个百分点', color:'var(--green)', data:S},
+    {t:'成本', v:'$'+(avg(C)).toFixed(2), small:'峰值 $'+Math.max(...C).toFixed(2), color:'var(--violet)', data:C},
+    {t:'平均耗时', v:(avg(D)).toFixed(1)+' 秒', small:'最长 '+Math.max(...D).toFixed(1)+' 秒', color:'var(--amber)', data:D},
+    {t:'失败数', v:F.reduce((x,y)=>x+y,0)+' 次', small:'今日 '+F[F.length-1]+' 次', color:'var(--red)', data:F},
+  ];
+  document.getElementById('trendGrid').innerHTML=cells.map(c=>`<div class="trend-cell">
+    <div class="tt"><span class="sw" style="width:8px;height:8px;border-radius:3px;background:${c.color};display:inline-block"></span>${c.t}</div>
+    <div class="tv">${c.v}<small>${c.small}</small></div>
+    ${sparkline(c.data,{color:c.color,w:210,h:34})}
+  </div>`).join('');
+
+  const fails=filteredRuns().filter(x=>x.status==='failed');
+  const order=['memory','reflection','planning','action','system'];
+  const counts={}; fails.forEach(f=>counts[f.cat]=(counts[f.cat]||0)+1);
+  const max=Math.max(1,...order.map(k=>counts[k]||0));
+  document.getElementById('failMix').innerHTML=order.map(k=>{
+    const c=CATEGORY[k]; const n=counts[k]||0;
+    return `<div class="hbar-row">
+      <span class="hname" style="color:${n?c.color:'var(--text-faint)'}">${c.label}</span>
+      <div class="hwrap"><i style="width:${(n/max)*100}%;background:${c.color};opacity:${n?1:.25}"></i></div>
+      <span class="hval">${n} 次 · ${fails.length?Math.round(n/fails.length*100):0}%</span>
+    </div>`;
+  }).join('');
+}
+
+/* ============ 审批 ============ */
+function openApprovals(){
+  const items=[
+    {risk:'high', title:'成本预算超限', desc:'数据智能体单次运行预估成本 $6.2，超过单次运行预算上限 $5，是否继续？', run:'run_3c7b'},
+    {risk:'medium', title:'越权动作放行复核', desc:'运维智能体拟执行删除日志这一高危动作，策略命中但置信度 0.72 低于自动拦截阈值 0.85。', run:'run_b2d1'},
+    {risk:'low', title:'重跑请求', desc:'测试智能体请求对失败运行进行第 2 次重试（已失败 1 次）。', run:'run_5f0e'},
+  ];
+  const rm={high:['高风险','high'],medium:['中风险','med'],low:['低风险','low']};
+  document.getElementById('approvalBody').innerHTML=items.map((it,i)=>{
+    const [txt,cls]=rm[it.risk];
+    return `<div class="appr-item">
+      <div class="sev ${it.risk}"></div>
+      <div class="appr-main">
+        <div class="at"><span class="risk-tag ${cls}">${txt}</span>${it.title}<span class="muted mono" style="margin-left:auto;font-size:10px">${it.run}</span></div>
+        <div class="ad">${it.desc}</div>
+      </div>
+      <div class="appr-actions">
+        <button class="btn primary" onclick="toast('已批准 · ${it.title}','ok')">批准</button>
+        <button class="btn danger" onclick="toast('已拒绝 · ${it.title}','deny')">拒绝</button>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('approvalMask').classList.add('open');
+}
+function closeApprovals(){document.getElementById('approvalMask').classList.remove('open')}
+
+/* ============ 快捷跳转 ============ */
+function goRunning(){queueTab='running';document.querySelectorAll('#queueTabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab==='running'));renderQueue();document.getElementById('queuePanel').scrollIntoView({behavior:'smooth',block:'start'});}
+function goExceptions(){document.getElementById('exceptionsPanel').scrollIntoView({behavior:'smooth',block:'start'});}
+function goCost(){document.getElementById('inspectorPanel').scrollIntoView({behavior:'smooth',block:'start'});}
+
+/* ============ 事件绑定 ============ */
+document.getElementById('queueTabs').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#queueTabs button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); queueTab=b.dataset.tab; renderQueue();
+});
+document.getElementById('trendSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#trendSeg button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); renderTrends();
+});
+document.addEventListener('click',e=>{if(!e.target.closest('.slice')) closeMenus();});
+
+/* ============ 主渲染 ============ */
+function refreshAll(){
+  renderMetrics(); renderQueue(); renderDetail(); renderExceptions(); renderTrends();
+  const n=Object.values(filters).filter(v=>v!=='全部').length;
+  document.getElementById('filterChip').classList.toggle('show',n>0);
+  document.querySelector('.fc-count').textContent=n;
+}
+buildSlice('sliceAgent','agent',AGENTS);
+buildSlice('sliceModel','model',MODELS);
+buildSlice('sliceWs','ws',WS);
+renderNodes();
+refreshAll();
+</script>
+</body>
+</html>
+

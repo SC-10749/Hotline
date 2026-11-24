@@ -765,6 +765,10 @@ npm --prefix frontend run build
 
 ---
 
+## 友情链接
+
+- [Prompt Vault](https://github.com/zklmiao/prompt-vault)
+
 <div align="center">
 
 **Hotline Agent** · 探索、验证、封装，让 AI 能力进入日常工作。
