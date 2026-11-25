@@ -33,7 +33,7 @@ function exportTrace() {
 <template>
   <section class="run-detail-panel" aria-label="运行详情">
     <div class="run-detail-top">
-      <div class="detail-title-group"><div class="detail-run-id">{{ run.id }} · {{ labels[run.status] || run.status }}</div><h2>{{ run.title }}</h2><p>{{ run.agent }} · {{ run.elapsed }}</p></div>
+      <div class="detail-title-group"><div class="detail-run-id">{{ run.id }} · {{ labels[run.status] || run.status }}</div><h3>{{ run.title }}</h3><p>{{ run.agent }} · {{ run.elapsed }}</p></div>
       <div class="detail-toolbar">
         <button class="button button-subtle" :disabled="loading" @click="$emit('refresh')">刷新事件</button>
         <button v-if="['queued', 'running'].includes(run.status)" class="button button-stop" :disabled="actionBusy || !!run.raw.cancel_requested" @click="$emit('cancel')">{{ run.raw.cancel_requested ? '停止请求已提交' : '停止运行' }}</button>

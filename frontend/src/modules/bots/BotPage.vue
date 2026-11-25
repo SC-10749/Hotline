@@ -46,9 +46,9 @@ const otherBots = computed(() => bots.state.bots.filter(bot => !bot.enabled))
       </div>
     </div>
 
-    <div v-else-if="!bots.state.bots.length" class="page-empty-state">
-      <div class="page-empty-icon"><Bot :size="40" /></div>
-      <h2>还没有机器人</h2>
+    <div v-else-if="!bots.state.bots.length" class="ui-empty">
+      <div class="ui-empty-icon"><Bot :size="26" /></div>
+      <h3>还没有机器人</h3>
       <p>机器人把一个角色的指令和技能绑在一起，开启后所有会话都复用它的人设。</p>
       <button class="primary-button" type="button" @click="bots.actions.openBotForm()"><Plus :size="15" />新建机器人</button>
     </div>
@@ -81,12 +81,12 @@ const otherBots = computed(() => bots.state.bots.filter(bot => !bot.enabled))
               <span v-if="bots.actions.botAvatar(bot)" class="bot-avatar-frame" :style="bots.actions.botAccent(bot)"><img class="bot-avatar" :src="bots.actions.botAvatar(bot)" alt="" /></span>
               <Bot v-else :size="18" />
               <span class="bot-card-name">{{ bot.name }}</span>
-              <span class="plugin-state" :class="{ off: !bot.enabled }">{{ bot.enabled ? '已开启' : '已关闭' }}</span>
+              <span class="ui-status" :class="bot.enabled ? 'ok' : 'idle'">{{ bot.enabled ? '已开启' : '已关闭' }}</span>
             </span>
             <span class="bot-card-skills">{{ bots.actions.botSkillNames(bot) }}</span>
           </button>
         </div>
-        <p v-if="enabledBot && !otherBots.length" class="bot-overview-empty">只有这一个机器人。再建一个角色助手，按场景在左侧切换。</p>
+        <p v-if="enabledBot && !otherBots.length" class="ui-empty-inline">只有这一个机器人。再建一个角色助手，按场景在左侧切换。</p>
       </section>
     </template>
   </section>

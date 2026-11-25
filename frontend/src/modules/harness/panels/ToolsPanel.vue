@@ -16,25 +16,24 @@ const { callSelectedMcpTool, editingTool, harnessMcpServers, mcpCallArgs, mcpCal
 
 
         <section v-if="activeSection === 'tools'" class="resource-page">
-          <div class="release-toolbar"><div><h2>工具与 MCP</h2></div><button class="button button-primary" @click="openToolDialog"><Plus :size="14" />登记工具</button></div>
           <p v-if="toolsError" role="alert">{{ toolsError }}</p>
           <section class="harness-panel resource-table-panel">
-            <div class="harness-panel-heading"><div><h3>工具目录</h3><p>{{ toolRows.length }} 条记录 · {{ toolsConnected ? '已连接工具目录' : '演示数据' }}</p></div><button class="button button-subtle" @click="refreshToolData">刷新目录</button></div>
-            <div v-if="toolRows.length" class="resource-table wide-actions">
-              <div class="resource-table-head"><span>工具 / 来源</span><span>范围</span><span>风险</span><span>登记状态</span><span></span></div>
-              <div v-for="row in toolRows" :key="row.tool_id" class="resource-row"><span><strong>{{ row.name }}</strong><small>{{ row.source }}</small><small v-if="toolTestResults[row.tool_id]" :class="toolTestResults[row.tool_id].ok ? '' : 'stat-warn'">{{ toolTestResults[row.tool_id].ok ? '连接正常' : toolTestResults[row.tool_id].message }}</small></span><span>{{ row.scope }}</span><span>{{ row.risk }}</span><span>{{ row.status }}</span><span><button class="text-action" :disabled="toolTestBusy === row.tool_id || !toolsConnected" :title="toolsConnected ? '测试工具连接' : '演示数据，未连接工具目录'" @click="testToolConnection(row)">{{ toolTestBusy === row.tool_id ? '测试中…' : '连接测试' }}</button><button class="text-action" @click="openToolDetails(row)">查看</button></span></div>
+            <div class="harness-panel-heading"><div><h3>工具目录</h3><p>{{ toolRows.length }} 条记录 · {{ toolsConnected ? '已连接工具目录' : '未连接工具目录' }}</p></div><div class="harness-panel-actions"><button class="button button-subtle" @click="refreshToolData">刷新目录</button><button class="button button-primary" @click="openToolDialog"><Plus :size="14" />登记工具</button></div></div>
+            <div v-if="toolRows.length" class="ui-table ui-cols-generic">
+              <div class="ui-table-head"><span>工具 / 来源</span><span>范围</span><span>风险</span><span>登记状态</span><span></span></div>
+              <div v-for="row in toolRows" :key="row.tool_id" class="ui-row"><span><strong>{{ row.name }}</strong><small>{{ row.source }}</small><small v-if="toolTestResults[row.tool_id]" :class="toolTestResults[row.tool_id].ok ? '' : 'stat-warn'">{{ toolTestResults[row.tool_id].ok ? '连接正常' : toolTestResults[row.tool_id].message }}</small></span><span>{{ row.scope }}</span><span>{{ row.risk }}</span><span>{{ row.status }}</span><span><button class="text-action" :disabled="toolTestBusy === row.tool_id || !toolsConnected" :title="toolsConnected ? '测试工具连接' : '未连接工具目录'" @click="testToolConnection(row)">{{ toolTestBusy === row.tool_id ? '测试中…' : '连接测试' }}</button><button class="text-action" @click="openToolDetails(row)">查看</button></span></div>
             </div>
-            <div v-else class="release-empty"><span>尚未登记工具</span><button class="text-action" @click="openToolDialog">登记第一个工具</button></div>
+            <div v-else class="ui-empty"><span>尚未登记工具</span><button class="text-action" @click="openToolDialog">登记第一个工具</button></div>
           </section>
           <section class="harness-panel resource-table-panel">
-            <div class="harness-panel-heading"><div><h3>MCP 连接器</h3><p>{{ harnessMcpServers.length }} 个连接器 · {{ toolsConnected ? '已连接目录' : '演示数据' }}</p></div></div>
+            <div class="harness-panel-heading"><div><h3>MCP 连接器</h3><p>{{ harnessMcpServers.length }} 个连接器 · {{ toolsConnected ? '已连接目录' : '未连接工具目录' }}</p></div></div>
             <p v-if="mcpServersError" role="alert">{{ mcpServersError }}</p>
-            <div v-if="harnessMcpServers.length" class="resource-table">
-              <div class="resource-table-head"><span>连接器 / 来源</span><span>状态</span><span>已发现工具</span><span>工具编号</span></div>
-              <div v-for="row in harnessMcpServers" :key="row.tool_id" class="resource-row"><span><strong>{{ row.name }}</strong><small>{{ row.source }}</small><small v-if="row.message" class="stat-warn">{{ row.message }}</small></span><span>{{ row.status || '未记录状态' }}</span><span>{{ (row.tools || []).length ? row.tools.join('、') : '未发现工具' }}</span><span>{{ row.tool_id }}</span></div>
+            <div v-if="harnessMcpServers.length" class="ui-table ui-cols-mcp">
+              <div class="ui-table-head"><span>连接器 / 来源</span><span>状态</span><span>已发现工具</span><span>工具编号</span></div>
+              <div v-for="row in harnessMcpServers" :key="row.tool_id" class="ui-row"><span><strong>{{ row.name }}</strong><small>{{ row.source }}</small><small v-if="row.message" class="stat-warn">{{ row.message }}</small></span><span>{{ row.status || '未记录状态' }}</span><span>{{ (row.tools || []).length ? row.tools.join('、') : '未发现工具' }}</span><span>{{ row.tool_id }}</span></div>
             </div>
             <div v-if="harnessMcpServers.length" class="harness-detail-block"><strong>工具调用</strong><div class="harness-detail-actions"><select v-model="mcpToolPick"><option value="">选择工具</option><template v-for="row in harnessMcpServers" :key="`call-${row.tool_id}`"><option v-for="tool in row.tools || []" :key="tool" :value="`${row.tool_id}::${tool}`">{{ row.name }} · {{ tool }}</option></template></select><input v-model="mcpCallArgs" placeholder='调用参数 JSON，例如 {"query":"测试"}' /><button class="button button-subtle" type="button" :disabled="mcpCallBusy || !mcpToolPick" @click="callSelectedMcpTool">{{ mcpCallBusy ? '调用中…' : '调用工具' }}</button></div><p v-if="mcpCallError" role="alert">{{ mcpCallError }}</p><pre v-if="mcpCallResult" class="execution-text">{{ JSON.stringify(mcpCallResult, null, 2) }}</pre></div>
-            <div v-else class="release-empty"><span>暂无 MCP 连接器</span></div>
+            <div v-else class="ui-empty"><span>暂无 MCP 连接器</span></div>
           </section>
         </section>
       <div v-if="showToolDialog" class="modal-backdrop" @click.self="!toolSaving && (showToolDialog = false)">

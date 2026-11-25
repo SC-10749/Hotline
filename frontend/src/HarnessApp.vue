@@ -27,7 +27,7 @@ import SkillDirectoryPanel from './modules/harness/panels/SkillDirectoryPanel.vu
 import AgentsPanel from './modules/harness/panels/AgentsPanel.vue'
 import WorkspacesPanel from './modules/harness/panels/WorkspacesPanel.vue'
 import ReleasesPanel from './modules/harness/panels/ReleasesPanel.vue'
-import { Activity, Check, Command, Menu, Plus, Search, ShieldCheck, Workflow, X } from 'lucide-vue-next'
+import { Activity, Check, Menu, Plus, ShieldCheck, Workflow, X } from 'lucide-vue-next'
 
 const props = defineProps({ embedded: { type: Boolean, default: false }, apiBase: { type: String, default: '' } })
 
@@ -68,17 +68,39 @@ const { harnessWorkspaces, refreshWorkspaceData, showWorkspaceDialog, workspaces
 const { harnessTools, refreshToolData, showToolDialog, toolsConnected } = toolsCtx
 const { harnessModels, modelsConnected, refreshModelData, showModelDialog } = modelsCtx
 const { catalogConnected, harnessSkills, refreshCatalogData, refreshSkillData, selectedCatalogName, selectedSkill, skillDirectoryTab, skillsConnected } = skillsCtx
-const { approvalDetail, harnessMachines, pendingApprovalRows, refreshResourceData, rejectDialog } = resourcesCtx
+const { approvalDetail, approvalsConnected, harnessMachines, pendingApprovalRows, refreshResourceData, rejectDialog, traceConnected } = resourcesCtx
 const { loadTraceEvents, loadTraceMetrics, loadTraceTrends } = tracesCtx
+const { machinesConnected } = resourcesCtx
 
 
-const sectionMode = computed(() => activeSection.value === 'artifacts' ? 'live' : activeSection.value === 'skills' ? ((skillDirectoryTab.value === 'catalog' ? catalogConnected.value : skillsConnected.value) ? 'live' : 'demo') : activeSection.value === 'models' ? (modelsConnected.value ? 'live' : 'demo') : activeSection.value === 'tools' ? (toolsConnected.value ? 'live' : 'demo') : ['overview', 'runs'].includes(activeSection.value) && executionConnected.value ? 'live' : activeSection.value === 'evaluations' && evaluationConnected.value ? 'live' : activeSection.value === 'releases' && releaseConnected.value ? 'live' : (activeSection.value === 'agents' ? agentsConnected.value : activeSection.value === 'workspaces' && workspacesConnected.value) ? 'live' : activeSection.value === 'settings' && settingsConnected.value ? 'live' : ['overview', 'runs', 'evaluations', 'releases', 'settings'].includes(activeSection.value) ? 'demo' : 'planned')
+// 每个 section 的数据来源与连接状态一一对应，避免用兜底分支把已接入的页面标成「未接入」
+const sectionStatus = computed(() => {
+  const skillLive = skillDirectoryTab.value === 'catalog' ? catalogConnected.value : skillsConnected.value
+  return {
+    overview: { live: executionConnected.value, label: executionConnected.value ? '今日真实运行记录' : executionLoaded.value ? '运行数据缓存 · 连接失败' : '运行服务未连接' },
+    runs: { live: executionConnected.value, label: executionConnected.value ? '运行服务数据' : executionLoaded.value ? '运行数据缓存 · 连接失败' : '运行服务未连接' },
+    evaluations: { live: evaluationConnected.value, label: evaluationConnected.value ? '实时测评数据 · 后台执行' : '未连接测评服务' },
+    agents: { live: agentsConnected.value, label: agentsConnected.value ? '实时资源目录' : '未连接资源目录' },
+    workspaces: { live: workspacesConnected.value, label: workspacesConnected.value ? '实时工作空间目录' : '未连接工作空间目录' },
+    tools: { live: toolsConnected.value, label: toolsConnected.value ? '工具登记数据' : '未连接工具目录' },
+    skills: { live: skillLive, label: skillDirectoryTab.value === 'catalog' ? (catalogConnected.value ? 'Catalog 版本目录' : 'Catalog 目录未连接') : skillsConnected.value ? '本地安装包目录' : '未连接 Skill 目录' },
+    models: { live: modelsConnected.value, label: modelsConnected.value ? '模型路由登记数据' : '未连接模型目录' },
+    machines: { live: machinesConnected.value, label: machinesConnected.value ? '运行时节点数据' : '未连接运行时节点 API' },
+    approvals: { live: approvalsConnected.value, label: approvalsConnected.value ? '审批队列数据' : '未连接审批 API' },
+    artifacts: { live: true, label: '登记产物 · 只读' },
+    observability: { live: traceConnected.value, label: traceConnected.value ? '只读运营 API' : '未连接运营 API' },
+    releases: { live: releaseConnected.value, label: releaseConnected.value ? '实时发布数据' : '未连接发布目录' },
+    settings: { live: settingsConnected.value, label: settingsConnected.value ? '实时设置' : '默认设置 · 未连接设置 API' },
+  }[activeSection.value] || { live: false, label: '未接入运行 API' }
+})
 
-const sourceLabel = computed(() => activeSection.value === 'artifacts' ? '登记产物 · 只读' : activeSection.value === 'overview' ? '今日真实运行记录' : activeSection.value === 'skills' ? (skillDirectoryTab.value === 'catalog' ? (catalogConnected.value ? 'Catalog 版本目录' : 'Catalog 目录未连接') : skillsConnected.value ? '本地安装包目录' : '未连接 Skill 目录') : activeSection.value === 'models' ? (modelsConnected.value ? '模型路由登记数据' : '未连接模型目录') : activeSection.value === 'tools' ? (toolsConnected.value ? '工具登记数据' : '未连接工具目录') : ['overview', 'runs'].includes(activeSection.value) ? (executionConnected.value ? '运行服务数据' : executionLoaded.value ? '运行数据缓存 · 连接失败' : '运行服务未连接') : activeSection.value === 'evaluations' ? (evaluationConnected.value ? '实时测评数据 · 后台执行' : '未连接测评服务') : activeSection.value === 'releases' ? (releaseConnected.value ? '实时发布数据' : '未连接发布目录') : ['agents', 'workspaces'].includes(activeSection.value) ? ((activeSection.value === 'agents' ? agentsConnected.value : workspacesConnected.value) ? '实时资源目录' : '未连接资源目录') : activeSection.value === 'settings' ? (settingsConnected.value ? '实时设置' : '默认设置 · 未连接设置 API') : '未接入运行 API')
+const sectionMode = computed(() => sectionStatus.value.live ? 'live' : 'demo')
+
+const sourceLabel = computed(() => sectionStatus.value.label)
 
 const canCreateRun = computed(() => ['overview', 'runs'].includes(activeSection.value))
 
-const canRefreshStatus = computed(() => ['overview', 'runs', 'evaluations', 'releases', 'agents', 'workspaces', 'settings'].includes(activeSection.value))
+const canRefreshStatus = computed(() => ['overview', 'runs', 'evaluations', 'releases', 'agents', 'workspaces', 'settings', 'machines', 'approvals', 'observability'].includes(activeSection.value))
 
 const sectionCounts = computed(() => ({
   runs: executionTotal.value,
@@ -114,6 +136,8 @@ function refreshActiveSection() {
   if (activeSection.value === 'releases') return refreshReleaseData()
   if (activeSection.value === 'workspaces') return refreshWorkspaceData()
   if (activeSection.value === 'settings') return refreshHarnessSettings()
+  if (activeSection.value === 'machines' || activeSection.value === 'approvals') return refreshResourceData()
+  if (activeSection.value === 'observability') { refreshResourceData(); loadTraceEvents(); loadTraceMetrics(); loadTraceTrends(); return }
   return refreshExecutionRuns()
 }
 
@@ -249,7 +273,7 @@ provide(HARNESS_TRACES, tracesCtx)
     </aside>
 
     <main class="main-surface">
-      <header v-if="!props.embedded" class="topbar"><button class="mobile-menu" aria-label="打开导航" @click="mobileNavOpen = true"><Menu :size="19" /></button><div class="breadcrumbs"><span>Harness</span><span class="crumb-slash">/</span><strong>{{ navTitle }}</strong></div><div class="topbar-actions"><span class="demo-label" :class="{ planned: sectionMode !== 'live' }"><span></span>{{ sourceLabel }}</span><button class="top-icon" aria-label="搜索" title="搜索" @click="$refs.searchField?.focus()"><Search :size="16" /></button><button class="command-shortcut" @click="$refs.searchField?.focus()"><Command :size="13" />快速查找<kbd>Ctrl K</kbd></button><button class="avatar-small" aria-label="个人账户">SC</button></div></header>
+      <header v-if="!props.embedded" class="topbar"><button class="mobile-menu" aria-label="打开导航" @click="mobileNavOpen = true"><Menu :size="19" /></button><div class="breadcrumbs"><span>Harness</span><span class="crumb-slash">/</span><strong>{{ navTitle }}</strong></div><div class="topbar-actions"><span class="demo-label" :class="sectionMode"><span></span>{{ sourceLabel }}</span><button class="avatar-small" aria-label="个人账户">SC</button></div></header>
       <div class="page-scroll"><div class="page-content">
       <div class="page-heading-row"><div><h1>{{ pageHeading }}</h1></div><div class="heading-actions"><button v-if="props.embedded" class="mobile-menu embedded-mobile-menu" type="button" title="打开 Harness 菜单" aria-label="打开 Harness 菜单" :aria-expanded="mobileNavOpen" @click="mobileNavOpen = true"><Menu :size="18" /></button><span v-if="props.embedded" class="embedded-source-label">{{ sourceLabel }}</span><button v-if="canRefreshStatus" class="button button-subtle refresh-button" title="刷新状态" aria-label="刷新状态" @click="refreshActiveSection"><Activity :size="15" /><span>{{ executionLoading ? '刷新中…' : '刷新状态' }}</span></button><button v-if="canCreateRun" class="button button-primary" @click="openCreateRun"><Plus :size="16" />新建运行</button></div></div>
       <div v-if="executionError && ['overview', 'runs'].includes(activeSection)" class="execution-error-banner"><ShieldCheck :size="16" /><span>{{ executionError }}。{{ executionLoaded ? '保留上次读取的记录。' : '尚未读取到运行记录。' }}</span><button class="text-action" @click="refreshExecutionRuns">重试</button></div>
@@ -258,7 +282,6 @@ provide(HARNESS_TRACES, tracesCtx)
 
       <div v-if="settingsError && activeSection === 'settings'" class="execution-error-banner"><ShieldCheck :size="16" /><span>{{ settingsError }}，当前保留默认设置。</span><button class="text-action" @click="refreshHarnessSettings">重试</button></div>
 
-        <div v-if="sectionMode === 'planned'" class="planned-notice"><div class="planned-mark"><ShieldCheck :size="18" /></div><div><strong>{{ navTitle }}尚未接入运行控制 API</strong><span>当前展示规划范围和待接入状态。接入后此处会显示来自后端的实时资源、版本与审计数据。</span></div><span class="planned-badge">目标模块 · {{ activeSection }}</span></div>
         <OverviewPanel v-if="activeSection === 'overview'" />
         <RunsPanel v-if="activeSection === 'runs'" />
         <EvaluationsPanel v-if="activeSection === 'evaluations'" />

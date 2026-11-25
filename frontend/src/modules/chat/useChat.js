@@ -717,8 +717,8 @@ export function useChat(ctx) {
     answerClarify, clarifyKeydown, copyText, exportChatHistory, toggleSearch,
     toggleOption, sendSelectedOptions, requestPermission, cancelPermission,
     confirmPermission, openFilePicker, requestTextEdit, askFromDoc, downloadHref,
-    messageBody, badgeInfo, timelineSummary, messageIsStreaming, highlightCode,
-    fmtRelTime, fmtElapsed, fmtStep, normalizeBrandText,
+    messageBody, renderMarkdown, badgeInfo, timelineSummary, messageIsStreaming, highlightCode,
+    fmtRelTime, fmtElapsed, fmtStep, normalizeBrandText, recommendationLabel,
     progressLabel, progressEntryLabel,
   }
 

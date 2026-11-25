@@ -55,14 +55,14 @@ const ciHint = computed(() => {
         </div>
       </nav>
     </div>
-    <p v-if="!bots.state.bots.length" class="bot-nav-empty">还没有机器人，先新建一个角色助手</p>
+    <p v-if="!bots.state.bots.length" class="ui-empty-inline">还没有机器人，先新建一个角色助手</p>
     <div class="bot-ci">
       <div class="bot-ci-head">
         <Workflow :size="15" />
         <strong>CI 工作流</strong>
         <label class="switch switch-pill" :title="ciHint"><input type="checkbox" :checked="bots.state.ciWorkflow.enabled === true" :disabled="!bots.state.ciWorkflow.configured || bots.state.ciBusy" @change="bots.actions.toggleCiWorkflow" /><span class="switch-track" aria-hidden="true"></span></label>
       </div>
-      <p class="bot-ci-meta"><span class="plugin-state" :class="{ off: !bots.state.ciWorkflow.enabled }">{{ ciStateText }}</span>{{ ciTarget ? ` · ${ciTarget}` : '' }}</p>
+      <p class="bot-ci-meta"><span class="ui-status" :class="bots.state.ciWorkflow.enabled ? 'ok' : 'idle'">{{ ciStateText }}</span>{{ ciTarget ? ` · ${ciTarget}` : '' }}</p>
       <p class="bot-ci-hint">{{ ciHint }}</p>
     </div>
   </div>

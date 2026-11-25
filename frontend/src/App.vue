@@ -270,17 +270,9 @@ onUnmounted(() => {
 
       <CodeMapPage v-else-if="ctx.activePage === 'code-map'" :api-base="ctx.backendUrl" @home="openHome" />
       <section v-else class="standalone-page" :aria-labelledby="`${ctx.activePage}-page-title`">
-        <aside class="page-sidebar">
-          <header class="page-sidebar-header">
-            <h2>{{ ctx.activePage === 'profile' ? '个人中心' : ({ automation: '自动化', plugins: '插件', bot: '机器人', docs: '文档库', harness: 'Harness 工程', export: '历史聊天' })[ctx.activePage] }}</h2>
-          </header>
+        <aside v-if="ctx.activePage === 'bot' || ctx.activePage === 'profile'" class="page-sidebar">
           <ProfileSidebar v-if="ctx.activePage === 'profile'" />
-          <button v-else-if="ctx.activePage === 'automation'" class="page-create" type="button" @click="automation.actions.openScheduleForm"><Plus :size="18" />新建任务</button>
-          <button v-else-if="ctx.activePage === 'plugins'" class="page-create" type="button" @click="skills.actions.openSkills"><Puzzle :size="18" />上传技能包</button>
-          <BotSidebar v-else-if="ctx.activePage === 'bot'" />
-          <button v-else-if="ctx.activePage === 'docs'" class="page-create" type="button" @click="documents.actions.openDocs"><Plus :size="18" />上传文档</button>
-          <button v-else-if="ctx.activePage === 'harness'" class="page-subitem active" type="button" @click="openHarnessPage"><Workflow :size="16" />Harness 控制面<span>已接入</span></button>
-          <button v-else class="page-create" type="button" :disabled="chat.state.exportingHistory" @click="chat.actions.exportChatHistory"><LoaderCircle v-if="chat.state.exportingHistory" :size="18" class="spin" /><Download v-else :size="18" />导出全部聊天</button>
+          <BotSidebar v-else />
         </aside>
 
         <div class="page-main">
@@ -288,7 +280,6 @@ onUnmounted(() => {
             <div>
               <h1 :id="`${ctx.activePage}-page-title`">{{ ctx.activePage === 'profile' ? ({ basics: '基础信息', api: 'API Key', personalization: '个性化', pet: '虚拟桌宠' })[ctx.profileSection] : ({ automation: '安排任务', plugins: '插件', bot: '机器人', docs: '文档库', harness: 'Harness 工程', export: '导出历史聊天' })[ctx.activePage] }}</h1>
             </div>
-            <button class="icon-button" type="button" aria-label="回到首页" title="回到首页" @click="openHome"><Home :size="18" /></button>
           </header>
           <ProfilePage v-if="ctx.activePage === 'profile'" />
           <HarnessApp v-if="ctx.activePage === 'harness'" embedded :api-base="ctx.backendUrl" />

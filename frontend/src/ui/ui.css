@@ -1,0 +1,388 @@
+/* Hotline 统一 UI 基础层
+ *
+ * 一处定义：面板、表格、状态、空态、列表。页面不再各自实现表格与空态。
+ * 规则见 docs/spec/2026-11-24-统一UI基础层与表格体系.md 与 frontend/src/ui/README.md。
+ * 只用 tokens.css 的共享令牌，不写死颜色；harness.css 的样式仍限定在 .harness-shell 内。
+ */
+
+/* ---------- 面板 ---------- */
+
+.harness-panel {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.harness-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 17px 12px;
+}
+
+.harness-panel-heading h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.harness-panel-heading p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.harness-panel-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---------- 表格（div + grid） ---------- */
+
+.ui-table {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* 列宽由语义列类决定：列类挂在 .ui-table 容器上，表头与行共用同一组列数 */
+.ui-table-head,
+.ui-row {
+  display: grid;
+  grid-template-columns: var(--ui-cols, none);
+  gap: 14px;
+  align-items: center;
+  padding: 0 14px;
+  min-width: var(--ui-cols-min, 0);
+}
+
+.ui-table-head {
+  min-height: 32px;
+  color: var(--muted);
+  background: var(--surface-subtle);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ui-row {
+  min-height: 42px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.ui-row:hover {
+  background: var(--surface-subtle);
+}
+
+.ui-row strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.ui-row small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.ui-row > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ui-row code {
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.ui-row b {
+  color: var(--success);
+  font: 600 12px Consolas, monospace;
+}
+
+.ui-row .dataset-type {
+  color: var(--muted);
+}
+
+.ui-row .dataset-pass {
+  color: var(--success);
+  font-family: Consolas, monospace;
+}
+
+.ui-row .dataset-pass small {
+  margin-left: 3px;
+  color: var(--success);
+  font-size: 10px;
+}
+
+/* 数值列：右对齐 + 等宽数字，表头与单元格共用同一个类 */
+.ui-num {
+  justify-self: end;
+  padding-inline-end: 6px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 行内操作：按钮之间留出间距并靠列尾对齐 */
+.ui-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+/* 状态胶囊按内容宽度显示，不被网格列拉伸成一条长底 */
+.ui-row > .ui-status {
+  justify-self: start;
+}
+
+/* 行本身是按钮时清掉浏览器默认外观 */
+button.ui-row {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  background: transparent;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* 列宽语义类：每类的列数必须等于表头单元格数 */
+.ui-cols-generic { --ui-cols: minmax(180px, 1.6fr) 100px minmax(120px, 1fr) 90px 120px; --ui-cols-min: 640px; }
+.ui-cols-workspace { --ui-cols: minmax(180px, 1.4fr) minmax(150px, 1.2fr) 100px 80px 80px; --ui-cols-min: 640px; }
+.ui-cols-machine { --ui-cols: minmax(150px, 1.4fr) 76px 96px 64px 118px minmax(96px, 0.9fr) 140px; --ui-cols-min: 760px; }
+.ui-cols-machine-summary { --ui-cols: minmax(140px, 1.2fr) 76px 96px 64px 118px minmax(96px, 1fr); --ui-cols-min: 640px; }
+.ui-cols-approval { --ui-cols: 34px minmax(160px, 1.5fr) minmax(110px, 1fr) minmax(120px, 1.1fr) 70px 150px; --ui-cols-min: 780px; }
+.ui-cols-trace { --ui-cols: minmax(190px, 1.5fr) 80px minmax(150px, 1.2fr) 90px 160px; --ui-cols-min: 760px; }
+.ui-cols-trace-event { --ui-cols: minmax(210px, 1.6fr) 100px 70px minmax(120px, 1fr) 160px; --ui-cols-min: 760px; }
+.ui-cols-trend { --ui-cols: 150px repeat(6, minmax(60px, 1fr)); --ui-cols-min: 700px; }
+.ui-cols-mcp { --ui-cols: minmax(180px, 1.5fr) 100px minmax(180px, 1.4fr) minmax(150px, 1.1fr); --ui-cols-min: 660px; }
+.ui-cols-dataset { --ui-cols: minmax(160px, 1.2fr) 88px 84px 96px minmax(124px, 1fr) 88px; --ui-cols-min: 700px; }
+.ui-cols-rollout { --ui-cols: minmax(130px, 1.4fr) 90px 90px 60px 70px minmax(170px, 1.1fr); --ui-cols-min: 660px; }
+.ui-cols-release-record { --ui-cols: 140px minmax(140px, 1.2fr) 80px 90px 70px 130px 130px 110px minmax(180px, 1.4fr); --ui-cols-min: 1080px; }
+.ui-cols-history { --ui-cols: 145px minmax(120px, 1fr) minmax(150px, 1.1fr) 90px 150px; --ui-cols-min: 600px; }
+.ui-cols-report { --ui-cols: minmax(160px, 1.4fr) 120px 90px 120px; --ui-cols-min: 520px; }
+.ui-cols-error-log { --ui-cols: 170px 130px minmax(200px, 1fr); --ui-cols-min: 520px; }
+.ui-cols-eval-results { --ui-cols: minmax(150px, 1.4fr) 70px 80px 120px 130px 80px 80px 90px 80px 90px; --ui-cols-min: 1030px; }
+
+/* ---------- 语义化真表格 ---------- */
+
+.ui-table-real {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.ui-table-real th {
+  padding: 7px 14px;
+  color: var(--muted);
+  background: var(--surface-subtle);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.ui-table-real td {
+  padding: 9px 14px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--text-secondary);
+  vertical-align: top;
+}
+
+.ui-table-real tbody tr:hover td {
+  background: var(--surface-subtle);
+}
+
+.ui-table-real td strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.ui-table-real code {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* ---------- 状态标记 ---------- */
+
+.ui-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.ui-status::before {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+
+.ui-status.ok { color: var(--success); background: var(--success-soft); }
+.ui-status.warn { color: var(--warning); background: var(--warning-soft); }
+.ui-status.err { color: var(--error); background: var(--error-soft); }
+.ui-status.idle { color: var(--muted); background: var(--surface-hover); }
+
+/* ---------- 空态 ---------- */
+
+.ui-empty {
+  display: grid;
+  gap: 8px;
+  align-content: center;
+  justify-items: center;
+  padding: 30px 20px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.ui-empty h3 {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ui-empty p {
+  max-width: 42ch;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.ui-empty .ui-empty-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 12px;
+  color: var(--text-secondary);
+  background: var(--surface-subtle);
+}
+
+.ui-empty .ui-empty-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.ui-empty .primary-button {
+  min-width: 128px;
+  justify-content: center;
+}
+
+/* 列表主区做成按钮时清掉浏览器默认外观 */
+button.ui-list-main {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+
+
+/* 紧凑空态：侧栏与行内提示 */
+.ui-empty-inline {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  padding: 12px 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: left;
+}
+
+/* ---------- 列表（卡片行） ---------- */
+
+.ui-list {
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.ui-list-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 15px 13px 16px;
+  border-top: 1px solid var(--line-soft);
+  transition: background-color 140ms var(--ease);
+}
+
+.ui-list-row:first-child {
+  border-top: 0;
+}
+
+.ui-list-row:hover {
+  background: var(--surface-subtle);
+}
+
+.ui-list-main {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.ui-list-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.ui-list-title strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-list-desc {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  min-height: 3em;
+}
+
+.ui-list-meta {
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-list-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}

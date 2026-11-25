@@ -507,7 +507,7 @@ onUnmounted(() => {
     </section>
 
     <section v-if="!connected" class="harness-panel">
-      <div class="release-empty"><span>未连接测评服务</span><small>发起与结果读取需要后端测评接口可用</small></div>
+      <div class="ui-empty"><span>未连接测评服务</span><small>发起与结果读取需要后端测评接口可用</small></div>
     </section>
 
     <section class="evaluation-kpis">
@@ -538,13 +538,13 @@ onUnmounted(() => {
           <p>{{ results.length }} 条样本结果 · 运行 {{ selectedRunId || '—' }}</p>
         </div>
       </div>
-      <div v-if="results.length" class="resource-table eval-results">
-        <div class="resource-table-head">
+      <div v-if="results.length" class="ui-table ui-cols-eval-results">
+        <div class="ui-table-head">
           <span>样本编号</span><span>重复轮次</span><span>判定</span><span>失败分类</span>
           <span>语义维度</span>
           <span>澄清轮次</span><span>工具错误</span><span>耗时(ms)</span><span>Tokens</span><span>操作</span>
         </div>
-        <div v-for="row in results" :key="`${row.case_id}-${row.epoch}`" class="resource-row">
+        <div v-for="row in results" :key="`${row.case_id}-${row.epoch}`" class="ui-row">
           <span><strong>{{ row.case_id || '—' }}</strong><small>{{ row.detail || '' }}</small></span>
           <span>{{ numberOrNull(row.epoch) ?? '—' }}</span>
           <span>{{ VERDICTS[row.verdict] || row.verdict || '—' }}</span>
@@ -564,7 +564,7 @@ onUnmounted(() => {
           <span><button class="text-action" type="button" @click="openTrace(row)">看轨迹<ChevronRight :size="13" /></button></span>
         </div>
       </div>
-      <div v-else class="release-empty"><span>暂无结果</span><small>选择测评集并发起一次测评</small></div>
+      <div v-else class="ui-empty"><span>暂无结果</span><small>选择测评集并发起一次测评</small></div>
     </section>
 
     <section class="harness-panel">
@@ -590,7 +590,7 @@ onUnmounted(() => {
       <div v-if="matrix" class="eval-matrix">
         <p v-if="!matrix.sameDataset" class="evaluation-progress">所选运行来自不同测评集，横向对比仅供参考</p>
         <div class="eval-matrix-scroll">
-          <table class="eval-matrix-table">
+          <table class="ui-table-real eval-matrix-table">
             <thead>
               <tr>
                 <th>样本编号</th>
@@ -614,7 +614,7 @@ onUnmounted(() => {
             </tbody>
           </table>
         </div>
-        <p v-if="!matrixRows.length" class="release-empty"><span>矩阵没有样本</span></p>
+        <p v-if="!matrixRows.length" class="ui-empty"><span>矩阵没有样本</span></p>
       </div>
     </section>
 
@@ -636,7 +636,7 @@ onUnmounted(() => {
       <p v-if="traceError" class="eval-error" role="alert">{{ traceError }}</p>
       <p v-if="traceBusy" class="evaluation-progress">正在读取轨迹…</p>
       <div v-if="!traceBusy && traceEvents.length" class="eval-trace-events" style="max-height: 320px; overflow: auto">
-        <table class="eval-trace-table">
+        <table class="ui-table-real eval-trace-table">
           <thead><tr><th>序号</th><th>时间</th><th>类型</th><th>级别</th><th>工具</th><th>摘要</th></tr></thead>
           <tbody>
             <tr v-for="(item, index) in traceEvents" :key="item.event_id ?? index">
@@ -650,7 +650,7 @@ onUnmounted(() => {
           </tbody>
         </table>
       </div>
-      <div v-else-if="!traceBusy && !traceError" class="release-empty"><span>该样本暂无轨迹事件</span></div>
+      <div v-else-if="!traceBusy && !traceError" class="ui-empty"><span>该样本暂无轨迹事件</span></div>
       <div v-if="traceTranscript.length" class="eval-trace-transcript">
         <strong>逐轮输出</strong>
         <ol>
@@ -693,20 +693,20 @@ onUnmounted(() => {
           <span class="eval-failure-track"><i :style="{ width: row.width + '%' }"></i></span>
         </div>
       </div>
-      <div v-else class="release-empty"><span>暂无失败样本</span></div>
+      <div v-else class="ui-empty"><span>暂无失败样本</span></div>
     </section>
 
     <section class="harness-panel">
       <div class="harness-panel-heading">
         <div><h3>门禁检查</h3><p>按当前配置的门禁阈值校验本次运行</p></div>
-        <span v-if="gateReport" class="dataset-state" :class="{ attention: gateReport.passed !== true }"><i></i>{{ gateReport.passed === true ? '通过' : '未通过' }}</span>
+        <span v-if="gateReport" class="ui-status" :class="gateReport.passed === true ? 'ok' : 'err'">{{ gateReport.passed === true ? '通过' : '未通过' }}</span>
       </div>
       <div v-for="gate in gates" :key="`${gate.label}-${gate.metric}`" class="gate-row">
         <span>{{ gate.label || gate.metric }} · 阈值 {{ gate.op || '>=' }} {{ formatMetric(gate.metric, gate.value) }}</span>
         <strong>{{ gate.metric }}</strong>
         <ChevronRight :size="14" />
       </div>
-      <div v-if="!gates.length" class="release-empty"><span>暂无门禁配置</span></div>
+      <div v-if="!gates.length" class="ui-empty"><span>暂无门禁配置</span></div>
       <div class="harness-detail-actions">
         <label class="eval-field">基线运行编号（可选）
           <input v-model="baselineRunId" placeholder="留空表示不对比基线" />
@@ -722,7 +722,7 @@ onUnmounted(() => {
         <CircleCheck v-if="check.passed === true" :size="14" />
         <CircleX v-else :size="14" />
       </div>
-      <div v-if="gateReport && !gateChecks.length" class="release-empty"><span>门禁检查未返回明细</span></div>
+      <div v-if="gateReport && !gateChecks.length" class="ui-empty"><span>门禁检查未返回明细</span></div>
     </section>
   </div>
 </template>
@@ -732,7 +732,6 @@ onUnmounted(() => {
 .eval-field { display: grid; gap: 5px; color: var(--h-secondary); font-size: 11px; }
 .eval-field select, .eval-field input { min-width: 150px; padding: 7px 9px; border: 1px solid var(--h-line); border-radius: 4px; color: var(--h-text); background: var(--surface); font: inherit; font-size: 11px; }
 .eval-error { margin: 12px 17px; color: var(--h-error); overflow-wrap: anywhere; }
-.eval-results .resource-table-head, .eval-results .resource-row { grid-template-columns: minmax(150px, 1.4fr) 70px 80px 120px 130px 80px 80px 90px 80px 90px; min-width: 1030px; }
 .eval-metric-cell { display: grid; gap: 3px; }
 .eval-matrix-picker { flex-wrap: wrap; gap: 10px; }
 .eval-matrix-run { display: flex; align-items: center; gap: 5px; color: var(--h-secondary); font-size: 11px; }

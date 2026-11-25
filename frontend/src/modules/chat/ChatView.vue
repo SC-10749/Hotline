@@ -1,10 +1,11 @@
 <script setup>
 import { inject, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
-  AlertCircle, ArrowUp, Check, ChevronDown, ChevronRight, Copy, Download, ExternalLink,
+  AlertCircle, ArrowUp, Check, ChevronDown, ChevronRight, Copy, Download,
   File, FileText, Link2, LoaderCircle, MessageCircle, Paperclip, Square, X,
 } from 'lucide-vue-next'
 import OptionPanel from '../requirement/OptionPanel.vue'
+import SourcePanel from './SourcePanel.vue'
 import { modes, quickPrompts } from './modes'
 import { formatBytes } from '../app/format'
 import { APP_KEY, CHAT_KEY } from '../app/keys'
@@ -17,6 +18,10 @@ const composer = ref(null)
 const composerArea = ref(null)
 const fileInput = ref(null)
 let composerObserver = null
+
+// 来源面板挂在对话区里，只服务当前这一轮回答。
+const sourceOpen = ref(false)
+const sourceMessage = ref(null)
 
 // 代码块高亮：markdown 渲染后统一补一次。
 const vHighlight = { mounted: chat.actions.highlightCode, updated: chat.actions.highlightCode }
@@ -43,6 +48,54 @@ function pickFile() {
 }
 
 defineExpose({ scrollToBottom, focusComposer, pickFile })
+
+// 卡片状态只表达三档：有异常 / 生成中 / 已完成，并始终配文字。
+// 徽标写固定状态词，具体阶段交给流水线和 aria-live，避免徽标随阶段变宽跳动。
+function answerState(message) {
+  if (message.timeline?.some((entry) => entry.type === 'error')) return { key: 'failed', label: '有异常' }
+  if (chat.actions.messageIsStreaming(message)) return { key: 'running', label: '生成中' }
+  return { key: message.done ? 'done' : 'idle', label: message.done ? '已完成' : '已停止' }
+}
+
+function entryState(entry) {
+  if (entry.type === 'error' || ['failed', 'cancelled'].includes(entry.status)) return 'err'
+  if (entry.endedAt == null && entry.status === 'running') return 'run'
+  if (entry.endedAt != null) return 'ok'
+  return 'idle'
+}
+
+// 流水线只取前四步，标签沿用后端下发的阶段文案，前端不改写。
+// 流已经停下时，残留的 running 节点降级为灰点，免得卡片说「已停止」而节点还在脉冲。
+function agentSteps(message) {
+  const streaming = chat.actions.messageIsStreaming(message)
+  return (message.timeline || []).slice(0, 4).map((entry, index) => {
+    const state = entryState(entry)
+    return {
+      key: index,
+      label: chat.actions.progressEntryLabel(entry) || entry.type || '处理中',
+      state: state === 'run' && !streaming ? 'idle' : state,
+    }
+  })
+}
+
+function openSources(message) {
+  if (sourceOpen.value && sourceMessage.value?.id === message.id) {
+    sourceOpen.value = false
+    return
+  }
+  sourceMessage.value = message
+  sourceOpen.value = true
+}
+
+function copyMessage(message) {
+  chat.actions.copyText(chat.actions.normalizeBrandText(message.content))
+}
+
+// 切会话就收起来源面板，避免面板里留着上一轮的内容。
+watch(() => chat.state.activeId, () => {
+  sourceOpen.value = false
+  sourceMessage.value = null
+})
 
 watch([() => chat.state.input, composer], async () => {
   await nextTick()
@@ -88,16 +141,28 @@ onUnmounted(() => {
       <p class="welcome-note">选个模式，然后说说你想做什么</p>
     </div>
 
-    <div v-for="message in chat.state.currentSession?.messages || []" :key="message.id" class="message-row" :class="`message-${message.role}`">
-      <div v-if="message.role === 'assistant'" class="assistant-avatar"><img :src="hotlineAvatar" alt="Hotline" /></div>
+    <div v-for="message in chat.state.currentSession?.messages || []" :key="message.id" class="message-row" :class="message.role === 'user' ? 'message-user' : 'message-assistant'">
       <div class="message-body">
-        <div class="message-meta"><strong>{{ message.role === 'user' ? '你' : 'Hotline' }}</strong><time v-if="message.createdAt">{{ new Date(message.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</time><span v-if="message.role === 'assistant' && message.showTimeline && chat.actions.messageIsStreaming(message)" class="stream-status" role="status" aria-live="polite"><span class="status-dot"></span>{{ chat.actions.progressLabel(message) }}</span></div>
+        <header v-if="message.role === 'assistant'" class="answer-head">
+          <span class="assistant-avatar"><img :src="hotlineAvatar" alt="Hotline" /></span>
+          <span class="answer-ident">
+            <strong>Hotline</strong>
+            <time v-if="message.createdAt">{{ new Date(message.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</time>
+          </span>
+          <span class="answer-state" :data-state="answerState(message).key"><span class="state-dot"></span>{{ answerState(message).label }}</span>
+        </header>
+        <div v-else class="message-meta">
+          <time v-if="message.createdAt">{{ new Date(message.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}</time>
+        </div>
+        <span v-if="message.role === 'assistant' && chat.actions.messageIsStreaming(message)" class="visually-hidden" role="status" aria-live="polite">{{ chat.actions.progressLabel(message) }}</span>
+
         <div v-if="message.fileName" class="message-attachment"><File :size="15" /><span>{{ message.fileName }}</span></div>
 
         <section v-if="message.role === 'assistant' && message.timeline?.length" class="timeline-block">
-          <button class="disclosure-button" type="button" :aria-expanded="message.showTimeline" @click="message.showTimeline = !message.showTimeline">
-            <span class="tl-dot" :class="{ run: chat.actions.messageIsStreaming(message), err: message.timeline.some((entry) => entry.type === 'error'), ok: message.done && !message.timeline.some((entry) => entry.type === 'error') }"></span>
-            <span>{{ message.timeline.some((entry) => entry.type === 'error') ? '执行记录 · 有异常' : (message.done ? '处理过程' : '处理进度') }}</span>
+          <button class="disclosure-button" type="button" :aria-expanded="message.showTimeline" :aria-label="`处理过程，${chat.actions.timelineSummary(message)}`" @click="message.showTimeline = !message.showTimeline">
+            <span class="agent-steps">
+              <span v-for="step in agentSteps(message)" :key="step.key" class="agent-step" :data-state="step.state"><i></i><em>{{ step.label }}</em></span>
+            </span>
             <span class="timeline-count mono-time">{{ chat.actions.timelineSummary(message) }}</span>
             <component :is="message.showTimeline ? ChevronDown : ChevronRight" :size="15" class="disclosure-chevron" />
           </button>
@@ -130,20 +195,20 @@ onUnmounted(() => {
           <p v-else class="clarify-note">已按你的选择继续提问。</p>
         </section>
 
-        <section v-if="message.references?.length" class="references-block">
-          <button class="disclosure-button" type="button" :aria-expanded="message.showReferences" @click="message.showReferences = !message.showReferences"><Link2 :size="15" /><span>参考来源</span><span class="timeline-count">{{ message.references.length }}</span><component :is="message.showReferences ? ChevronDown : ChevronRight" :size="15" class="disclosure-chevron" /></button>
-          <div v-if="message.showReferences" class="reference-list">
-            <a v-for="ref in message.references" :key="ref.url" :href="ref.url" target="_blank" rel="noopener noreferrer" class="reference-link"><span class="reference-copy"><strong>{{ ref.title }}</strong><small>{{ ref.url }}</small></span><ExternalLink :size="14" /></a>
-          </div>
-        </section>
-
         <a v-if="message.pptFile" class="download-link" :href="chat.actions.downloadHref(message.pptFile)" download><Download :size="16" /> 下载生成的 PPT</a>
         <div v-if="message.role === 'assistant' && message.recommend?.length" class="recommendations"><span class="recommend-label">接下来可以</span><button v-for="(question, index) in message.recommend" :key="index" type="button" @click="chat.actions.sendRecommendation(question)">{{ chat.actions.recommendationLabel(question) }}<ArrowUp :size="13" /></button></div>
-        <button v-if="message.role === 'assistant' && message.content" class="copy-message icon-button" type="button" aria-label="复制回答" title="复制回答" @click="chat.actions.copyText(chat.actions.normalizeBrandText(message.content))"><Copy :size="14" /></button>
+
+        <footer v-if="message.role === 'assistant' && (message.content || message.references?.length)" class="answer-foot">
+          <button v-if="message.references?.length" class="answer-action" :class="{ 'is-active': sourceOpen && sourceMessage?.id === message.id }" type="button" :aria-expanded="sourceOpen && sourceMessage?.id === message.id" @click="openSources(message)"><Link2 :size="14" />来源 {{ message.references.length }}</button>
+          <span class="answer-spacer"></span>
+          <button v-if="message.content" class="answer-action" type="button" aria-label="复制回答" title="复制回答" @click="copyMessage(message)"><Copy :size="14" />复制</button>
+        </footer>
       </div>
       <div v-if="message.role === 'user'" class="user-avatar">你</div>
     </div>
   </section>
+
+  <SourcePanel :open="sourceOpen" :references="sourceMessage?.references || []" @close="sourceOpen = false" />
 
   <footer ref="composerArea" class="composer-area">
     <div class="composer-wrap">

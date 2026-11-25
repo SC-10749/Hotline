@@ -13,7 +13,6 @@ const { activeSection, props } = ctxShell
 
 
         <section v-if="activeSection === 'artifacts'" class="resource-page">
-          <div class="release-toolbar"><div><h2>产物与存储</h2></div></div>
           <section class="harness-panel resource-table-panel"><ArtifactList :api-base="props.apiBase" /></section>
 
         </section>

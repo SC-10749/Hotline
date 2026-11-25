@@ -28,16 +28,11 @@ a { text-underline-offset: 3px; }
 }
 .standalone-page { background: var(--canvas); }
 .page-sidebar { background: var(--sidebar); border-color: var(--line-soft); }
-.page-sidebar-header h2 { font-size: 18px; }
 .standalone-header h1 { margin-top: 0; font-size: 24px; }
-.page-empty-state h2 { font-size: 24px; }
-.page-empty-state p { color: var(--text-secondary); font-size: 14px; }
-.page-empty-icon { width: 56px; height: 56px; border: 0; border-radius: 12px; color: var(--text-secondary); background: var(--surface-subtle); }
-.page-empty-icon svg { width: 28px; height: 28px; }
 
 :is(.primary-button, .secondary-button, .danger-button, .button) { min-height: 38px; border-radius: var(--control-radius); font-size: 12px; }
-.primary-button, .page-empty-state .primary-button { color: var(--on-accent); background: var(--accent); border-color: var(--accent); border-radius: var(--control-radius); }
-.primary-button:hover:not(:disabled), .page-empty-state .primary-button:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+.primary-button { color: var(--on-accent); background: var(--accent); border-color: var(--accent); border-radius: var(--control-radius); }
+.primary-button:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
 .secondary-button { color: var(--text-secondary); background: var(--surface); }
 .secondary-button:hover:not(:disabled) { background: var(--surface-hover); }
 .danger-button { color: var(--error); background: var(--error-soft); }
@@ -50,7 +45,6 @@ textarea.text-field { height: auto; min-height: 96px; padding-block: 10px; line-
 .plugins-page { align-content: start; }
 .text-action { display: inline-flex; min-height: 34px; align-items: center; justify-content: center; gap: 5px; padding: 0 8px; border: 0; border-radius: var(--control-radius); color: var(--text-secondary); background: transparent; font-size: 12px; cursor: pointer; }
 .text-action:hover:not(:disabled) { background: var(--surface-hover); }
-.plugin-state { color: var(--success); }
 .profile-settings-content { min-width: 0; }
 .settings-actions { margin-top: 4px; }
 
@@ -78,8 +72,6 @@ textarea.text-field { height: auto; min-height: 96px; padding-block: 10px; line-
   .harness-shell .harness-sidebar { height: calc(100dvh - 52px - env(safe-area-inset-bottom)); }
 }
 @media (max-width: 700px) {
-  .plugin-row { grid-template-columns: minmax(0, 1fr); gap: 10px; }
-  .plugin-row-actions { flex-wrap: wrap; }
   .standalone-header { gap: 12px; flex-wrap: wrap; }
   .profile-settings-content .dialog-actions { justify-content: flex-start; }
 }

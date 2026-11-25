@@ -1,6 +1,6 @@
 ---
 name: hotline-tdd
-description: 把需求条目变成可运行的测试：先列测试清单，再按 RED→GREEN 落地，最后按仓库规定的检查交付。行为变更与缺陷修复也用它。
+description: Hotline TDD（测试驱动开发）：把需求条目变成先失败的测试，再按 RED→GREEN 实现并跑交付检查。
 ---
 
 # Hotline TDD

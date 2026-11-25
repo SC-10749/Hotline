@@ -20,7 +20,6 @@
 :where(.harness-shell) .nav-link > svg { flex: 0 0 auto; }
 :where(.harness-shell) .nav-link span { min-width: 0; flex: 1; }
 :where(.harness-shell) .nav-link small { min-width: 22px; color: var(--h-muted); font-size: 11px; text-align: right; }
-:where(.harness-shell) .health-mini, :where(.harness-shell) .machine-led { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--success); }
 :where(.harness-shell) .user-avatar, :where(.harness-shell) .avatar-small { display: grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border: 1px solid var(--line); border-radius: 50%; color: var(--text-secondary); background: var(--surface); font-size: 11px; font-weight: 700; }
 :where(.harness-shell) .main-surface { display: flex; min-width: 0; min-height: 100dvh; flex-direction: column; }
 :where(.harness-shell) .topbar { position: sticky; z-index: 3; top: 0; display: flex; height: 55px; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 16px; padding: 0 28px; border-bottom: 1px solid var(--h-line-soft); background: var(--surface); }
@@ -29,10 +28,10 @@
 :where(.harness-shell) .breadcrumbs strong { color: var(--h-text); font-weight: 600; }
 :where(.harness-shell) .crumb-slash { color: var(--muted); }
 :where(.harness-shell) .topbar-actions { gap: 9px; }
-:where(.harness-shell) .demo-label { display: inline-flex; align-items: center; gap: 6px; margin-right: 6px; color: var(--warning); font-size: 11px; white-space: nowrap; }
-:where(.harness-shell) .demo-label > span { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); }
-:where(.harness-shell) .demo-label.planned { color: var(--h-muted); }
-:where(.harness-shell) .demo-label.planned > span { background: var(--surface-hover); }
+:where(.harness-shell) .demo-label { display: inline-flex; align-items: center; gap: 6px; margin-right: 6px; color: var(--h-muted); font-size: 11px; white-space: nowrap; }
+:where(.harness-shell) .demo-label > span { width: 6px; height: 6px; border-radius: 50%; background: var(--h-green); }
+:where(.harness-shell) .demo-label.demo { color: var(--warning); }
+:where(.harness-shell) .demo-label.demo > span { background: var(--warning); }
 :where(.harness-shell) .top-icon, :where(.harness-shell) .close-mobile, :where(.harness-shell) .mobile-menu { display: inline-grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 5px; color: var(--h-secondary); background: transparent; }
 :where(.harness-shell) .top-icon:hover:not(:disabled), :where(.harness-shell) .mobile-menu:hover:not(:disabled) { border-color: var(--h-line); background: var(--h-hover); }
 :where(.harness-shell) .command-shortcut { display: flex; height: 31px; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid var(--h-line); border-radius: 5px; color: var(--h-secondary); background: var(--surface); font-size: 11px; }
@@ -66,13 +65,6 @@
 :where(.harness-shell) .release-kpis span, :where(.harness-shell) .release-kpis small { color: var(--h-muted); font-size: 11px; }
 :where(.harness-shell) .release-kpis strong { color: var(--h-text); font-family: Consolas, monospace; font-size: 20px; }
 :where(.harness-shell) .release-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(260px, .8fr); gap: 12px; margin-bottom: 12px; }
-:where(.harness-shell) .release-table { overflow-x: auto; }
-:where(.harness-shell) .release-table-head, :where(.harness-shell) .release-row { display: grid; grid-template-columns: minmax(130px, 1.4fr) 90px 90px 60px 70px 45px; gap: 8px; align-items: center; min-width: 560px; padding: 0 13px; }
-:where(.harness-shell) .release-table-head { min-height: 32px; color: var(--h-muted); background: var(--surface); font-size: 11px; }
-:where(.harness-shell) .release-row { min-height: 58px; border-top: 1px solid var(--h-line-soft); color: var(--h-secondary); font-size: 11px; }
-:where(.harness-shell) .release-row > span:first-child { display: grid; gap: 3px; }
-:where(.harness-shell) .release-row strong { color: var(--h-text); }
-:where(.harness-shell) .release-row small { color: var(--h-muted); }
 :where(.harness-shell) .release-form { display: grid; gap: 10px; padding: 0 14px 14px; }
 :where(.harness-shell) .release-form label { display: grid; gap: 5px; color: var(--h-secondary); font-size: 11px; }
 :where(.harness-shell) .release-form input { padding: 8px 9px; border: 1px solid var(--h-line); border-radius: 4px; color: var(--h-text); background: var(--surface); font: inherit; }
@@ -85,20 +77,8 @@
 :where(.harness-shell) .release-gate-result { color: var(--warning); font-size: 11px; }
 :where(.harness-shell) .release-gate-result.passed { color: var(--success); }
 :where(.harness-shell) .release-history { margin-bottom: 12px; }
-:where(.harness-shell) .release-history-list { overflow-x: auto; }
-:where(.harness-shell) .release-history-row { display: grid; grid-template-columns: 145px minmax(120px, 1fr) minmax(150px, 1.1fr) 90px 150px; gap: 10px; align-items: center; min-width: 600px; min-height: 48px; padding: 0 13px; border-top: 1px solid var(--h-line-soft); color: var(--h-secondary); font-size: 11px; }
-:where(.harness-shell) .release-history-row strong { color: var(--h-text); }
-:where(.harness-shell) .release-history-row code { color: var(--h-muted); }
-:where(.harness-shell) .release-empty { display: grid; min-height: 120px; place-items: center; gap: 8px; color: var(--h-muted); font-size: 11px; }
 :where(.harness-shell) .resource-table-panel { margin-bottom: 12px; }
-:where(.harness-shell) .resource-table { overflow-x: auto; }
-:where(.harness-shell) .resource-table-head, :where(.harness-shell) .resource-row { display: grid; grid-template-columns: minmax(180px, 1.6fr) 100px minmax(120px, 1fr) 80px 55px; gap: 10px; align-items: center; min-width: 570px; padding: 0 13px; }
-:where(.harness-shell) .resource-table-head { min-height: 32px; color: var(--h-muted); background: var(--surface); font-size: 11px; }
-:where(.harness-shell) .resource-row { min-height: 62px; border-top: 1px solid var(--h-line-soft); color: var(--h-secondary); font-size: 11px; }
-:where(.harness-shell) .resource-row > span:first-child { display: grid; gap: 4px; }
-:where(.harness-shell) .resource-row strong { color: var(--h-text); }
-:where(.harness-shell) .resource-row small { color: var(--h-muted); }
-:where(.harness-shell) .resource-table-head.workspace-cols, :where(.harness-shell) .resource-row.workspace-cols { grid-template-columns: minmax(180px, 1.4fr) minmax(150px, 1.2fr) 100px 80px 55px; }
+/* 每张表的列数必须与表头单元格数一致；此处按表登记列宽，避免多余列掉到第二行 */
 @media (max-width: 840px) { :where(.harness-shell) .release-kpis { grid-template-columns: repeat(2, 1fr); } :where(.harness-shell) .release-grid { grid-template-columns: 1fr; } }
 :where(.harness-shell) .heading-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }
 :where(.harness-shell) .button { display: inline-flex; min-height: 36px; align-items: center; justify-content: center; gap: 7px; padding: 0 11px; border: 1px solid var(--h-line); border-radius: 5px; background: var(--h-surface); font-size: 11px; font-weight: 600; transition: background-color 130ms ease-out, border-color 130ms ease-out, color 130ms ease-out; }
@@ -123,7 +103,6 @@
 :where(.harness-shell) .overview-stat > small { display: flex; min-width: 0; align-items: center; gap: 5px; overflow: hidden; color: var(--h-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 :where(.harness-shell) .overview-stat .positive { color: var(--h-green); }
 :where(.harness-shell) .stat-warn { color: var(--h-warning) !important; }
-:where(.harness-shell) .status-inline { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
 :where(.harness-shell) .run-workbench { display: grid; min-width: 0; grid-template-columns: minmax(235px, .82fr) minmax(390px, 1.65fr) minmax(245px, .9fr); align-items: stretch; overflow: hidden; border: 1px solid var(--h-line); border-radius: 6px; background: var(--h-surface); }
 :where(.harness-shell) .run-workbench.execution-live { grid-template-columns: minmax(230px, .75fr) minmax(0, 1.7fr); }
 :where(.harness-shell) .execution-text { white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; background: var(--surface-subtle); font-size: 12px; line-height: 1.6; }
@@ -135,7 +114,7 @@
 :where(.harness-shell) .run-list-panel, :where(.harness-shell) .run-detail-panel { min-width: 0; }
 :where(.harness-shell) .run-list-panel { display: flex; min-height: 570px; flex-direction: column; border-right: 1px solid var(--h-line); }
 :where(.harness-shell) .panel-heading { display: flex; min-height: 67px; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; }
-:where(.harness-shell) .panel-heading h2 { margin: 0; font-size: 13px; font-weight: 650; }
+:where(.harness-shell) .panel-heading h2, :where(.harness-shell) .panel-heading h3 { margin: 0; font-size: 13px; font-weight: 650; }
 :where(.harness-shell) .panel-heading > div > span { display: block; margin-top: 4px; color: var(--h-muted); font-size: 11px; }
 :where(.harness-shell) .run-list-tools { padding: 10px 11px 8px; border-bottom: 1px solid var(--h-line-soft); }
 :where(.harness-shell) .run-search { display: flex; height: 32px; align-items: center; gap: 7px; padding: 0 8px; border: 1px solid var(--h-line); border-radius: 4px; color: var(--h-muted); background: var(--surface); }
@@ -155,7 +134,7 @@
 :where(.harness-shell) .run-detail-top { display: flex; min-height: 97px; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 16px 12px; }
 :where(.harness-shell) .detail-title-group { min-width: 0; }
 :where(.harness-shell) .detail-run-id { display: flex; align-items: center; gap: 7px; color: var(--h-muted); font: 10px Consolas, monospace; }
-:where(.harness-shell) .detail-title-group h2 { overflow: hidden; margin: 7px 0 4px; font-size: 14px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+:where(.harness-shell) .detail-title-group h2, :where(.harness-shell) .detail-title-group h3 { overflow: hidden; margin: 7px 0 4px; font-size: 14px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 :where(.harness-shell) .detail-toolbar { display: flex; flex: 0 0 auto; align-items: center; gap: 3px; }
 :where(.harness-shell) .detail-toolbar .button { min-height: 31px; padding: 0 8px; font-size: 11px; }
 :where(.harness-shell) .detail-tabs { display: flex; min-height: 42px; gap: 15px; overflow-x: auto; padding: 0 16px; border-top: 1px solid var(--h-line-soft); border-bottom: 1px solid var(--h-line); scrollbar-width: thin; }
@@ -172,17 +151,10 @@
 :where(.harness-shell) .section-title-row { display: flex; min-height: 60px; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 15px; border-bottom: 1px solid var(--h-line-soft); }
 :where(.harness-shell) .section-title-row h2 { margin: 0; font-size: 12px; font-weight: 650; }
 :where(.harness-shell) .section-title-row > div > span { display: block; margin-top: 4px; color: var(--h-muted); font-size: 11px; }
-:where(.harness-shell) .machine-table { min-width: 650px; }
-:where(.harness-shell) .machine-section { overflow-x: auto; }
-:where(.harness-shell) .machine-header, :where(.harness-shell) .machine-row { display: grid; min-width: 650px; grid-template-columns: 1.15fr 1.35fr .8fr 1.1fr .8fr 1fr; align-items: center; column-gap: 12px; padding: 0 15px; }
-:where(.harness-shell) .machine-header { min-height: 33px; color: var(--h-muted); background: var(--surface); font-size: 11px; }
-:where(.harness-shell) .machine-row { min-height: 42px; border-top: 1px solid var(--h-line-soft); color: var(--h-secondary); font-size: 11px; }
-:where(.harness-shell) .machine-row strong { display: flex; align-items: center; gap: 7px; color: var(--h-text); font-size: 11px; font-weight: 600; }
-:where(.harness-shell) .machine-led.offline, :where(.harness-shell) .health-mini.offline { background: var(--surface-hover); }
-:where(.harness-shell) .health-mini { display: inline-block; width: 6px; height: 6px; margin-right: 5px; vertical-align: 1px; }
-:where(.harness-shell) .machine-row small { color: var(--h-muted); font-size: 11px; }
+:where(.harness-shell) .machine-offline-note { display: flex; align-items: center; justify-content: flex-start; gap: 14px; padding: 9px 15px; border-top: 1px solid var(--h-line-soft); color: var(--h-muted); font-size: 11px; }
 :where(.harness-shell) .page-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 7px 16px; padding: 12px 2px 0; color: var(--h-muted); font-size: 11px; }
 :where(.harness-shell) .footer-health { display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; background: var(--warning); }
+:where(.harness-shell) .footer-health.live { background: var(--h-green); }
 :where(.harness-shell) .toast-message { position: fixed; z-index: 10; right: 24px; bottom: 22px; display: flex; min-height: 42px; align-items: center; gap: 9px; padding: 0 14px; border: 1px solid var(--h-line); border-radius: 5px; background: var(--surface); box-shadow: 0 5px 20px rgba(36, 37, 34, 0.09); font-size: 11px; }
 :where(.harness-shell) .toast-message svg { color: var(--h-green); }
 :where(.harness-shell) .mobile-scrim { display: none; }
@@ -232,7 +204,7 @@
   :where(.harness-shell) .run-detail-panel { min-height: 0; border-bottom: 1px solid var(--h-line); }
   :where(.harness-shell) .run-detail-top { min-height: 86px; padding: 11px; }
   :where(.harness-shell) .detail-toolbar .button { min-height: 32px; padding: 0 7px; font-size: 11px; }
-  :where(.harness-shell) .detail-title-group h2 { max-width: 58vw; font-size: 12px; }
+  :where(.harness-shell) .detail-title-group h2, :where(.harness-shell) .detail-title-group h3 { max-width: 58vw; font-size: 12px; }
   :where(.harness-shell) .detail-tabs { gap: 16px; padding: 0 12px; }
   :where(.harness-shell) .detail-scroll { padding: 12px; }
   :where(.harness-shell) .machine-section { margin-top: 13px; }
@@ -266,17 +238,14 @@
 :where(.harness-shell) .evaluation-tabs button:hover:not(:disabled), :where(.harness-shell) .evaluation-tabs button.active { color: var(--h-text); background: var(--surface-hover); }
 :where(.harness-shell) .evaluation-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }:where(.harness-shell) .evaluation-kpis > div { display: grid; gap: 5px; padding: 15px 16px; border-right: 1px solid var(--line); }:where(.harness-shell) .evaluation-kpis > div:last-child { border-right: 0; }:where(.harness-shell) .evaluation-kpis span, :where(.harness-shell) .evaluation-kpis small { color: var(--muted); font-size: 11px; }:where(.harness-shell) .evaluation-kpis strong { color: var(--h-text); font: 600 23px Consolas, monospace; }:where(.harness-shell) .evaluation-kpis small.positive { color: var(--success); }:where(.harness-shell) .evaluation-kpis strong.stat-warn { color: var(--warning); }
 :where(.harness-shell) .evaluation-health, :where(.harness-shell) .evaluation-datasets { min-width: 0; }
-:where(.harness-shell) .gate-row { display: grid; grid-template-columns: 1fr auto 16px; align-items: center; gap: 8px; padding: 12px 17px; border-top: 1px solid var(--line); color: var(--text-secondary); font-size: 11px; }:where(.harness-shell) .gate-row strong { color: var(--success); font: 600 12px Consolas, monospace; }:where(.harness-shell) .gate-row svg { color: var(--success); }:where(.harness-shell) .gate-note { display: flex; gap: 7px; margin: 9px 17px 16px; padding: 9px; color: var(--muted); background: var(--surface-subtle); font-size: 11px; line-height: 1.5; }:where(.harness-shell) .gate-note svg { flex: 0 0 auto; color: var(--muted); }
-:where(.harness-shell) .dataset-table { overflow-x: auto; padding: 0 17px 8px; }:where(.harness-shell) .dataset-head, :where(.harness-shell) .dataset-row { display: grid; grid-template-columns: minmax(180px, 1.5fr) minmax(100px, .8fr) 70px 100px 100px 90px 18px; align-items: center; gap: 12px; min-width: 720px; }:where(.harness-shell) .dataset-head { padding: 0 10px 8px; color: var(--muted); font-size: 11px; }:where(.harness-shell) .dataset-row { width: 100%; padding: 13px 10px; border: 0; border-top: 1px solid var(--line); color: var(--text-secondary); background: transparent; cursor: pointer; font: inherit; font-size: 11px; text-align: left; }:where(.harness-shell) .dataset-row:hover:not(:disabled) { background: var(--surface-subtle); }:where(.harness-shell) .dataset-row > strong { color: var(--text); font-size: 12px; }:where(.harness-shell) .dataset-type { color: var(--muted); }:where(.harness-shell) .dataset-pass { color: var(--success); font-family: Consolas, monospace; }:where(.harness-shell) .dataset-pass small { margin-left: 3px; color: var(--success); font: 10px var(--h-font); }:where(.harness-shell) .dataset-state { display: inline-flex; align-items: center; gap: 5px; color: var(--success); }:where(.harness-shell) .dataset-state i { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }:where(.harness-shell) .dataset-state.running i { box-shadow: 0 0 0 3px #d9f1df; }:where(.harness-shell) .dataset-state.attention { color: var(--warning); }:where(.harness-shell) .dataset-state.attention i { background: var(--warning); }
-:where(.harness-shell) .evaluation-subpage { min-height: 430px; }:where(.harness-shell) .evaluation-dataset-card-wrap { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; }:where(.harness-shell) .evaluation-dataset-card-wrap .evaluation-dataset-card { border-top: 0; }:where(.harness-shell) .evaluation-dataset-cards, :where(.harness-shell) .evaluation-config-list, :where(.harness-shell) .evaluation-report-list { padding: 0 17px 17px; }:where(.harness-shell) .evaluation-dataset-card, :where(.harness-shell) .evaluation-report-row { display: grid; grid-template-columns: 1fr auto 18px; align-items: center; gap: 14px; width: 100%; padding: 17px 12px; border: 0; border-top: 1px solid var(--line); color: var(--text-secondary); background: transparent; cursor: pointer; font: inherit; text-align: left; }:where(.harness-shell) .evaluation-dataset-card:hover:not(:disabled), :where(.harness-shell) .evaluation-report-row:hover:not(:disabled) { background: var(--surface-subtle); }:where(.harness-shell) .evaluation-dataset-card div, :where(.harness-shell) .evaluation-report-row { min-width: 0; }:where(.harness-shell) .evaluation-dataset-card strong { display: block; color: var(--text); font-size: 13px; }:where(.harness-shell) .evaluation-dataset-card span { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }:where(.harness-shell) .evaluation-dataset-card b, :where(.harness-shell) .evaluation-report-row b { color: var(--success); font: 600 13px Consolas, monospace; }:where(.harness-shell) .evaluation-config-list label { display: grid; grid-template-columns: 18px 1fr auto; align-items: center; gap: 10px; padding: 15px 12px; border-top: 1px solid var(--line); cursor: pointer; }:where(.harness-shell) .evaluation-config-list input { accent-color: var(--accent); }:where(.harness-shell) .evaluation-config-list span { display: grid; gap: 3px; }:where(.harness-shell) .evaluation-config-list strong { color: var(--text); font-size: 12px; }:where(.harness-shell) .evaluation-config-list small { color: var(--muted); font-size: 11px; }:where(.harness-shell) .evaluation-config-list em { color: var(--success); font-size: 11px; font-style: normal; }:where(.harness-shell) .evaluation-report-row strong { color: var(--text); font-size: 12px; }:where(.harness-shell) .evaluation-report-row > span:not(.dataset-state) { color: var(--muted); font-size: 11px; }
+:where(.harness-shell) .gate-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 12px 17px; border-top: 1px solid var(--line); color: var(--text-secondary); font-size: 11px; }:where(.harness-shell) .gate-row > .ui-status { justify-self: end; }:where(.harness-shell) .gate-note { display: flex; gap: 7px; margin: 9px 17px 16px; padding: 9px; color: var(--muted); background: var(--surface-subtle); font-size: 11px; line-height: 1.5; }:where(.harness-shell) .gate-note svg { flex: 0 0 auto; color: var(--muted); }:where(.harness-shell) .gate-note button { flex: 0 0 auto; margin-left: auto; }
+:where(.harness-shell) .evaluation-subpage { min-height: 430px; }
 @media (max-width: 700px) { :where(.harness-shell) .evaluation-toolbar { align-items: flex-start; flex-direction: column; }:where(.harness-shell) .evaluation-tabs { width: 100%; overflow-x: auto; }:where(.harness-shell) .evaluation-kpis { grid-template-columns: repeat(2, 1fr); }:where(.harness-shell) .evaluation-kpis > div:nth-child(2) { border-right: 0; }:where(.harness-shell) .evaluation-kpis > div:nth-child(-n+2) { border-bottom: 1px solid var(--line); } }
 :where(.harness-shell) .execution-pagination { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px; border-top: 1px solid var(--h-line); font-size: 12px; }
 :where(.harness-shell) .execution-pagination span { font-variant-numeric: tabular-nums; }
 :where(.harness-shell) .execution-stream-state { color: var(--h-muted); font-size: 12px; }
 :where(.harness-shell) .evaluation-progress { color: var(--h-secondary); font-size: 11px; }
-:where(.harness-shell) .gate-row.failed strong { color: var(--error); }:where(.harness-shell) .gate-row.failed svg { color: var(--error); }
-:where(.harness-shell) .evaluation-report-row { grid-template-columns: minmax(150px, 1.3fr) 1fr 90px 120px 18px; }
-:where(.harness-shell) .resource-table.wide-actions .resource-table-head, :where(.harness-shell) .resource-table.wide-actions .resource-row { grid-template-columns: minmax(180px, 1.6fr) 100px minmax(110px, 1fr) 90px 150px; }
+
 :where(.harness-shell) .harness-detail-block { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--h-line-soft); }
 :where(.harness-shell) .harness-detail-block > strong { display: block; margin-bottom: 8px; color: var(--h-text); font-size: 12px; }
 :where(.harness-shell) .harness-detail-rows { display: grid; gap: 6px; }
@@ -293,21 +262,11 @@
 :where(.harness-shell) .text-action.danger { color: var(--error); }
 :where(.harness-shell) .dataset-snapshot-list { display: grid; gap: 8px; margin-top: 16px; }
 :where(.harness-shell) .dataset-snapshot-list > strong { color: var(--h-text); font-size: 12px; }
-:where(.harness-shell) .dataset-snapshot-list .release-empty { min-height: 80px; }
 /* 发布记录审计表 */
-:where(.harness-shell) .release-record-list { overflow-x: auto; }
-:where(.harness-shell) .release-record-head, :where(.harness-shell) .release-record-row { display: grid; grid-template-columns: 140px minmax(140px, 1.2fr) 80px 90px 70px 130px 130px 110px minmax(180px, 1.4fr); gap: 10px; align-items: center; min-width: 1080px; padding: 0 13px; }
-:where(.harness-shell) .release-record-head { min-height: 32px; color: var(--h-muted); background: var(--surface); font-size: 11px; }
-:where(.harness-shell) .release-record-row { min-height: 52px; border-top: 1px solid var(--h-line-soft); color: var(--h-secondary); font-size: 11px; }
-:where(.harness-shell) .release-record-row > span:nth-child(2) { display: grid; gap: 3px; }
-:where(.harness-shell) .release-record-row strong { color: var(--h-text); }
-:where(.harness-shell) .release-record-row small { color: var(--h-muted); }
-:where(.harness-shell) .release-record-row code { color: var(--h-muted); font-size: 11px; overflow-wrap: anywhere; }
 :where(.harness-shell) .release-record-checks { display: grid; gap: 3px; }
 :where(.harness-shell) .release-record-checks span { color: var(--success); }
 :where(.harness-shell) .release-record-checks span.failed { color: var(--warning); }
 /* 灰度推进列 */
-:where(.harness-shell) .release-table.rollout-table .release-table-head, :where(.harness-shell) .release-table.rollout-table .release-row { grid-template-columns: minmax(130px, 1.4fr) 90px 90px 60px 70px minmax(170px, 1.1fr); }
 :where(.harness-shell) .rollout-advance { display: flex; align-items: center; gap: 10px; }
 :where(.harness-shell) .rollout-advance input { width: 68px; padding: 6px 8px; border: 1px solid var(--h-line); border-radius: 4px; color: var(--h-text); background: var(--surface); font: inherit; font-size: 11px; }
 /* 门禁阈值与发布策略表单 */

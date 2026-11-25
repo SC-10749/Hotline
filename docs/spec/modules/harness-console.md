@@ -121,6 +121,24 @@
 - `python_backend/api/routers/observability.py:_open_readonly` —— 只读连接与缺失兜底；同文件 `_event_row/_summary` —— 事件行归一化与摘要截断
 - `python_backend/modules/execution/store.py:event_level/event_tool` —— 事件级别与工具名提取
 
+## 控制台页面层级与状态标注
+
+### 入口
+- 壳层：`frontend/src/HarnessApp.vue`（14 个 section 的菜单、来源标签、刷新动作与状态映射表 `sectionStatus`）
+- 面板：`frontend/src/modules/harness/panels/*Panel.vue`（每个 section 只负责自己的内容）；`frontend/src/modules/harness/useResources.js`（节点、审批、Trace 三类连接标志）
+- 样式：`frontend/src/harness.css`（表格列模板类 `machine-cols/approval-cols/trace-run-cols/trace-event-cols/trend-cols/mcp-cols/workspace-cols`、`harness-panel-actions`、`footer-health.live`）
+
+### 现状
+- 一屏只有一个一级标题：壳层 `page-heading-row h1` 输出菜单名，面板内标题从 `h3` 起，主操作按钮并入 `harness-panel-heading` 右侧的 `harness-panel-actions`。
+- 顶栏来源标签按 section 映射到真实连接标志，只有 `live`（成功色）与 `demo`（警示色）两档；页面内不再出现「未接入运行 API」横幅或「演示数据」说明。
+- `useResources.js` 的 `machinesConnected/approvalsConnected/traceConnected` 是普通 ref，由各自请求成败决定；`resourceConnected` 是派生 computed，只读。
+- 每张表的栅格列数等于表头单元格数，列宽按语义登记成 class，不写行内样式。
+- 运行总览的节点表在线优先、离线折叠，并给出在线/离线计数与「管理机器」入口。
+- AgentsPanel 与 WorkspacesPanel 各只负责自己的 section，互不渲染对方内容。
+
+### 边界
+- `machines` 与 `approvals` 共用 ResourcesPanel，按 `activeSection` 分支切换；若两者差异变大再拆独立面板。
+
 ## 代码地图资源
 ### 入口
 - `python_backend/api/routers/code_map.py:create_code_map_router` —— 代码地图静态资源路由

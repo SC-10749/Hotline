@@ -722,10 +722,6 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
 .standalone-page:has(.harness-shell.is-embedded) > .page-sidebar { display: none; }
 .standalone-page:has(.harness-shell.is-embedded) > .page-main { min-width: 0; min-height: 100dvh; grid-template-rows: minmax(0, 1fr); padding: 0; }
 .page-sidebar { min-width: 0; min-height: 100%; border-right: 1px solid var(--line); background: var(--surface-subtle); }
-.page-sidebar-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.page-sidebar-header h2 { margin: 0; color: var(--text); font-weight: 650; }
-.page-sidebar-actions { display: flex; gap: 3px; }
-.page-sidebar-actions .icon-button { color: var(--muted); }
 .page-create { display: flex; width: 100%; align-items: center; margin-top: 18px; border: 0; color: var(--text-secondary); background: transparent; cursor: pointer; text-align: left; }
 .page-create:hover:not(:disabled) { color: var(--text); }
 .page-create:disabled { color: var(--muted); cursor: not-allowed; }
@@ -736,12 +732,7 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
 .standalone-header { display: flex; max-width: 920px; align-items: flex-start; justify-content: space-between; margin: 0 auto; padding-bottom: 26px; border-bottom: 1px solid var(--line-soft); }
 .page-main .standalone-header { width: 100%; max-width: none; margin: 0; padding: 0 0 18px; border-bottom: 1px solid var(--line); }
 .standalone-header h1 { margin: 7px 0 0; color: var(--text); font-weight: 600; }
-.page-empty-state { display: flex; align-self: center; justify-self: center; width: min(100%, 560px); flex-direction: column; align-items: center; padding: 40px 20px 90px; text-align: center; }
-.page-empty-icon { display: grid; width: 80px; height: 80px; place-items: center; border: 2px solid var(--line); border-radius: 50%; color: var(--text-secondary); background: var(--surface-subtle); }
-.page-empty-state h2 { margin: 22px 0 0; color: var(--text); font-weight: 500; letter-spacing: -0.03em; }
-.page-empty-state p { max-width: 520px; margin: 8px 0 28px; color: var(--muted); line-height: 1.6; }
-.page-empty-state .primary-button { min-width: 128px; justify-content: center; border-radius: 999px; color: var(--on-accent); background: var(--accent); }
-@media (max-width: 760px) { .page-sidebar { min-height: auto; border-right: 0; border-bottom: 1px solid var(--line); } .page-main { min-height: calc(100dvh - 150px); } .page-empty-state { padding-bottom: 30px; } }
+@media (max-width: 760px) { .page-sidebar { min-height: auto; border-right: 0; border-bottom: 1px solid var(--line); } .page-main { min-height: calc(100dvh - 150px); } }
 
 .app-shell.standalone-page-active { grid-template-columns: 56px minmax(0, 1fr); }
 .app-shell.standalone-page-active > .sidebar { display: none; }
@@ -806,15 +797,11 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
 .composer-hint { font-size: 10px; }
 .composer-hint kbd { font-size: 10px; }
 .standalone-page { grid-template-columns: 248px minmax(0, 1fr); }
+.standalone-page:not(:has(> .page-sidebar)) { grid-template-columns: minmax(0, 1fr); }
 .page-sidebar { padding: 20px 14px; }
-.page-sidebar-header h2 { font-size: 20px; }
-.page-sidebar-actions .icon-button { width: 32px; height: 32px; }
 .page-create, .page-subitem { min-height: 40px; gap: 10px; padding: 8px 10px; font-size: 14px; }
 .page-subitem span { font-size: 12px; }
 .standalone-header h1 { font-size: 30px; }
-.page-empty-state h2 { font-size: 30px; }
-.page-empty-state p { font-size: 17px; }
-.page-empty-state .primary-button { min-height: 44px; font-size: 14px; }
 @media (max-width: 760px) {
   .standalone-page { grid-template-columns: 1fr; }
   .sidebar-top { padding: 16px 12px 0; }
@@ -825,8 +812,6 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
   .composer-box textarea { min-height: 26px; font-size: 14px; }
   .page-sidebar { padding: 16px; }
   .page-main { padding: 18px 14px; }
-  .page-empty-state h2 { font-size: 25px; }
-  .page-empty-state p { font-size: 15px; }
 }
 @media (max-width: 560px) {
   .topbar { padding-inline: 11px; }
@@ -849,8 +834,6 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
   .attach-button, .send-button { width: 30px; height: 30px; }
   .page-main { padding: 18px 12px; }
   .standalone-header h1 { font-size: 25px; }
-  .page-empty-state h2 { font-size: 24px; }
-  .page-empty-state p { font-size: 14px; }
 }
 
 /* Keep the chat canvas and composer area on the same surface. */
@@ -875,28 +858,16 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
 
 
 /* Harness control-plane surfaces shared with the Vue Harness app. */
-.harness-panel { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
-.harness-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 17px 12px; }
-.harness-panel-heading h3 { margin: 0; color: var(--text); font-size: 14px; font-weight: 650; }
-.harness-panel-heading p { margin: 4px 0 0; color: var(--muted); font-size: 10px; }
 .run-list { padding: 0 8px 8px; }
 
 /* 插件列表与虚拟桌宠：真实数据页面，替代原先的空壳占位 */
 .plugins-page { display: grid; gap: 16px; }
-.plugin-list { display: grid; gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-.plugin-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 13px 16px; border-top: 1px solid var(--line); transition: background-color 140ms var(--ease); }
-.plugin-row:hover { background: var(--surface-subtle); }
-.plugin-row:first-child { border-top: 0; }
-.plugin-row-main { display: grid; min-width: 0; gap: 3px; }
-.plugin-row-title { display: flex; min-width: 0; align-items: center; gap: 8px; margin: 0; }
-.plugin-row-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 2px; }
-.plugin-row-title strong { overflow: hidden; color: var(--text); font-size: 13px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
-.plugin-row-desc, .plugin-row-meta { margin: 0; overflow: hidden; overflow-wrap: anywhere; }
-.plugin-row-desc { display: -webkit-box; color: var(--text-secondary); font-size: 12px; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.plugin-row-meta { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+/* 独立页内容区收口宽度：极宽屏下文案与操作不再被拉到两端 */
+.standalone-page:not(:has(.harness-shell)):not(:has(> .page-sidebar)) > .page-main { width: 100%; max-width: 1200px; margin-inline: auto; }
+/* 页面级空态：成块面板，避免小盒子挤在上方、下方大片留白 */
+.plugins-page > .ui-empty { min-height: 360px; align-content: center; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.page-main > .ui-empty { width: 100%; max-width: 460px; align-self: center; justify-self: center; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 
-.plugin-state { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; color: var(--success); background: var(--success-soft); font-size: 11px; white-space: nowrap; }
-.plugin-state.off { color: var(--muted); background: var(--surface-hover); }
 .pet-options { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
 .pet-option { display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; }
 .pet-option.active { border-color: var(--line); color: var(--success); background: var(--success-soft); }
@@ -937,7 +908,6 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
 .bot-nav-title { overflow: hidden; color: var(--text); font-size: 13px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
 .bot-nav-meta { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .bot-nav-row .switch { padding-right: 8px; }
-.bot-nav-empty { margin: 12px 0 0; padding: 0 10px; color: var(--muted); font-size: 12px; line-height: 1.6; }
 
 /* 右侧：当前启用的机器人占一条名片，其余按网格铺开 */
 .bot-spotlight { padding: 18px 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-subtle); }
@@ -954,7 +924,6 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
 .bot-card-top { display: flex; min-width: 0; align-items: center; gap: 9px; }
 .bot-card-name { overflow: hidden; flex: 1; color: var(--text); font-size: 13px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
 .bot-card-skills { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.bot-overview-empty { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
 
 /* 右侧详情：标题行 + 技能标签 + 操作 */
 .bot-detail { display: grid; gap: 18px; align-content: start; }
@@ -983,7 +952,6 @@ body, .app-shell, .workspace, .message-list { color: var(--text); background: va
 .bot-ci-head strong { flex: 1; color: var(--text); font-size: 13px; font-weight: 600; }
 .bot-ci-meta { margin: 0; color: var(--muted); font-size: 11px; }
 .bot-ci-hint { margin: 0; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
-.plugin-state.off { color: var(--muted); }
 /* 角色头像：圆形裁切 + 主题色描边，角标是贴在头像右下角的角色贴图 */
 .bot-avatar { width: 20px; height: 20px; flex: 0 0 auto; border-radius: 50%; object-fit: cover; object-position: center 32%; box-shadow: 0 0 0 1.5px var(--bot-accent, var(--line)); transition: transform .15s ease; }
 .bot-nav-name:hover .bot-avatar { transform: scale(1.08); }

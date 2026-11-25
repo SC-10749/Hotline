@@ -171,7 +171,7 @@ uv pip install --python eval/.venv/Scripts/python.exe -r eval/requirements-tools
       <div class="harness-panel-heading"><h3>运行记录</h3><button class="text-action" type="button" @click="refresh">刷新</button></div>
       <p v-if="loading" role="status">正在读取运行记录…</p>
       <p v-else-if="!runs.length" class="benchmark-note">暂无运行。配置输入后开始首次测试。</p>
-      <div v-else class="benchmark-table-wrap"><table class="benchmark-table"><thead><tr><th>开始时间</th><th>运行编号</th><th>状态</th><th>操作</th></tr></thead>
+      <div v-else class="benchmark-table-wrap"><table class="ui-table-real benchmark-table"><thead><tr><th>开始时间</th><th>运行编号</th><th>状态</th><th>操作</th></tr></thead>
         <tbody><tr v-for="run in runs" :key="run.id"><td>{{ formatTime(run.createdAt) }}</td><td><code>{{ run.id.slice(0, 12) }}</code></td><td>{{ labels[run.status] || run.status }}</td><td><button class="text-action" type="button" @click="selected = run">查看结果</button></td></tr></tbody>
       </table></div>
       <div v-if="selected" class="benchmark-result" aria-live="polite">

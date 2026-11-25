@@ -1,12 +1,39 @@
 <script setup>
-import { inject, ref } from 'vue'
-import { Bell, ChevronDown, CircleDot, FolderOpen, Headset, MoreHorizontal, Plus, Search, Trash2, X } from 'lucide-vue-next'
+import { computed, inject, ref } from 'vue'
+import { Bell, CircleDot, FolderOpen, Headset, MoreHorizontal, Plus, Search, Trash2, X } from 'lucide-vue-next'
 import { APP_KEY, CHAT_KEY, WORKSPACES_KEY } from '../app/keys'
 
 const ctx = inject(APP_KEY)
 const chat = inject(CHAT_KEY)
 const workspaces = inject(WORKSPACES_KEY)
 const projectFolderInput = ref(null)
+
+// 历史会话按自然日分组：只用后端返回的真实时间，不猜也不补。
+function sessionTime(session) {
+  const raw = session.createTime || session.updatedAt
+  if (!raw) return null
+  // 后端给的是带微秒的 ISO 时间，截到毫秒再解析，避免个别运行时解析失败。
+  const normalized = String(raw).replace(' ', 'T').replace(/(\.\d{3})\d+/, '$1')
+  const parsed = new Date(normalized)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+const recentGroups = computed(() => {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const yesterday = new Date(today.getTime() - 86400000)
+  const groups = [
+    { key: 'today', label: '今天', items: [] },
+    { key: 'yesterday', label: '昨天', items: [] },
+    { key: 'earlier', label: '更早', items: [] },
+  ]
+  for (const session of chat.state.recentList) {
+    const time = sessionTime(session)
+    const bucket = !time ? 2 : time >= today ? 0 : time >= yesterday ? 1 : 2
+    groups[bucket].items.push(session)
+  }
+  return groups.filter((group) => group.items.length)
+})
 
 // 工作区目录选择：浏览器不提供目录选择事件，只能由隐藏 input 触发。
 function pickFolder() {
@@ -28,6 +55,7 @@ defineExpose({ pickFolder })
           <button class="icon-button mobile-close" type="button" aria-label="关闭会话栏" @click="ctx.mobileSidebarOpen = false"><X :size="18" /></button>
         </div>
       </div>
+      <p class="brand-sub">智能联络中心 · 对话工作台</p>
 
       <nav class="quick-nav" aria-label="快捷入口">
         <button class="nav-item" type="button" @click="chat.actions.newSession"><Plus :size="18" /><span>新对话</span><kbd>Ctrl K</kbd></button>
@@ -63,8 +91,10 @@ defineExpose({ pickFolder })
           </button>
         </div>
       </template>
-      <div class="session-heading recent-heading"><span>最近</span><ChevronDown :size="16" /><span class="recent-heading-actions"><button class="icon-button" type="button" aria-label="最近会话更多"><MoreHorizontal :size="17" /></button><button class="icon-button" type="button" aria-label="新建最近会话" @click="chat.actions.newSession"><Plus :size="17" /></button></span></div>
-      <div v-for="session in chat.state.recentList" :key="session.id" class="session-item task-card" :class="{ active: chat.state.activeId === session.id }">
+      <div class="session-heading recent-heading"><span class="visually-hidden">历史会话</span><span class="recent-heading-actions"><button class="icon-button" type="button" aria-label="最近会话更多"><MoreHorizontal :size="17" /></button><button class="icon-button" type="button" aria-label="新建最近会话" @click="chat.actions.newSession"><Plus :size="17" /></button></span></div>
+      <template v-for="group in recentGroups" :key="group.key">
+      <div class="session-heading group-heading"><span>{{ group.label }}</span></div>
+      <div v-for="session in group.items" :key="session.id" class="session-item task-card" :class="{ active: chat.state.activeId === session.id }">
         <button class="session-select" type="button" @click="chat.actions.selectSession(session.id)">
           <span class="session-dot"><span class="dot ok"></span></span>
           <span class="session-main">
@@ -74,6 +104,7 @@ defineExpose({ pickFolder })
         </button>
         <button v-if="!session.isDraft" class="session-delete icon-button" type="button" :disabled="!!chat.state.deletingId" :aria-label="`删除会话：${session.title}`" @click.stop="chat.actions.deleteConversation(session.id)"><Trash2 :size="15" /></button>
       </div>
+      </template>
       <div v-if="chat.state.recentList.length === 0" class="session-empty">{{ chat.state.searchText ? '没有匹配的会话' : '还没有历史会话' }}</div>
     </nav>
 

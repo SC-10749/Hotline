@@ -16,15 +16,14 @@ const { editingModel, harnessModels, modelDraft, modelError, modelFallbackChain,
 
 
         <section v-if="activeSection === 'models'" class="resource-page">
-          <div class="release-toolbar"><div><h2>模型路由</h2></div><button class="button button-primary" @click="openModelDialog"><Plus :size="14" />登记模型路由</button></div>
           <p v-if="modelsError" role="alert">{{ modelsError }}</p>
           <section class="harness-panel resource-table-panel">
-            <div class="harness-panel-heading"><div><h3>模型路由目录</h3><p>{{ modelRows.length }} 条记录 · {{ modelsConnected ? '已连接目录' : '演示数据' }}</p></div><button class="button button-subtle" @click="refreshModelData">刷新目录</button></div>
-            <div v-if="modelRows.length" class="resource-table wide-actions">
-              <div class="resource-table-head"><span>模型 / 提供商</span><span>路由用途</span><span>备用模型</span><span>登记状态</span><span></span></div>
-              <div v-for="row in modelRows" :key="row.model_id" class="resource-row"><span><strong>{{ row.name }}</strong><small>{{ row.provider || '未指定提供商' }}</small><small v-if="modelTestResults[row.model_id]" :class="modelTestResults[row.model_id].ok ? '' : 'stat-warn'">{{ modelTestResults[row.model_id].ok ? '连接正常' : modelTestResults[row.model_id].message }}</small></span><span>{{ row.route }}</span><span>{{ harnessModels.find(item => item.model_id === row.fallback_model_id)?.name || row.fallback_model_id || '无' }}</span><span>{{ row.status }}</span><span><button class="text-action" :disabled="modelTestBusy === row.model_id || !modelsConnected" :title="modelsConnected ? '测试模型路由连接' : '演示数据，未连接模型目录'" @click="testModelConnection(row)">{{ modelTestBusy === row.model_id ? '测试中…' : '连接测试' }}</button><button class="text-action" @click="openModelDetails(row)">查看</button></span></div>
+            <div class="harness-panel-heading"><div><h3>模型路由目录</h3><p>{{ modelRows.length }} 条记录 · {{ modelsConnected ? '已连接目录' : '未连接模型目录' }}</p></div><div class="harness-panel-actions"><button class="button button-subtle" @click="refreshModelData">刷新目录</button><button class="button button-primary" @click="openModelDialog"><Plus :size="14" />登记模型路由</button></div></div>
+            <div v-if="modelRows.length" class="ui-table ui-cols-generic">
+              <div class="ui-table-head"><span>模型 / 提供商</span><span>路由用途</span><span>备用模型</span><span>登记状态</span><span></span></div>
+              <div v-for="row in modelRows" :key="row.model_id" class="ui-row"><span><strong>{{ row.name }}</strong><small>{{ row.provider || '未指定提供商' }}</small><small v-if="modelTestResults[row.model_id]" :class="modelTestResults[row.model_id].ok ? '' : 'stat-warn'">{{ modelTestResults[row.model_id].ok ? '连接正常' : modelTestResults[row.model_id].message }}</small></span><span>{{ row.route }}</span><span>{{ harnessModels.find(item => item.model_id === row.fallback_model_id)?.name || row.fallback_model_id || '无' }}</span><span>{{ row.status }}</span><span><button class="text-action" :disabled="modelTestBusy === row.model_id || !modelsConnected" :title="modelsConnected ? '测试模型路由连接' : '未连接模型目录'" @click="testModelConnection(row)">{{ modelTestBusy === row.model_id ? '测试中…' : '连接测试' }}</button><button class="text-action" @click="openModelDetails(row)">查看</button></span></div>
             </div>
-            <div v-else class="release-empty"><span>尚未登记模型路由</span><button class="text-action" @click="openModelDialog">登记第一个模型路由</button></div>
+            <div v-else class="ui-empty"><span>尚未登记模型路由</span><button class="text-action" @click="openModelDialog">登记第一个模型路由</button></div>
           </section>
         </section>
       <div v-if="showModelDialog" class="modal-backdrop" @click.self="!modelSaving && (showModelDialog = false)">

@@ -15,27 +15,26 @@ const { bindSelectedCatalogVersion, catalog, catalogBaseVersion, catalogBindBusy
 
 
         <section v-if="activeSection === 'skills'" class="resource-page">
-          <div class="release-toolbar"><div><h2>Skills</h2></div><button class="button button-subtle" @click="refreshActiveSection">刷新目录</button></div>
           <div class="evaluation-tabs" role="group" aria-label="Skill 来源"><button :class="{ active: skillDirectoryTab === 'installed' }" @click="selectSkillDirectory('installed')">本地安装包</button><button :class="{ active: skillDirectoryTab === 'catalog' }" @click="selectSkillDirectory('catalog')">Catalog 版本</button></div>
           <template v-if="skillDirectoryTab === 'installed'">
           <p v-if="skillsError" role="alert">{{ skillsError }}</p>
-          <section class="harness-panel resource-table-panel"><div class="harness-panel-heading"><div><h3>本地 Skill 安装目录</h3><p>{{ skillRows.length }} 条记录 · {{ skillsConnected ? '已连接目录' : '演示数据' }}</p></div></div>
-            <div v-if="skillRows.length" class="resource-table">
-              <div class="resource-table-head"><span>名称 / 说明</span><span>来源文件</span><span>入口</span><span>状态</span><span></span></div>
-              <div v-for="row in skillRows" :key="row.id" class="resource-row"><span><strong>{{ row.name }}</strong><small>{{ row.description || '暂无描述' }}</small></span><span>{{ row.sourceFile || '本地安装包' }}</span><span>{{ row.entry || '—' }}</span><span>{{ row.enabled ? '已启用' : '已停用' }}</span><button class="text-action" @click="openSkillDetails(row)">查看</button></div>
+          <section class="harness-panel resource-table-panel"><div class="harness-panel-heading"><div><h3>本地 Skill 安装目录</h3><p>{{ skillRows.length }} 条记录 · {{ skillsConnected ? '已连接目录' : '未连接 Skill 目录' }}</p></div></div>
+            <div v-if="skillRows.length" class="ui-table ui-cols-generic">
+              <div class="ui-table-head"><span>名称 / 说明</span><span>来源文件</span><span>入口</span><span>状态</span><span></span></div>
+              <div v-for="row in skillRows" :key="row.id" class="ui-row"><span><strong>{{ row.name }}</strong><small>{{ row.description || '暂无描述' }}</small></span><span>{{ row.sourceFile || '本地安装包' }}</span><span>{{ row.entry || '—' }}</span><span>{{ row.enabled ? '已启用' : '已停用' }}</span><button class="text-action" @click="openSkillDetails(row)">查看</button></div>
             </div>
-            <div v-else class="release-empty"><span>尚未安装本地 Skill 包</span></div>
+            <div v-else class="ui-empty"><span>尚未安装本地 Skill 包</span></div>
           </section>
           </template>
           <section v-else class="harness-panel resource-table-panel">
             <div class="harness-panel-heading"><div><h3>Catalog 版本与项目绑定</h3><p>{{ catalog.project || '当前项目' }} · {{ catalogNames.length }} 个技能 · {{ catalog.skills.length }} 个版本</p></div></div>
             <p v-if="catalogError" role="alert">{{ catalogError }}</p>
-            <div v-if="catalogLoading" class="release-empty">正在读取 Catalog…</div>
-            <div v-else-if="catalogNames.length" class="resource-table">
-              <div class="resource-table-head"><span>技能</span><span>版本数</span><span>项目绑定</span><span>灰度状态</span><span></span></div>
-              <div v-for="name in catalogNames" :key="name" class="resource-row"><span><strong>{{ name }}</strong></span><span>{{ catalog.skills.filter(row => row.name === name).length }}</span><span>{{ catalog.bindings.find(row => row.name === name)?.version || '未绑定' }}</span><span>{{ catalog.rollouts.find(row => row.name === name && row.active)?.percentage ?? '—' }}{{ catalog.rollouts.some(row => row.name === name && row.active) ? '%' : '' }}</span><button class="text-action" @click="openCatalogSkill(name)">查看</button></div>
+            <div v-if="catalogLoading" class="ui-empty">正在读取 Catalog…</div>
+            <div v-else-if="catalogNames.length" class="ui-table ui-cols-generic">
+              <div class="ui-table-head"><span>技能</span><span>版本数</span><span>项目绑定</span><span>灰度状态</span><span></span></div>
+              <div v-for="name in catalogNames" :key="name" class="ui-row"><span><strong>{{ name }}</strong></span><span>{{ catalog.skills.filter(row => row.name === name).length }}</span><span>{{ catalog.bindings.find(row => row.name === name)?.version || '未绑定' }}</span><span>{{ catalog.rollouts.find(row => row.name === name && row.active)?.percentage ?? '—' }}{{ catalog.rollouts.some(row => row.name === name && row.active) ? '%' : '' }}</span><button class="text-action" @click="openCatalogSkill(name)">查看</button></div>
             </div>
-            <div v-else class="release-empty">当前没有 Catalog 版本</div>
+            <div v-else class="ui-empty">当前没有 Catalog 版本</div>
           </section>
         </section>
       <div v-if="selectedCatalogName" class="modal-backdrop" @click.self="!catalogDetailBusy && (selectedCatalogName = '')">

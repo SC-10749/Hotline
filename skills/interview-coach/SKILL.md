@@ -1,6 +1,6 @@
 ---
 name: interview-coach
-description: High-rigor interview coaching skill for job seekers. Use when someone wants structured prep, transcript analysis, practice drills, storybank management, or performance tracking. Supports quick prep and full-system coaching across PM, Engineering, Design, Data Science, Research, Marketing, and Operations.
+description: 面试教练：结构化备考、面经转写分析、模拟演练与故事库管理，覆盖产品、工程、设计、数据、研究、市场与运营岗。
 ---
 
 # Interview Coach

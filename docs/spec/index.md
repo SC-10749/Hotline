@@ -40,6 +40,8 @@
 | [S-015](2026-11-24-CI校验修复.md) | 2026-11-24 | CI 校验修复（技能流历史契约 · agent 事件 · 注册取消挂死 · mvnw 可执行位） | 已实现 | skill-center 技能测试、service_registry 取消语义、java_backend/mvnw 权限位、execution 模块文档 |
 | [S-016](2026-11-24-CI工作流开关.md) | 2026-11-24 | 机器人页的 CI 工作流开关 | 已实现 | harness-console 模块、/harness/ci-workflow 路由、GitHub 工作流客户端、机器人页开关 |
 | [S-017](2026-11-24-角色头像恢复.md) | 2026-11-24 | 角色机器人头像恢复（6 个角色重新接线） | 已实现 | frontend/src/assets 头像文件、BOT_META、AGENTS.md、S-014 |
+| [S-018](2026-11-24-Harness菜单页层级与状态标注.md) | 2026-11-24 | Harness 菜单页信息层级与状态标注修正（真实连接状态 · 表格列对齐 · 标题唯一 · 概览页有效信号） | 已实现 | Harness 控制台壳层与各 Panel、harness.css、useResources.js |
+| [S-019](2026-11-24-统一UI基础层与表格体系.md) | 2026-11-24 | 统一 UI 基础层与表格体系（ui-table · ui-status · ui-empty · 独立页标题唯一） | 已实现 | frontend/src/ui/、style.css、harness.css、theme.css、App.vue、各模块页面 |
 | S-XXX | — | 模板见 [_template.md](_template.md) | — | — |
 
 ## 写规格的最小要求

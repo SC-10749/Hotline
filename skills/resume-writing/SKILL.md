@@ -1,6 +1,6 @@
 ---
 name: resume-writing
-description: 写或修改简历类文档时使用。规范来自 GitHub 高星开源简历 skill（3.3k star），规定句式结构（X-Y-Z / STAR / CAR）、量化规则、强动词、ATS 硬约束、篇幅与自检清单。触发词：写简历、改简历、简历 md、resume、项目经历怎么写、帮我把项目写成简历。
+description: 简历写作（按 GitHub 高星开源规范）：写或改简历时约束句式、量化、强动词与 ATS 格式，没有证据的数字不写。
 ---
 
 # 简历写作规范

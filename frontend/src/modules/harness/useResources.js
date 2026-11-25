@@ -55,18 +55,21 @@ export function useResources({ props, notify }) {
   }
 
   async function refreshResourceData({ silent = false } = {}) {
-    try {
-      const [machines, approvals, traceRuns] = await Promise.all([getHarnessMachines(props.apiBase), getHarnessApprovals(props.apiBase, 'pending'), getHarnessObservabilityRuns(props.apiBase)])
-      harnessMachines.value = machines?.items || []
-      harnessApprovals.value = approvals?.items || []
-      harnessTraceRuns.value = traceRuns?.items || []
-      resourceConnected.value = true
-      resourceError.value = ''
-    } catch (error) {
-      resourceConnected.value = false
-      resourceError.value = error.message || '资源目录服务暂不可用'
-      if (!silent) notify(`资源目录刷新失败：${resourceError.value}`)
-    }
+    const [machines, approvals, traceRuns] = await Promise.allSettled([
+      getHarnessMachines(props.apiBase),
+      getHarnessApprovals(props.apiBase, 'pending'),
+      getHarnessObservabilityRuns(props.apiBase),
+    ])
+    // 连接标志按请求各自成败记录：某一类失败不影响其余类型的展示
+    machinesConnected.value = machines.status === 'fulfilled'
+    harnessMachines.value = machines.status === 'fulfilled' ? machines.value?.items || [] : []
+    approvalsConnected.value = approvals.status === 'fulfilled'
+    harnessApprovals.value = approvals.status === 'fulfilled' ? approvals.value?.items || [] : []
+    traceConnected.value = traceRuns.status === 'fulfilled'
+    harnessTraceRuns.value = traceRuns.status === 'fulfilled' ? traceRuns.value?.items || [] : []
+    const failure = [machines, approvals, traceRuns].find(item => item.status === 'rejected')?.reason
+    resourceError.value = failure ? failure.message || '资源目录服务暂不可用' : ''
+    if (failure && !silent) notify(`资源目录刷新失败：${resourceError.value}`)
     loadApprovalNotifications()
   }
 
@@ -157,6 +160,7 @@ export function useResources({ props, notify }) {
     approvalNotifications,
     approvalRows,
     approvalSelection,
+    approvalsConnected,
     decideApproval,
     decideApprovalBatch,
     formatWorkerSeen,
@@ -183,5 +187,6 @@ export function useResources({ props, notify }) {
     resourceConnected,
     submitRejectApproval,
     toggleMachineDrain,
+    traceConnected,
   }
 }
